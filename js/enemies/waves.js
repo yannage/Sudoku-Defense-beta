@@ -359,3 +359,4 @@ const EnemyWaves = (function() {
 
 // Make module available globally
 window.EnemyWaves = EnemyWaves;
+window.EnemiesModule = window.EnemyWaves;
