@@ -1,0 +1,707 @@
+/* Sudoku Tower Defense - Main Stylesheet */
+
+/* === Base Styles === */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+:root {
+    --primary-color: #4CAF50;
+    --primary-dark: #3e8e41;
+    --secondary-color: #2196F3;
+    --text-color: #333;
+    --light-bg: #f0f0f0;
+    --dark-bg: #333;
+    --cell-bg: #fff;
+    --cell-highlight: #e6f7ff;
+    --cell-fixed: #f0f0f0;
+    --path-color: #ffebcc;
+    --error-color: #ff6b6b;
+    --success-color: #69db7c;
+    --grid-border: #333;
+    --inner-grid: #aaa;
+    --incorrect-tower-bg: rgba(255, 102, 102, 0.3);
+    --number-highlight-bg: rgba(135, 206, 250, 0.4);
+    --number-highlight-border: #2196F3;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    line-height: 1.6;
+    color: var(--text-color);
+    background-color: var(--light-bg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+h1 {
+    margin-bottom: 20px;
+    color: var(--primary-dark);
+    text-align: center;
+    font-size: 2.2rem;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+}
+
+/* === Game Container === */
+#game-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    max-width: 600px;
+    width: 100%;
+    margin: 0 auto;
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+/* === Game Header === */
+#game-header {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    background-color: var(--dark-bg);
+    color: white;
+    padding: 10px 15px;
+    border-radius: 5px;
+    font-weight: bold;
+    flex-wrap: wrap;
+}
+
+#game-header > div {
+    margin: 5px;
+}
+
+#high-score {
+    color: white;
+    font-weight: bold;
+}
+
+#high-score-value {
+    color: gold;
+}
+
+/* === Sudoku Board === */
+#sudoku-board {
+    display: grid;
+    grid-template-columns: repeat(9, 1fr);
+    grid-template-rows: repeat(9, 1fr);
+    gap: 1px;
+    background-color: var(--grid-border);
+    width: 100%;
+    aspect-ratio: 1;
+    border: 2px solid var(--grid-border);
+    position: relative;
+}
+
+.sudoku-cell {
+    background-color: var(--cell-bg);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: clamp(1rem, 4vw, 1.8rem);
+    position: relative;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.sudoku-cell:hover {
+    background-color: var(--cell-highlight);
+}
+
+.sudoku-cell.highlighted {
+    background-color: var(--cell-highlight);
+}
+
+.sudoku-cell.fixed {
+    background-color: var(--cell-fixed);
+    cursor: not-allowed;
+}
+
+.sudoku-cell.path {
+    background-color: var(--path-color);
+}
+
+/* Number highlighting feature */
+.sudoku-cell.number-highlighted {
+    background-color: var(--number-highlight-bg) !important;
+    box-shadow: inset 0 0 0 2px var(--number-highlight-border);
+    transition: all 0.2s ease;
+}
+
+/* Incorrect tower feature */
+.sudoku-cell.incorrect-tower {
+    background-color: var(--incorrect-tower-bg) !important;
+    animation: pulse-red 2s infinite;
+}
+
+@keyframes pulse-red {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+/* Grid lines for 3x3 boxes */
+.sudoku-cell:nth-child(3n) {
+    border-right: 2px solid var(--grid-border);
+}
+
+.sudoku-cell:nth-child(9n) {
+    border-right: none;
+}
+
+.sudoku-cell:nth-child(n+19):nth-child(-n+27),
+.sudoku-cell:nth-child(n+46):nth-child(-n+54),
+.sudoku-cell:nth-child(n+73):nth-child(-n+81) {
+    border-bottom: 2px solid var(--grid-border);
+}
+
+/* === Tower & Enemy Styling === */
+.tower {
+    font-size: 1.8rem;
+    text-align: center;
+}
+
+.enemy {
+    font-size: 1.5rem;
+    position: absolute;
+    transform: translate(-50%, -50%);
+    z-index: 10;
+    transition: transform 0.3s ease-out;
+}
+
+.enemy-health-bar {
+    position: absolute;
+    bottom: -8px;
+    left: -10px;
+    width: 20px;
+    height: 4px;
+    background-color: #333;
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.enemy-health-fill {
+    height: 100%;
+    background-color: #ff0000;
+    transition: width 0.2s;
+}
+
+.tower-level {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    font-size: 10px;
+    background-color: #333;
+    color: white;
+    border-radius: 50%;
+    width: 14px;
+    height: 14px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* === Tower Selection === */
+#tower-selection {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    margin-top: 10px;
+}
+
+.tower-option {
+    width: calc(10% - 8px);
+    min-width: 40px;
+    aspect-ratio: 1;
+    border: 1px solid var(--dark-bg);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.5rem;
+    cursor: pointer;
+    background-color: white;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.tower-option:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.tower-option.selected {
+    background-color: var(--cell-highlight);
+    border: 2px solid var(--secondary-color);
+    transform: translateY(-2px);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.tower-option.affordable {
+    border-color: var(--primary-color);
+}
+
+.tower-option.unaffordable {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* === Game Info Section === */
+#game-info {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+}
+
+#currency-value {
+    font-weight: bold;
+    color: var(--primary-dark);
+}
+
+#status-message {
+    flex-basis: 100%;
+    text-align: center;
+    font-weight: bold;
+    color: var(--text-color);
+    background-color: var(--light-bg);
+    padding: 8px;
+    border-radius: 4px;
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* === Game Controls === */
+#game-controls {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+button {
+    padding: 10px 16px;
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: bold;
+    transition: background-color 0.2s, transform 0.1s;
+}
+
+button:hover {
+    background-color: var(--primary-dark);
+    transform: translateY(-2px);
+}
+
+button:active {
+    transform: translateY(0);
+}
+
+#pause-game {
+    background-color: var(--secondary-color);
+}
+
+#pause-game:hover {
+    background-color: #0b7dda;
+}
+
+#stats-button {
+    background-color: #673AB7;
+}
+
+#stats-button:hover {
+    background-color: #5E35B1;
+}
+
+#new-game {
+    background-color: #ff9800;
+}
+
+#new-game:hover {
+    background-color: #e68a00;
+}
+
+/* === Responsive Styles === */
+@media (max-width: 768px) {
+    body {
+        padding: 10px;
+    }
+    
+    h1 {
+        font-size: 1.8rem;
+    }
+    
+    #game-container {
+        padding: 15px;
+    }
+    
+    #game-header {
+        font-size: 0.9rem;
+    }
+    
+    .tower-option {
+        min-width: 35px;
+        font-size: 1.2rem;
+    }
+    
+    button {
+        padding: 8px 12px;
+        font-size: 0.9rem;
+    }
+}
+
+@media (max-width: 480px) {
+    h1 {
+        font-size: 1.5rem;
+    }
+    
+    #game-container {
+        padding: 10px;
+    }
+    
+    #game-header {
+        font-size: 0.8rem;
+    }
+    
+    .tower-option {
+        min-width: 30px;
+        font-size: 1rem;
+    }
+    
+    #game-controls {
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    button {
+        width: 100%;
+        padding: 12px;
+    }
+    
+    #status-message {
+        font-size: 0.9rem;
+    }
+}
+
+/* === Animations === */
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.tower-attack {
+    animation: pulse 0.3s ease-in-out;
+}
+
+.enemy-damaged {
+    animation: pulse 0.3s ease-in-out;
+}
+
+.new-element {
+    animation: fadeIn 0.5s ease-in-out;
+}
+
+/* === Tower Projectile Animation === */
+.tower-projectile {
+    color: #000;
+    filter: drop-shadow(0 0 2px #fff);
+    pointer-events: none;
+    transform-origin: center center;
+}
+
+.tower-attacking {
+    animation: tower-attack-pulse 0.3s ease-in-out;
+    filter: drop-shadow(0 0 5px #ffff00) drop-shadow(0 0 10px #ff9900);
+    z-index: 15;
+}
+
+@keyframes tower-attack-pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+
+/* === Modal Styles === */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+}
+
+.modal.active {
+    opacity: 1;
+    pointer-events: all;
+}
+
+.modal-content {
+    background-color: white;
+    padding: 30px;
+    border-radius: 8px;
+    text-align: center;
+    max-width: 80%;
+    transform: translateY(-20px);
+    transition: transform 0.3s;
+}
+
+.modal.active .modal-content {
+    transform: translateY(0);
+}
+
+/* Game over modal */
+#game-over-modal h2 {
+    color: #ff6b6b;
+    margin-bottom: 15px;
+}
+
+/* Level complete modal */
+#level-complete-modal h2 {
+    color: var(--primary-color);
+    margin-bottom: 15px;
+}
+
+#level-complete-score {
+    font-size: 1.2rem;
+    margin-bottom: 20px;
+}
+
+/* Tower upgrade modal */
+.upgrade-stats {
+    margin: 20px 0;
+    border: 1px solid #eee;
+    padding: 10px;
+    border-radius: 5px;
+}
+
+.stat-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.stat-label {
+    text-align: left;
+    font-weight: bold;
+    flex: 2;
+}
+
+.stat-current, .stat-new {
+    flex: 1;
+}
+
+.stat-arrow {
+    flex: 0.5;
+    color: #888;
+}
+
+.stat-new {
+    color: var(--primary-color);
+    font-weight: bold;
+}
+
+.upgrade-cost {
+    margin: 15px 0;
+    font-size: 1.1em;
+}
+
+.currency-value {
+    font-weight: bold;
+    color: #ff9800;
+}
+
+.upgrade-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+}
+
+/* === Save notification === */
+.save-notification {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 10px 15px;
+    border-radius: 5px;
+    font-size: 0.9rem;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.3s, transform 0.3s;
+    z-index: 1000;
+}
+
+.save-notification.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* === Bonus Styling === */
+.bonus-choice-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+}
+
+.bonus-choice-modal.active {
+    opacity: 1;
+    pointer-events: all;
+}
+
+.bonus-choice-content {
+    background-color: white;
+    padding: 25px;
+    border-radius: 8px;
+    max-width: 500px;
+    width: 90%;
+    text-align: center;
+}
+
+.bonus-options {
+    display: flex;
+    justify-content: space-around;
+    margin-top: 20px;
+}
+
+.bonus-option {
+    flex: 1;
+    margin: 0 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.bonus-option-button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 15px;
+    background-color: #f5f5f5;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    width: 100%;
+}
+
+.bonus-option-button:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+}
+
+.bonus-icon {
+    font-size: 24px;
+    margin-bottom: 8px;
+}
+
+.bonus-name {
+    font-weight: bold;
+}
+
+.bonus-description {
+    font-size: 12px;
+    margin-top: 8px;
+    color: #666;
+}
+
+/* Tower bonus styling */
+.bonus-damage {
+    border: 2px solid #ff4d4d !important;
+    box-shadow: 0 0 8px #ff4d4d !important;
+}
+
+.bonus-points {
+    border: 2px solid #4d4dff !important;
+    box-shadow: 0 0 8px #4d4dff !important;
+}
+
+.bonus-currency {
+    border: 2px solid #ffd700 !important;
+    box-shadow: 0 0 8px #ffd700 !important;
+}
+
+/* Animation for completed units */
+@keyframes bonus-flash {
+    0% { transform: scale(1); background-color: rgba(255,255,255,0.5); }
+    50% { transform: scale(1.1); background-color: rgba(255,255,255,0.8); }
+    100% { transform: scale(1); background-color: rgba(255,255,255,0); }
+}
+
+.bonus-flash {
+    animation: bonus-flash 0.5s ease-in-out;
+    z-index: 30;
+    pointer-events: none;
+}
+
+/* === Game Statistics Table === */
+.game-stats-table {
+    width: 100%;
+    margin: 15px 0;
+    border-collapse: collapse;
+}
+
+.game-stats-table th,
+.game-stats-table td {
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+}
+
+.game-stats-table th {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.game-stats-table tr:nth-child(even) {
+    background-color: var(--light-bg);
+}
+
+.game-stats-table tr:hover {
+    background-color: var(--cell-highlight);
+}
+
+.stat-value {
+    font-weight: bold;
+}
+
+.stat-highlight {
+    color: var(--primary-color);
+}
