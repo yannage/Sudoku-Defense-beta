@@ -276,7 +276,7 @@ const SudokuCompletion = (function() {
     /**
      * Initialize event listeners
      */
-    function init() {
+    function initEventListeners() {
         // Listen for game initialization
         EventSystem.subscribe(GameEvents.GAME_INIT, reset);
         
@@ -292,7 +292,7 @@ const SudokuCompletion = (function() {
     }
     
     // Initialize event listeners
-    init();
+    initEventListeners();
     
     // Public API
     return {
@@ -301,3 +301,7 @@ const SudokuCompletion = (function() {
         getCompletionStatus,
         reset
     };
+})();
+
+// Make module available globally
+window.SudokuCompletion = SudokuCompletion;
