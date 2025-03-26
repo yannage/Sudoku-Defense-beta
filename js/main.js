@@ -4,43 +4,46 @@
  */
 
 const SudokuTowerDefense = (function() {
+    // Enable debug mode
+    const DEBUG = true;
+    
     // Required modules with their loading status
     const modules = {
-    // Core Modules
-    'core/events.js': false,
-    'core/game-loop.js': false,
-    'core/save-system.js': false,
-    
-    // Sudoku Modules
-    'sudoku/board.js': false,
-    'sudoku/generator.js': false,
-    'sudoku/validator.js': false,
-    'sudoku/completion.js': false,
-    
-    // Tower Modules
-    'towers/types.js': false,
-    'towers/placement.js': false,
-    'towers/attacks.js': false,
-    'towers/upgrades.js': false,
-    
-    // Enemy Modules
-    'enemies/types.js': false,
-    'enemies/movement.js': false,
-    'enemies/waves.js': false,
-    
-    // Bonus Modules
-    'bonuses/completion-bonuses.js': false,
-    'bonuses/wave-bonuses.js': false,
-    
-    // UI Modules
-    'ui/board-renderer.js': false,
-    'ui/tower-selector.js': false,
-    'ui/animations.js': false,
-    'ui/modals.js': false,
-    
-    // Player Module
-    'player.js': false  // Add this line
-};
+        // Core Modules
+        'core/events.js': false,
+        'core/game-loop.js': false,
+        'core/save-system.js': false,
+        
+        // Sudoku Modules
+        'sudoku/board.js': false,
+        'sudoku/generator.js': false,
+        'sudoku/validator.js': false,
+        'sudoku/completion.js': false,
+        
+        // Tower Modules
+        'towers/types.js': false,
+        'towers/placement.js': false,
+        'towers/attacks.js': false,
+        'towers/upgrades.js': false,
+        
+        // Enemy Modules
+        'enemies/types.js': false,
+        'enemies/movement.js': false,
+        'enemies/waves.js': false,
+        
+        // Bonus Modules
+        'bonuses/completion-bonuses.js': false,
+        'bonuses/wave-bonuses.js': false,
+        
+        // UI Modules
+        'ui/board-renderer.js': false,
+        'ui/tower-selector.js': false,
+        'ui/animations.js': false,
+        'ui/modals.js': false,
+        
+        // Player Module
+        'player.js': false
+    };
     
     // Dependencies between modules
     const dependencies = {
@@ -50,27 +53,36 @@ const SudokuTowerDefense = (function() {
         'sudoku/board.js': ['core/events.js', 'sudoku/generator.js'],
         'sudoku/completion.js': ['sudoku/board.js', 'sudoku/validator.js'],
         
-        'towers/placement.js': ['towers/types.js', 'sudoku/board.js'],
+        'player.js': ['core/events.js'],
+        
+        'towers/placement.js': ['towers/types.js', 'sudoku/board.js', 'player.js'],
         'towers/attacks.js': ['towers/types.js', 'enemies/types.js'],
-        'towers/upgrades.js': ['towers/types.js', 'towers/placement.js'],
+        'towers/upgrades.js': ['towers/types.js', 'towers/placement.js', 'player.js'],
         
         'enemies/movement.js': ['enemies/types.js', 'sudoku/board.js'],
-        'enemies/waves.js': ['enemies/types.js', 'enemies/movement.js'],
+        'enemies/waves.js': ['enemies/types.js', 'enemies/movement.js', 'player.js'],
         
         'bonuses/completion-bonuses.js': ['core/events.js', 'sudoku/completion.js'],
-        'bonuses/wave-bonuses.js': ['core/events.js', 'enemies/waves.js'],
+        'bonuses/wave-bonuses.js': ['core/events.js', 'enemies/waves.js', 'player.js'],
         
         'ui/board-renderer.js': ['core/events.js', 'sudoku/board.js'],
-        'ui/tower-selector.js': ['core/events.js', 'towers/types.js'],
+        'ui/tower-selector.js': ['core/events.js', 'towers/types.js', 'player.js'],
         'ui/animations.js': ['towers/attacks.js', 'enemies/movement.js'],
         'ui/modals.js': ['core/events.js']
     };
+    
+    // Debug log function
+    function debugLog(message) {
+        if (DEBUG) {
+            console.log(`[DEBUG] ${message}`);
+        }
+    }
     
     /**
      * Initialize the game
      */
     function init() {
-        console.log("Initializing Sudoku Tower Defense...");
+        debugLog("Initializing Sudoku Tower Defense...");
         
         // Load modules in order
         loadModules();
@@ -112,7 +124,7 @@ const SudokuTowerDefense = (function() {
             }
         }
         
-        console.log(`Loading module: ${modulePath}`);
+        debugLog(`Loading module: ${modulePath}`);
         
         // Create script element
         const script = document.createElement('script');
@@ -122,7 +134,7 @@ const SudokuTowerDefense = (function() {
         // Set up load handler
         script.onload = function() {
             modules[modulePath] = true;
-            console.log(`Module loaded: ${modulePath}`);
+            debugLog(`Module loaded: ${modulePath}`);
             checkAllModulesLoaded();
             
             // Load dependent modules
@@ -139,7 +151,7 @@ const SudokuTowerDefense = (function() {
         
         // Set up error handler
         script.onerror = function() {
-            console.error(`Failed to load module: ${modulePath}`);
+            debugLog(`Failed to load module: ${modulePath}`);
         };
         
         // Add to document
@@ -161,7 +173,7 @@ const SudokuTowerDefense = (function() {
      * Start the game
      */
     function startGame() {
-        console.log("All modules loaded, starting game...");
+        debugLog("All modules loaded, starting game...");
         
         // Initialize UI first
         if (window.BoardRenderer) {
@@ -172,15 +184,26 @@ const SudokuTowerDefense = (function() {
             TowerSelector.init();
         }
         
+        // Initialize player module
+        if (window.PlayerModule) {
+            PlayerModule.init();
+        }
+        
         // Initialize game systems
         if (window.GameLoop) {
             GameLoop.init();
         }
+        
+        debugLog("Game started successfully");
     }
     
     // Public API
     return {
-        init
+        init,
+        debug: {
+            getModuleStatus: function() { return {...modules}; },
+            getDependencies: function() { return {...dependencies}; }
+        }
     };
 })();
 
