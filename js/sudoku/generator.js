@@ -209,64 +209,155 @@ const SudokuGenerator = (function() {
         // Mark the starting position
         pathCells.add(`${currentRow},${currentCol}`);
         
-        // Keep track of visited columns to ensure we always make progress
-        const visitedColumns = new Set([0]);
-        
         // Generate path until we reach the last column
         while (currentCol < 8) {
             let possibleMoves = [];
             
-            // Check each direction
+            // Check each direction for valid moves
             for (let [dr, dc] of directions) {
                 let newRow = currentRow + dr;
                 let newCol = currentCol + dc;
                 
-                // Check if the new position is valid
-                if (
-                    newRow >= 0 && newRow < 9 && 
+                if (newRow >= 0 && newRow < 9 && 
                     newCol >= 0 && newCol < 9 && 
-                    !pathCells.has(`${newRow},${newCol}`)
-                ) {
-                    // If we're already at the target column, only allow vertical moves
-                    if (currentCol === 7 && newCol > currentCol) {
-                        // We've reached column 7, only allow moving to endRow
-                        if (newRow === endRow) {
-                            possibleMoves = [[dr, dc]];
-                            break;
-                        }
-                    } else {
-                        // Otherwise, consider this move
-                        possibleMoves.push([dr, dc]);
-                    }
+                    !pathCells.has(`${newRow},${newCol}`)) {
+                    possibleMoves.push([dr, dc]);
                 }
             }
             
-            // If no valid moves, force a move right
+            // If no valid moves, try to move right
             if (possibleMoves.length === 0) {
-                // Try to move right
-                let newRow = currentRow;
-                let newCol = currentCol + 1;
-                
-                if (newCol < 9 && !pathCells.has(`${newRow},${newCol}`)) {
-                    currentRow = newRow;
+                const newCol = currentCol + 1;
+                if (newCol < 9 && !pathCells.has(`${currentRow},${newCol}`)) {
                     currentCol = newCol;
                     pathCells.add(`${currentRow},${currentCol}`);
-                    visitedColumns.add(currentCol);
-                    continue;
                 } else {
-                    // If we can't move right, try to find any non-visited cell
-                    let found = false;
-                    for (let r = 0; r < 9; r++) {
-                        for (let c = currentCol; c < 9; c++) {
-                            if (!pathCells.has(`${r},${c}`)) {
-                                // Check if we can connect to this cell without crossing the path
-                                if (canConnect(currentRow, currentCol, r, c, pathCells)) {
-                                    // Add connecting cells
-                                    const connectingCells = getConnectingCells(currentRow, currentCol, r, c);
-                                    for (const cell of connectingCells) {
-                                        pathCells.add(cell);
-                                    }
-                                    currentRow = r;
-                                    currentCol = c;
-                                    found = true;
-                                    break
+                    // If we can't progress, break out
+                    break;
+                }
+                continue;
+            }
+            
+            // Choose a random valid move
+            const [dr, dc] = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
+            currentRow += dr;
+            currentCol += dc;
+            pathCells.add(`${currentRow},${currentCol}`);
+        }
+        
+        // If we haven't reached the end row in the last column, add a straight path to it
+        if (currentCol === 8 && currentRow !== endRow) {
+            const step = currentRow < endRow ? 1 : -1;
+            for (let r = currentRow + step; step > 0 ? r <= endRow : r >= endRow; r += step) {
+                pathCells.add(`${r},${currentCol}`);
+            }
+        }
+        
+        return pathCells;
+    }
+    
+    /**
+     * Check if we can connect two cells without crossing the path
+     * @param {number} row1 - First cell row
+     * @param {number} col1 - First cell column
+     * @param {number} row2 - Second cell row
+     * @param {number} col2 - Second cell column
+     * @param {Set<string>} existingPath - Set of existing path cells
+     * @returns {boolean} Whether cells can be connected
+     */
+    function canConnect(row1, col1, row2, col2, existingPath) {
+        // For simplicity, only allow straight line connections
+        if (row1 !== row2 && col1 !== col2) {
+            return false;
+        }
+        
+        // Check for obstacles in the path
+        if (row1 === row2) {
+            // Horizontal connection
+            const minCol = Math.min(col1, col2);
+            const maxCol = Math.max(col1, col2);
+            for (let c = minCol + 1; c < maxCol; c++) {
+                if (existingPath.has(`${row1},${c}`)) {
+                    return false;
+                }
+            }
+        } else {
+            // Vertical connection
+            const minRow = Math.min(row1, row2);
+            const maxRow = Math.max(row1, row2);
+            for (let r = minRow + 1; r < maxRow; r++) {
+                if (existingPath.has(`${r},${col1}`)) {
+                    return false;
+                }
+            }
+        }
+        
+        return true;
+    }
+    
+    /**
+     * Get cells needed to connect two points
+     * @param {number} row1 - First cell row
+     * @param {number} col1 - First cell column
+     * @param {number} row2 - Second cell row
+     * @param {number} col2 - Second cell column
+     * @returns {string[]} Array of cell coordinates as strings
+     */
+    function getConnectingCells(row1, col1, row2, col2) {
+        const cells = [];
+        
+        if (row1 === row2) {
+            // Horizontal connection
+            const minCol = Math.min(col1, col2);
+            const maxCol = Math.max(col1, col2);
+            for (let c = minCol + 1; c <= maxCol; c++) {
+                cells.push(`${row1},${c}`);
+            }
+        } else if (col1 === col2) {
+            // Vertical connection
+            const minRow = Math.min(row1, row2);
+            const maxRow = Math.max(row1, row2);
+            for (let r = minRow + 1; r <= maxRow; r++) {
+                cells.push(`${r},${col1}`);
+            }
+        }
+        
+        return cells;
+    }
+    
+    /**
+     * Generate a Sudoku puzzle with given difficulty
+     * @param {string} difficulty - Puzzle difficulty (easy, medium, hard)
+     * @returns {Object} Generated puzzle with board, solution, fixedCells
+     */
+    function generatePuzzle(difficulty = 'medium') {
+        // Generate a path for enemies first
+        const path = generateEnemyPath();
+        
+        // Generate a complete solution
+        const solution = generateCompleteSolution();
+        
+        // Determine cells to reveal based on difficulty
+        const cellsToReveal = difficultySettings[difficulty] || difficultySettings.medium;
+        
+        // Create puzzle from solution
+        const { puzzle, fixed } = createPuzzleFromSolution(solution, path, cellsToReveal);
+        
+        return {
+            board: puzzle,
+            solution: solution,
+            fixedCells: fixed,
+            pathCells: path
+        };
+    }
+    
+    // Public API
+    return {
+        generatePuzzle,
+        generateEnemyPath,
+        difficultySettings
+    };
+})();
+
+// Make module available globally
+window.SudokuGenerator = SudokuGenerator;
