@@ -6,38 +6,41 @@
 const SudokuTowerDefense = (function() {
     // Required modules with their loading status
     const modules = {
-        // Core Modules
-        'core/events.js': false,
-        'core/game-loop.js': false,
-        'core/save-system.js': false,
-        
-        // Sudoku Modules
-        'sudoku/board.js': false,
-        'sudoku/generator.js': false,
-        'sudoku/validator.js': false,
-        'sudoku/completion.js': false,
-        
-        // Tower Modules
-        'towers/types.js': false,
-        'towers/placement.js': false,
-        'towers/attacks.js': false,
-        'towers/upgrades.js': false,
-        
-        // Enemy Modules
-        'enemies/types.js': false,
-        'enemies/movement.js': false,
-        'enemies/waves.js': false,
-        
-        // Bonus Modules
-        'bonuses/completion-bonuses.js': false,
-        'bonuses/wave-bonuses.js': false,
-        
-        // UI Modules
-        'ui/board-renderer.js': false,
-        'ui/tower-selector.js': false,
-        'ui/animations.js': false,
-        'ui/modals.js': false
-    };
+    // Core Modules
+    'core/events.js': false,
+    'core/game-loop.js': false,
+    'core/save-system.js': false,
+    
+    // Sudoku Modules
+    'sudoku/board.js': false,
+    'sudoku/generator.js': false,
+    'sudoku/validator.js': false,
+    'sudoku/completion.js': false,
+    
+    // Tower Modules
+    'towers/types.js': false,
+    'towers/placement.js': false,
+    'towers/attacks.js': false,
+    'towers/upgrades.js': false,
+    
+    // Enemy Modules
+    'enemies/types.js': false,
+    'enemies/movement.js': false,
+    'enemies/waves.js': false,
+    
+    // Bonus Modules
+    'bonuses/completion-bonuses.js': false,
+    'bonuses/wave-bonuses.js': false,
+    
+    // UI Modules
+    'ui/board-renderer.js': false,
+    'ui/tower-selector.js': false,
+    'ui/animations.js': false,
+    'ui/modals.js': false,
+    
+    // Player Module
+    'player.js': false  // Add this line
+};
     
     // Dependencies between modules
     const dependencies = {
