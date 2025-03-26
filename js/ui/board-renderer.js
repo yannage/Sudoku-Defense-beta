@@ -163,7 +163,7 @@ const BoardRenderer = (function() {
             
             // Attempt to place tower
             if (window.TowersModule) {
-                const tower = TowersModule.createTower(towerType, row, col);
+                const tower = TowerPlacement.getTowerAt(row, col);
                 
                 if (tower) {
                     // Tower placed successfully, update board
