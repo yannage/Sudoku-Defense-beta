@@ -94,14 +94,29 @@ const SudokuTowerDefense = (function() {
     /**
      * Load all required modules
      */
-    function loadModules() {
-        // First load core modules and modules without dependencies
+    /**
+ * Load all modules respecting dependencies
+ */
+function loadModules() {
+    // Try to load any module whose dependencies are satisfied
+    let modulesAttempted = true;
+
+    while (modulesAttempted) {
+        modulesAttempted = false;
+
         for (const modulePath in modules) {
-            if (!dependencies[modulePath] || dependencies[modulePath].length === 0) {
-                loadModule(modulePath);
+            if (!modules[modulePath]) {
+                const deps = dependencies[modulePath] || [];
+                const depsLoaded = deps.every(dep => modules[dep]);
+
+                if (depsLoaded) {
+                    loadModule(modulePath);
+                    modulesAttempted = true;
+                }
             }
         }
     }
+}
     
     /**
      * Load a single module
@@ -161,13 +176,16 @@ const SudokuTowerDefense = (function() {
     /**
      * Check if all modules are loaded, and start the game if they are
      */
-    function checkAllModulesLoaded() {
-        const allLoaded = Object.values(modules).every(loaded => loaded);
-        
-        if (allLoaded) {
-            startGame();
-        }
+    /**
+ * Check if all modules are loaded and then start the game
+ */
+function checkAllModulesLoaded() {
+    const allLoaded = Object.values(modules).every(Boolean);
+
+    if (allLoaded) {
+        startGame();
     }
+}
     
     /**
      * Start the game
