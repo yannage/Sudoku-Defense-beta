@@ -67,5 +67,88 @@
 <script src="js/core/game-loop.js"></script>
 <script src="js/bridge.js"></script> <!-- Add the bridge.js here -->
 <script src="js/main.js"></script>
+
+
+// Add this to a script tag at the end of your HTML or in a separate file
+document.addEventListener('DOMContentLoaded', function() {
+    console.log("Setting up tower selection handlers");
+    
+    // Add click handlers to tower buttons
+    const towerButtons = document.querySelectorAll('.tower-option');
+    towerButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            console.log("Tower button clicked:", this.dataset.towerType);
+            
+            // Remove selection from all buttons
+            towerButtons.forEach(btn => btn.classList.remove('selected'));
+            
+            // Add selection to this button
+            this.classList.add('selected');
+            
+            // Try to use PlayerModule if available
+            if (window.PlayerModule && typeof PlayerModule.selectTower === 'function') {
+                PlayerModule.selectTower(this.dataset.towerType);
+                console.log("Tower selected in PlayerModule");
+            } else {
+                console.error("PlayerModule not available or selectTower not a function");
+            }
+        });
+    });
+    
+    // Add click handlers to the Sudoku cells
+    const cells = document.querySelectorAll('.sudoku-cell');
+    cells.forEach(cell => {
+        cell.addEventListener('click', function() {
+            console.log("Cell clicked:", this.dataset.row, this.dataset.col);
+            
+            // Get the selected tower type
+            const selectedTower = document.querySelector('.tower-option.selected');
+            if (!selectedTower) {
+                console.log("No tower selected");
+                return;
+            }
+            
+            const towerType = selectedTower.dataset.towerType;
+            const row = parseInt(this.dataset.row);
+            const col = parseInt(this.dataset.col);
+            
+            // Try to place tower
+            if (window.TowerPlacement && typeof TowerPlacement.createTower === 'function') {
+                const tower = TowerPlacement.createTower(towerType, row, col);
+                console.log("Tower placed:", tower);
+                
+                // Update UI
+                if (window.BoardRenderer && typeof BoardRenderer.updateBoard === 'function') {
+                    BoardRenderer.updateBoard();
+                }
+            } else if (window.TowersModule && typeof TowersModule.createTower === 'function') {
+                const tower = TowersModule.createTower(towerType, row, col);
+                console.log("Tower placed:", tower);
+            } else {
+                console.error("Tower placement functions not available");
+            }
+        });
+    });
+    
+    // Add click handler to Start Wave button
+    const startWaveButton = document.getElementById('start-wave');
+    if (startWaveButton) {
+        startWaveButton.addEventListener('click', function() {
+            console.log("Start Wave button clicked");
+            
+            if (window.EnemyWaves && typeof EnemyWaves.startWave === 'function') {
+                EnemyWaves.startWave();
+            } else if (window.EnemiesModule && typeof EnemiesModule.startWave === 'function') {
+                EnemiesModule.startWave();
+            } else {
+                console.error("Enemy wave functions not available");
+            }
+        });
+    }
+    
+    console.log("Event handlers setup complete");
+});
+
+
 </body>
 </html>
