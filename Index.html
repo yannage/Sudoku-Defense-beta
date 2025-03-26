@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sudoku Tower Defense</title>
+    <link rel="stylesheet" href="css/styles.css">
+    
+    <!-- Load only the main script - it will handle module loading -->
+    <script src="js/main.js"></script>
+</head>
+<body>
+    <h1>Sudoku Tower Defense</h1>
+    
+    <div id="game-container">
+        <div id="game-header">
+            <div id="score">Score: <span id="score-value">0</span></div>
+            <div id="lives">Lives: <span id="lives-value">3</span></div>
+            <div id="wave">Wave: <span id="wave-value">1</span></div>
+            <div id="high-score">High Score: <span id="high-score-value">0</span></div>
+        </div>
+        
+        <div id="sudoku-board"></div>
+        
+        <div id="tower-selection">
+            <div class="tower-option" data-tower-type="1" title="Number Tower (1): Attacks enemies with matching number">1️⃣</div>
+            <div class="tower-option" data-tower-type="2" title="Number Tower (2): Attacks enemies with matching number">2️⃣</div>
+            <div class="tower-option" data-tower-type="3" title="Number Tower (3): Attacks enemies with matching number">3️⃣</div>
+            <div class="tower-option" data-tower-type="4" title="Number Tower (4): Attacks enemies with matching number">4️⃣</div>
+            <div class="tower-option" data-tower-type="5" title="Number Tower (5): Attacks enemies with matching number">5️⃣</div>
+            <div class="tower-option" data-tower-type="6" title="Number Tower (6): Attacks enemies with matching number">6️⃣</div>
+            <div class="tower-option" data-tower-type="7" title="Number Tower (7): Attacks enemies with matching number">7️⃣</div>
+            <div class="tower-option" data-tower-type="8" title="Number Tower (8): Attacks enemies with matching number">8️⃣</div>
+            <div class="tower-option" data-tower-type="9" title="Number Tower (9): Attacks enemies with matching number">9️⃣</div>
+            <div class="tower-option" data-tower-type="special" title="Special Tower: Attacks all enemy types">🔮</div>
+        </div>
+        
+        <div id="game-info">
+            <div>Currency: <span id="currency-value">100</span></div>
+            <div id="status-message">Place towers to defend against enemies!</div>
+        </div>
+        
+        <div id="game-controls">
+            <button id="start-wave">Start Wave</button>
+            <button id="pause-game">Pause</button>
+            <button id="stats-button">Stats</button>
+            <button id="new-game">New Game</button>
+        </div>
+    </div>
+    
+    <!-- No additional scripts are loaded here - main.js handles all loading -->
+</body>
+</html>
