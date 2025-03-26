@@ -88,24 +88,13 @@ const SudokuTowerDefense = (function() {
     }
 
     /**
-     * Load all modules respecting dependencies
+     * Load all required modules
      */
     function loadModules() {
-        let modulesAttempted = true;
-
-        while (modulesAttempted) {
-            modulesAttempted = false;
-
-            for (const modulePath in modules) {
-                if (!modules[modulePath]) {
-                    const deps = dependencies[modulePath] || [];
-                    const depsLoaded = deps.every(dep => modules[dep]);
-
-                    if (depsLoaded) {
-                        loadModule(modulePath);
-                        modulesAttempted = true;
-                    }
-                }
+        // First load core modules and modules without dependencies
+        for (const modulePath in modules) {
+            if (!dependencies[modulePath] || dependencies[modulePath].length === 0) {
+                loadModule(modulePath);
             }
         }
     }
@@ -115,40 +104,63 @@ const SudokuTowerDefense = (function() {
      * @param {string} modulePath - Path to the module
      */
     function loadModule(modulePath) {
-        if (modules[modulePath]) return;
+        // Check if module is already loaded
+        if (modules[modulePath]) {
+            return;
+        }
+
+        // Check dependencies
+        if (dependencies[modulePath]) {
+            const deps = dependencies[modulePath];
+            for (const dep of deps) {
+                if (!modules[dep]) {
+                    // Dependency not loaded yet, load it first
+                    loadModule(dep);
+                }
+            }
+        }
 
         debugLog(`Loading module: ${modulePath}`);
 
+        // Create script element
         const script = document.createElement('script');
         script.src = `js/${modulePath}`;
         script.async = false;
 
+        // Set up load handler
         script.onload = function() {
             modules[modulePath] = true;
             debugLog(`Module loaded: ${modulePath}`);
             checkAllModulesLoaded();
+
+            // Load dependent modules
+            for (const modPath in dependencies) {
+                if (dependencies[modPath].includes(modulePath) && !modules[modPath]) {
+                    const allDepsLoaded = dependencies[modPath].every(dep => modules[dep]);
+                    if (allDepsLoaded) {
+                        loadModule(modPath);
+                    }
+                }
+            }
         };
 
+        // Set up error handler
         script.onerror = function() {
             debugLog(`Failed to load module: ${modulePath}`);
-            alert(`Error: Failed to load ${modulePath}. Game may not work properly.`);
         };
 
+        // Add to document
         document.head.appendChild(script);
     }
 
     /**
-     * Check if all modules are loaded and then start the game
+     * Check if all modules are loaded, and start the game if they are
      */
     function checkAllModulesLoaded() {
-        const unloaded = Object.entries(modules)
-            .filter(([_, loaded]) => !loaded)
-            .map(([mod]) => mod);
+        const allLoaded = Object.values(modules).every(loaded => loaded);
 
-        if (unloaded.length === 0) {
+        if (allLoaded) {
             startGame();
-        } else {
-            debugLog(`Waiting for: ${unloaded.join(', ')}`);
         }
     }
 
