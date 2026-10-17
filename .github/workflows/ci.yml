@@ -1,0 +1,38 @@
+name: Validate and package Gridfall
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm test
+      - run: npm run build
+  linux:
+    if: github.event_name != 'pull_request'
+    needs: test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci --no-audit --no-fund
+      - run: npm run package:linux
+      - name: Preserve Linux execute permissions in depot archive
+        run: tar -czf release/Gridfall-linux-depot.tar.gz -C release/linux-unpacked .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Gridfall-linux-x64
+          path: |
+            release/*.AppImage
+            release/Gridfall-linux-depot.tar.gz
+          retention-days: 30
