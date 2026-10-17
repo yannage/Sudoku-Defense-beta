@@ -120,3 +120,52 @@
   .rg-body{padding:14px 20px}
   .rg-footer{padding:8px 20px}
 }
+
+/* Voxel supply division: the same little objects appear in menus and on the HUD. */
+.rg-wallet>span{display:inline-flex;align-items:center;gap:3px}
+.rg-wallet i{display:inline-block;width:25px;height:24px;flex:none;margin-right:1px}
+.rg-wallet small{margin-left:1px}
+.rg-mini-chest{width:104px;height:84px;border:0;border-radius:0;background:none;box-shadow:none;transform:none;margin:0 auto 9px}
+.rg-shop-gem{width:86px;height:69px;margin:-4px auto 2px;text-shadow:none;filter:drop-shadow(0 0 9px color-mix(in srgb,var(--loot),transparent 90%))}
+.rg-hero-chest{width:248px;height:214px;margin:0;transform:none;filter:drop-shadow(0 11px 13px #0007)}
+.stage-0 .rg-hero-chest{animation:vx-cache-charge .15s ease-in-out infinite alternate}
+.stage-1 .rg-hero-chest,.stage-2 .rg-hero-chest{transform:none;animation:none}
+.rg-reveal-stage{overflow:visible}
+.rg-reveal-halo{width:160px;height:110px;border-radius:0;clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);transform:translateY(55px) scaleY(.55);background:color-mix(in srgb,var(--loot),transparent 93%)}
+.rg-chest-card,.rg-shop-card{position:relative;background:linear-gradient(135deg,color-mix(in srgb,var(--loot),#13212d 96%),#0e1b28);box-shadow:inset 0 -3px 0 #07101a}
+.rg-chest-card:before,.rg-chest-card:after{content:'';position:absolute;width:7px;height:7px;border:1px solid color-mix(in srgb,var(--loot),#375061 70%);background:#1e3341;top:8px;pointer-events:none}
+.rg-chest-card:before{left:8px}.rg-chest-card:after{right:8px}
+.rg-item-art{width:48px;height:44px;background:linear-gradient(150deg,color-mix(in srgb,var(--loot),transparent 90%),#0b1a2877);border-radius:3px;border:1px solid color-mix(in srgb,var(--loot),transparent 79%);box-shadow:2px 3px 0 #02091477;text-shadow:none}
+.rg-big-glyph,.rg-reward-glyph{transform:none;text-shadow:none;border-radius:4px;background:radial-gradient(ellipse,color-mix(in srgb,var(--loot),transparent 86%),#0b1a2833);box-shadow:3px 4px 0 #030b1455}
+.rg-big-glyph{width:83px;height:75px}
+.rg-reward-glyph{width:79px;height:71px}
+.rg-slot-glyph{width:43px;height:41px;display:grid;place-items:center}
+.rg-mini-slots>span{height:38px}
+.rg-stack-demo i{width:37px;height:34px}
+.rg-passive-glyph{border:0;background:none;width:36px;height:34px}
+.rg-passive{grid-template-columns:36px 1fr}
+.rg-seed-art{width:90px;height:82px;margin:0 auto 12px}
+.rg-empty>.rg-empty-art{display:block;width:80px;height:72px;margin:0 auto 10px}
+@keyframes vx-cache-charge{from{transform:translate(-1px,0) rotate(-.7deg)}to{transform:translate(1px,-1px) rotate(.7deg)}}
+@media(hover:hover){.rg-chest-card:hover .rg-mini-chest{transform:translateY(-2px);transition:transform .16s}.rg-item-card:hover .vx-art{filter:drop-shadow(0 0 4px color-mix(in srgb,var(--loot),transparent 75%))}}
+@media(max-width:700px){
+  .rg-wallet i{width:23px;height:22px}
+  .rg-mini-chest{width:89px;height:71px;margin:-2px auto 5px}
+  .rg-shop-gem{width:70px;height:56px;margin:-3px auto 1px}
+  .rg-hero-chest{width:195px;height:168px;margin:0;transform:none}
+  .rg-item-art{width:39px;height:35px;margin-bottom:5px}
+  .rg-detail-card .rg-big-glyph{width:57px;height:51px;margin:6px 12px 5px 0}
+  .rg-slot-glyph{width:36px;height:35px}
+  .rg-reward-glyph{width:64px;height:57px;margin-bottom:9px}
+  .rg-passive{grid-template-columns:30px 1fr auto}
+  .rg-passive-glyph{width:31px;height:30px}
+  .rg-reveal-halo{width:130px;height:90px;transform:translateY(42px) scaleY(.55)}
+}
+.rg-reduced-motion .rg-hero-chest,.reduced-motion .rg-hero-chest{transform:none!important;animation:none!important}
+@media(prefers-reduced-motion:reduce){.rg-hero-chest{transform:none!important;animation:none!important}}
+/* Crop-free magnification for small inventory modules, within their fixed slots. */
+.rg-item-art .vx-art,.rg-slot-glyph .vx-art,.rg-mini-slots .vx-art,.rg-stack-demo .vx-art,.rg-passive-glyph .vx-art{transform:scale(1.4);transform-origin:50% 67%}
+.rg-big-glyph .vx-art,.rg-reward-glyph .vx-art{transform:scale(1.25);transform-origin:50% 65%}
+.rg-wallet .vx-art{transform:scale(1.4);transform-origin:50% 67%}
+/* Decorative rays and voxel shadows must never create a sideways loot scroll. */
+.rogue-dialog .rg-body { overflow-x:hidden; }

@@ -17,6 +17,22 @@ const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
 const ease = t => t * t * (3 - 2 * t);
 const finite = (v, fallback = 0) => Number.isFinite(v) ? v : fallback;
+// World-plane headings are independent of the flat/isometric camera morph.
+export function towerAimAngle(x, y, targetX, targetY, fallback = 0) {
+  if (![x, y, targetX, targetY].every(Number.isFinite)) return finite(fallback);
+  const dx = targetX - x, dy = targetY - y;
+  return dx * dx + dy * dy > 1e-12 ? Math.atan2(dy, dx) : finite(fallback);
+}
+export function turnToward(angle, target, dt, snap = false) {
+  angle = finite(angle); target = finite(target, angle);
+  const delta = Math.atan2(Math.sin(target - angle), Math.cos(target - angle));
+  const result = angle + delta * (snap ? 1 : 1 - Math.exp(-Math.max(0, finite(dt)) * 22));
+  return Math.atan2(Math.sin(result), Math.cos(result));
+}
+export function towerMuzzle(x, y, angle = 0, attachments = 0, recoil = 0) {
+  const length = .39 - finite(recoil), a = finite(angle);
+  return { x: finite(x) + Math.cos(a) * length + Math.sin(a) * .015, y: finite(y) + Math.sin(a) * length - Math.cos(a) * .015, z: .4875 + clamp(finite(attachments), 0, 5) * .18 };
+}
 function rgb(hex) {
   if (typeof hex === 'string' && hex.startsWith('rgb')) {
     const channels = hex.match(/[\d.]+/g);
@@ -41,6 +57,7 @@ export class VoxelRenderer {
     this.particles = []; this.rings = []; this.labels = []; this.beams = []; this.pickups = [];
     this.state = {}; this.shake = 0; this.flash = 0; this.reducedMotion = false;
     this._frame = 0; this._lastPhase = null; this._towerHits = [];
+    this._aims = new Map(); this._lastAimClock = null;
     this._click = event => { const cell = this.towerAt(event.clientX, event.clientY) ?? this.cellAt(event.clientX, event.clientY); if (cell !== null && this.onCell) this.onCell(cell); };
     canvas.addEventListener('click', this._click);
     this._observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => this.resize()) : null;
@@ -120,6 +137,43 @@ export class VoxelRenderer {
     this._poly(p, shade(color, 1.09), edge ? alpha('#ffffff', .18) : null, .65);
   }
 
+  _rotatedCube(x, y, z, w, d, h, angle, color) {
+    const ca = Math.cos(angle), sa = Math.sin(angle);
+    const corners = [[-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]];
+    const points = corners.map(([dx, dy]) => ({ x: x + dx * ca - dy * sa, y: y + dx * sa + dy * ca }));
+    const top = points.map(p => this._project(p.x, p.y, z + h)), bottom = points.map(p => this._project(p.x, p.y, z));
+    // Draw only faces looking toward the isometric camera, regardless of yaw.
+    for (let i = 0; i < 4; i++) {
+      const j = (i + 1) % 4, dx = corners[j][0] - corners[i][0], dy = corners[j][1] - corners[i][1];
+      const nx = dy * ca + dx * sa, ny = dy * sa - dx * ca, length = Math.hypot(nx, ny);
+      if (nx + ny > 1e-8) this._poly([top[i], bottom[i], bottom[j], top[j]], shade(color, .52 + .21 * Math.max(0, ny / length)));
+    }
+    this._poly(top, shade(color, 1.09), alpha('#ffffff', .18), .65);
+  }
+
+  _updateAim(state, dt) {
+    // The simulation clock stops under every menu; turret tracking stops too.
+    const clock = state._clock;
+    const step = Number.isFinite(clock) && this._lastAimClock !== null ? clamp(clock - this._lastAimClock, 0, .05) : dt;
+    this._lastAimClock = Number.isFinite(clock) ? clock : null;
+    const enemies = new Map((state.enemies || []).filter(e => e.hp > 0).map(e => [e.id, e]));
+    const active = new Set();
+    for (const tower of state.towers || []) {
+      active.add(tower.id);
+      let aim = this._aims.get(tower.id);
+      if (!aim || aim.source !== tower) {
+        aim = { source: tower, angle: finite(tower.aimAngle), shotAge: 1, color: PALETTE[(tower.number || 1) - 1] };
+        this._aims.set(tower.id, aim);
+      }
+      const enemy = state.phase === 'battle' ? enemies.get(tower.aimTargetId) : null;
+      if (enemy && aim.shotAge > 0) aim.angle = turnToward(aim.angle, towerAimAngle(tower.cell % 9, Math.floor(tower.cell / 9), enemy.x, enemy.y, aim.angle), step, this.reducedMotion);
+      // With no live target, retain the last facing direction. Old saves safely
+      // begin at their previous fixed +X facing and acquire aim on their first shot.
+      aim.shotAge = Math.min(1, aim.shotAge + step);
+    }
+    for (const id of this._aims.keys()) if (!active.has(id)) this._aims.delete(id);
+  }
+
   _glow(x, y, radius, color, opacity = .4) {
     if (radius < .5 || opacity <= 0) return;
     const c = this.ctx, g = c.createRadialGradient(x, y, 0, x, y, radius);
@@ -138,7 +192,16 @@ export class VoxelRenderer {
       }
     }
     if (type === 'shot') {
-      if (this.beams.length < 100) this.beams.push({ x, y, tx: finite(event.targetX, x), ty: finite(event.targetY, y), color: MODULES[effect]?.color || color, effect, height: finite(event.height, .65), age: 0, life: effect === 'range' ? .26 : .16 });
+      let origin = { x, y, z: finite(event.height, .65) };
+      // Chain-lightning hops deliberately have no towerId/cell: only the actual
+      // muzzle event is allowed to turn a head or trigger recoil.
+      if (cell !== null && event.towerId !== undefined) {
+        const angle = finite(event.aimAngle, towerAimAngle(x, y, event.targetX, event.targetY));
+        origin = { ...towerMuzzle(x, y, angle), z: finite(event.height, .4875) };
+        const tower = (this.state.towers || []).find(t => t.id === event.towerId);
+        if (tower) this._aims.set(tower.id, { source: tower, angle, shotAge: 0, color: MODULES[effect]?.color || color });
+      }
+      if (this.beams.length < 100) this.beams.push({ x: origin.x, y: origin.y, tx: finite(event.targetX, x), ty: finite(event.targetY, y), color: MODULES[effect]?.color || color, effect, height: origin.z, age: 0, life: effect === 'range' ? .26 : .16 });
       return;
     }
     if (type === 'fragment' || type === 'chestDrop') {
@@ -173,6 +236,7 @@ export class VoxelRenderer {
     this.state = state;
     if (dt > 2) dt /= 1000;
     dt = clamp(dt, 0, .05);
+    this._updateAim(state, dt);
     this.time += dt;
     const battle = ['prep', 'battle', 'loot', 'reward', 'lost', 'won'].includes(state.phase);
     const target = battle ? 1 : 0;
@@ -381,10 +445,19 @@ export class VoxelRenderer {
       cube(0, 0, .25, .3, .3, .055, color);
       for (let i = 0; i < attachments.length; i++) this._module(tower, attachments[i], i, build);
       const head = .385 + attachments.length * .18;
-      cube(0, 0, head, .33, .31, .18, color);
-      cube(.21, -.015, head + .055, .29, .11, .095, mid);
-      cube(.37, -.015, head + .06, .04, .145, .085, '#e8ffec');
-      cube(-.12, -.1, head + .18, .065, .065, .065, '#d6ffdf');
+      const aim = this._aims.get(tower.id), angle = finite(aim?.angle, finite(tower.aimAngle));
+      const recoil = this.reducedMotion ? 0 : .055 * clamp(1 - finite(aim?.shotAge, 1) / .14);
+      const ca = Math.cos(angle), sa = Math.sin(angle);
+      const parts = [[0, 0, head, .33, .31, .18, color], [.21, -.015, head + .055, .29, .11, .095, mid], [.37, -.015, head + .06, .04, .145, .085, '#e8ffec'], [-.12, -.1, head + .18, .065, .065, .065, '#d6ffdf']]
+        .map(([dx, dy, z, w, d, h, col]) => ({ x: x + (dx - recoil) * ca - dy * sa, y: y + (dx - recoil) * sa + dy * ca, z, w, d, h, col }));
+      parts.sort((a, b) => a.x + a.y - b.x - b.y);
+      for (const part of parts) this._rotatedCube(part.x, part.y, part.z * build, part.w, part.d, part.h * build, angle, part.col);
+      const muzzle = towerMuzzle(x, y, angle, attachments.length, recoil), muzzleScreen = this._project(muzzle.x, muzzle.y, muzzle.z * build);
+      if (!this.reducedMotion && aim?.shotAge < .09) {
+        const flash = 1 - aim.shotAge / .09;
+        this._glow(muzzleScreen.x, muzzleScreen.y, this.isoSize * .38 * flash, aim.color, .8 * flash);
+        this._rotatedCube(muzzle.x, muzzle.y, muzzle.z * build - .04, .09 * flash, .09 * flash, .08 * flash, angle, '#f3ffe8');
+      }
       const tip = this._project(x, y, (head + .25) * build);
       this._glow(tip.x, tip.y, this.isoSize * .36, color, .13 + (phase + 1) * .022);
       const rarities = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
@@ -400,7 +473,7 @@ export class VoxelRenderer {
       }
       // Hit region follows the visible raised machine; ground-cell picking remains
       // a separate precise inverse projection for keyboard/controller navigation.
-      this._towerHits.push({ cell: tower.cell, left: base.x - this.isoSize * .29, right: base.x + this.isoSize * .35, top: tip.y - 3, bottom: base.y + 4 });
+      this._towerHits.push({ cell: tower.cell, left: Math.min(base.x - this.isoSize * .29, muzzleScreen.x - 3), right: Math.max(base.x + this.isoSize * .35, muzzleScreen.x + 3), top: Math.min(tip.y - 3, muzzleScreen.y - 3), bottom: base.y + 4 });
       if (selected || level > 1) {
         const badgeX = tip.x - this.isoSize * .25, badgeY = tip.y - 8;
         const label = `L${level}`, fontSize = Math.max(8, Math.min(10, this.isoSize * .27));

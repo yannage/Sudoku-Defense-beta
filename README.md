@@ -4,7 +4,9 @@ A Sudoku tower-defense roguelite alpha by Yak Studios. Solve a traditional grid,
 
 [Play Gridfall](https://gridfall.yakstudios.chatgpt.site) · [Player guide](docs/ROGUELITE-GUIDE.md)
 
-Version **0.2.1** gives the board more room with a compact layout that fits the viewport, keeps all nine number buttons visible, and moves secondary controls into a collapsible quick bar. Tower, Bag, Chests, Notes, and More share one panel; opening it pauses the game clock. The inventory also has a compact item list and focused item details for smaller screens.
+Version **0.2.2** adds turret heads that rotate toward the enemies they fire at and a shared voxel-art system for chests, loot, and quick-bar controls. Loot previews and chest reveals use the same visual style as the battlefield.
+
+The compact layout fits the viewport, keeps all nine number buttons visible, and moves secondary controls into a collapsible quick bar. Tower, Bag, Chests, Notes, and More share one panel; opening it pauses the game clock. The inventory also has a compact item list and focused item details for smaller screens.
 
 The game includes independent Sudoku and combat difficulties, a 50-round campaign, tower and number-family upgrades, five-slot equipment stacks, fragment-powered chests, consumables, passive upgrades, and a credit-only slot machine. The rendering foundation is stylized 2.5D Canvas. This is an evolving game framework and playable alpha; campaign balance has not undergone a full human playtest.
 
@@ -17,7 +19,7 @@ Choose **Free play** for one round, **Campaign** for 50 rounds with a fresh diff
 3. **Defend:** fight for drops and fragments. Emergency placements may break Sudoku rules, but raise corruption and expire after battle. Use consumables when the wave gets dangerous.
 4. **Loot:** open earned chests, manage equipment, buy passive upgrades, or spend credits at the slot machine before choosing the next board.
 
-All numbered towers start with basic bolts. Attachments provide rapid fire, lightning, frost, explosions, poison, range, power, gravity, or nova effects. Repeated attachments stack. Number-family upgrades, items, resources, and passive purchases continue through the run; individual tower upgrades belong to the current board. Equipment returns to the inventory when a board ends.
+All numbered towers start with basic bolts. During combat, their heads turn toward their firing targets. Attachments provide rapid fire, lightning, frost, explosions, poison, range, power, gravity, or nova effects. Repeated attachments stack. Number-family upgrades, items, resources, and passive purchases continue through the run; individual tower upgrades belong to the current board. Equipment returns to the inventory when a board ends.
 
 Read the [player guide](docs/ROGUELITE-GUIDE.md) for progression, controls, and loot. Blackjack and poker are future additions; only slots are included in this alpha.
 
@@ -35,7 +37,7 @@ npm run build
 
 Open `http://127.0.0.1:4173`. `dist/` contains the deployable web game and readable source; no bundler is required. The build command checks the static files, and tests exercise the simulation, items, input, and desktop boundaries.
 
-`dist/engine/` contains rendering, visual effects, procedural audio, and gamepad systems. `dist/game/simulation.js` owns Sudoku, economy, progression, and combat; `dist/game/items.js` defines equipment, rarity, and slot outcomes. `dist/app.js` connects the game to the board UI. `dist/quick-ui.js` owns the collapsible quick bar, `dist/cockpit.css` defines the compact game layout, and `dist/rogue-ui.js` owns the inventory, loot, and run setup panels. Another game can reuse the engine modules, deployment, and desktop shell with its own simulation and UI.
+`dist/engine/` contains rendering, visual effects, procedural audio, and gamepad systems. `dist/game/simulation.js` owns Sudoku, economy, progression, and combat; `dist/game/items.js` defines equipment, rarity, and slot outcomes. `dist/app.js` connects the game to the board UI. `dist/quick-ui.js` owns the collapsible quick bar, `dist/cockpit.css` defines the compact game layout, and `dist/rogue-ui.js` owns the inventory, loot, and run setup panels. `dist/voxel-art.js` and `dist/voxel-art.css` provide shared voxel illustrations for those interfaces. Another game can reuse the engine modules, art helpers, deployment, and desktop shell with its own simulation and UI.
 
 ## Web deployment
 
@@ -50,7 +52,7 @@ npm run desktop
 npm run package:linux
 ```
 
-Packaging produces `release/Gridfall-0.2.1-x64.AppImage` and `release/linux-unpacked/`. Run `release/linux-unpacked/gridfall` directly or add it as a non-Steam game. Make the AppImage executable with `chmod +x release/*.AppImage`. The GitHub Actions artifact also contains a depot tarball that preserves executable permissions.
+Packaging produces `release/Gridfall-0.2.2-x64.AppImage` and `release/linux-unpacked/`. Run `release/linux-unpacked/gridfall` directly or add it as a non-Steam game. Make the AppImage executable with `chmod +x release/*.AppImage`. The GitHub Actions artifact also contains a depot tarball that preserves executable permissions.
 
 The Linux application embeds Electron and plays the web game offline. It uses the browser Gamepad API; start Deck testing with Steam Input's standard Gamepad layout. **F11** toggles desktop fullscreen. The shell serves local assets only on `127.0.0.1`, isolates web content from Node, blocks external navigation, and retains local data under Electron's user-data directory. It does not upload player data.
 

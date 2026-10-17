@@ -248,3 +248,43 @@ body { background:#080e18; }
 @media(prefers-reduced-motion:reduce) {
   .cockpit *, .cockpit *:before, .cockpit *:after { animation:none!important; transition:none!important; }
 }
+
+/* Physical little objects, shared with the voxel battlefield and loot cabinet. */
+.cockpit .hud-voxel { display:block; width:23px; height:23px; flex:none; }
+.cockpit .hud-voxel>svg { display:block; width:100%; height:100%; }
+.cockpit .quick-icon { display:block; width:29px; height:29px; flex:none; }
+.cockpit .quick-icon>svg { width:100%; height:100%; display:block; filter:drop-shadow(0 2px 1px #020b1499); }
+.cockpit .quickbar>button { border-radius:5px; box-shadow:inset 0 1px 0 #9dc8c116,inset 0 -3px 0 #020e1b66; }
+.cockpit .quickbar>button[aria-expanded="true"] { box-shadow:inset 0 2px 0 #91edc96b,inset 0 -3px 0 #04150d77; }
+.cockpit .quickbar>button:hover .quick-icon { transform:translateY(-1px); }
+.cockpit .quick-panel-head>div { position:relative; padding-left:43px; min-width:0; }
+.cockpit .panel-voxel { display:block; position:absolute; width:35px; height:35px; left:0; top:50%; transform:translateY(-50%); }
+.cockpit .panel-voxel>svg { width:100%; height:100%; }
+.cockpit .quick-item { display:grid; grid-template-columns:46px minmax(0,1fr); align-items:center; gap:10px; min-height:68px; padding:8px 10px; }
+.cockpit .quick-item-art { width:46px; height:46px; display:block; }
+.cockpit .quick-item-art>svg { width:100%; height:100%; display:block; }
+.cockpit .quick-item-copy { min-width:0; display:grid; gap:3px; }
+.cockpit .quick-item-copy small:first-child { color:var(--loot); font-size:9px; letter-spacing:.4px; }
+.cockpit .quick-empty-art { float:left; width:44px; height:44px; margin:1px 10px 0 0; }
+.cockpit .quick-empty-art>svg { width:100%; height:100%; }
+.cockpit .quick-panel .tower-glyph { position:relative; width:58px; height:58px; border:0; background:none; box-shadow:none; transform:none; border-radius:0; }
+.cockpit .tower-glyph>svg { width:58px; height:58px; }
+.cockpit .tower-glyph-number { position:absolute; right:-1px; bottom:0; display:grid; place-items:center; min-width:21px; height:22px; padding:0 3px; border:1px solid var(--selected); background:#12252c; font:700 14px ui-monospace,monospace; color:var(--selected); box-shadow:2px 2px 0 #050b13; }
+.cockpit .stack-slots button>svg { width:32px; height:32px; vertical-align:middle; }
+.cockpit .tower-card { border-radius:4px; box-shadow:inset 0 2px 0 #bde6e319,inset 0 -4px 0 #040b1699,2px 2px 0 #020810; }
+.cockpit .tower-card.active { box-shadow:inset 0 2px 0 color-mix(in srgb,var(--tower-color),transparent 45%),inset 0 -4px 0 #04151f,0 0 12px color-mix(in srgb,var(--tower-color),transparent 88%); }
+@media(max-width:700px) {
+  .cockpit .quickbar>button { grid-template-rows:26px 12px; gap:1px; }
+  .cockpit .quick-icon { width:28px; height:28px; }
+  .cockpit .hud { gap:10px; }
+  .cockpit .hud-credit,.cockpit .hud-fragments,.cockpit .hud-health { gap:3px; }
+  .cockpit .hud-voxel { width:20px; height:20px; }
+  .cockpit .quick-panel-head .eyebrow { font-size:7px; letter-spacing:.7px; }
+}
+@media(min-width:740px) and (max-height:540px) { .cockpit .quick-icon { width:25px; height:25px; } }
+/* Compact controls crop the illustration's presentation margin, not the control. */
+.cockpit .quick-icon>svg { transform:scale(1.65); transform-origin:50% 70%; }
+.cockpit .hud-voxel>svg { transform:scale(1.75); transform-origin:50% 70%; }
+.cockpit .panel-voxel>svg { transform:scale(1.45); transform-origin:50% 70%; }
+.cockpit .quick-item-art:not(.chest)>svg { transform:scale(1.35); transform-origin:50% 70%; }
+.cockpit .stack-slots button>svg { transform:scale(1.45); transform-origin:50% 70%; }

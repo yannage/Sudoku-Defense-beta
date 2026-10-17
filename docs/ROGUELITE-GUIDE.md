@@ -1,4 +1,4 @@
-# Gridfall 0.2.1 player guide
+# Gridfall 0.2.2 player guide
 
 Gridfall mixes timed Sudoku with tower defense and a run-long collection of equipment. Your numbers create the towers; your loot determines how they fight.
 
@@ -18,6 +18,8 @@ Only **one quick panel** opens at a time. Tap its tab again, press the close but
 
 On smaller screens, the full inventory uses a compact item list. Select an item to inspect its effect and equipment action; **Back to items** returns to the list. Open Bag → **Manage inventory** to see the collection, or choose an item directly from the short list.
 
+Chests, equipment, and quick-bar controls use matching voxel artwork. Item names, rarity labels, costs, and descriptions remain available alongside the art.
+
 ## Choose a run
 
 | Mode | Length | Difficulty choices |
@@ -34,7 +36,7 @@ Sudoku and combat each have their own **Easy / Medium / Hard** setting. Harder S
 
 **War prep.** The board becomes a battlefield and seeds grow into high-tech towers. Click an existing tower to inspect its stats, upgrade it, or open its equipment. Open chests, fit attachments, and buy reserve seeds before launching combat.
 
-**Defend.** The route is fixed for this battle. Spend reserves to put extra towers in empty cells. An illegal Sudoku placement still fights, but increases corruption and disappears after the wave. Its equipment is returned. Enemies provide credits, energy fragments, and occasional chests. Keep the core alive and use temporary items when needed.
+**Defend.** The route is fixed for this battle. Tower heads rotate toward their firing targets, making their aim easier to follow. Spend reserves to put extra towers in empty cells. An illegal Sudoku placement still fights, but increases corruption and disappears after the wave. Its equipment is returned. Enemies provide credits, energy fragments, and occasional chests. Keep the core alive and use temporary items when needed.
 
 **Loot.** Spend fragments to unlock chests, collect equipment and consumables, buy passives, or try the slot machine. In Campaign, choose the next board's Sudoku and combat difficulties. Locked in keeps your original choices. A new board starts each round; your collection and run upgrades continue.
 

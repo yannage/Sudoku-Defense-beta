@@ -1,0 +1,20 @@
+/* Shared isometric objects: projected geometry and light, without image downloads. */
+.vx-art{display:block;width:100%;height:100%;overflow:visible;pointer-events:none;user-select:none;filter:drop-shadow(0 2px 1px #0002)}
+.vx-chest-glow,.vx-chest-particles{opacity:0}
+.vx-chest-lid{transform-origin:66px 47px;transition:transform .56s cubic-bezier(.22,1.18,.35,1)}
+.stage-0 .vx-chest-lock{animation:vx-lock-charge .38s ease-in-out infinite alternate}
+.stage-1 .vx-chest-lid,.stage-2 .vx-chest-lid,.vx-open .vx-chest-lid{transform:translate(-6px,-13px) rotate(-16deg)}
+.stage-1 .vx-chest-glow,.stage-2 .vx-chest-glow,.vx-open .vx-chest-glow{opacity:1;transition:opacity .3s}
+.stage-1 .vx-chest-lid{animation:vx-lid-open .56s cubic-bezier(.22,1.18,.35,1) both}
+.stage-1 .vx-chest-glow{animation:vx-cache-light .45s ease-out both}
+.stage-1 .vx-chest-particles{opacity:1}
+.stage-1 .vx-chest-spark{animation:vx-cube-burst .7s ease-out both;animation-delay:var(--vx-delay)}
+@keyframes vx-lid-open{from{transform:translate(0,0) rotate(0)}to{transform:translate(-6px,-13px) rotate(-16deg)}}
+@keyframes vx-cache-light{from{opacity:0}to{opacity:1}}
+@keyframes vx-cube-burst{from{opacity:1;transform:translate(0,0)}to{opacity:0;transform:translate(var(--vx-dx),var(--vx-dy))}}
+@keyframes vx-lock-charge{to{filter:brightness(1.75);opacity:.8}}
+.rg-reduced-motion .vx-art *,.reduced-motion .vx-art *{animation:none!important;transition:none!important}
+.rg-reduced-motion .rg-reveal-body .vx-chest-lid,.reduced-motion .rg-reveal-body .vx-chest-lid{transform:translate(-6px,-13px) rotate(-16deg)}
+.rg-reduced-motion .rg-reveal-body .vx-chest-glow,.reduced-motion .rg-reveal-body .vx-chest-glow{opacity:1}
+.rg-reduced-motion .vx-chest-particles,.reduced-motion .vx-chest-particles{display:none}
+@media(prefers-reduced-motion:reduce){.vx-art *{animation:none!important;transition:none!important}.rg-reveal-body .vx-chest-lid{transform:translate(-6px,-13px) rotate(-16deg)}.rg-reveal-body .vx-chest-glow{opacity:1}.vx-chest-particles{display:none}}

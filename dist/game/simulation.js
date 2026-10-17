@@ -329,7 +329,12 @@ export class Game {
   _fire(tower,target){
     const stats=this.towerStats(tower),origin=xy(tower.cell),effects=stats.effects,color=colorFor(tower.number);
     const effect=EFFECT_KINDS.find(kind=>effects[kind]>0)||'basic';
-    this._emit('shot',{...origin,cell:tower.cell,number:tower.number,targetX:target.x,targetY:target.y,color,illegal:tower.illegal,effect,height:.65+(tower.attachments?.length||0)*.18});
+    // Presentation metadata is captured before damage can kill or displace the
+    // target. It never participates in range, priority, cadence, or damage.
+    tower.aimTargetId=target.id;tower.aimX=target.x;tower.aimY=target.y;
+    const dx=target.x-origin.x,dy=target.y-origin.y;
+    tower.aimAngle=dx*dx+dy*dy>1e-12?Math.atan2(dy,dx):(Number.isFinite(tower.aimAngle)?tower.aimAngle:0);
+    this._emit('shot',{...origin,cell:tower.cell,towerId:tower.id,number:tower.number,targetId:target.id,targetX:target.x,targetY:target.y,aimAngle:tower.aimAngle,color,illegal:tower.illegal,effect,height:.4875+(tower.attachments?.length||0)*.18});
     const impact={x:target.x,y:target.y};this._damage(target,stats.damage,color);
     if(effects.frost&&target.hp>0){target.slowTime=Math.max(target.slowTime,2);target.slowFactor=Math.min(target.slowFactor||1,1-Math.min(.7,.18*effects.frost));}
     if(effects.venom&&target.hp>0){target.poisonTime=3;target.poisonDps=Math.max(target.poisonDps,.3*effects.venom*stats.damage);}

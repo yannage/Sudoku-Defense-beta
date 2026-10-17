@@ -4,6 +4,7 @@ import { AudioEngine } from './engine/audio.js';
 import { GamepadInput } from './engine/input.js';
 import { RogueUI } from './rogue-ui.js';
 import { QuickBar } from './quick-ui.js';
+import { voxelArt } from './voxel-art.js';
 
 const $ = id => document.getElementById(id);
 const storage = {
@@ -180,7 +181,7 @@ function inspectTower() {
   $('app').classList.toggle('tower-selected', !!tower); $('app').classList.toggle('seed-selected', !tower);
   $('inspectorEyebrow').textContent = tower ? 'SELECTED TOWER' : 'SELECTED SEED';
   $('towerName').textContent = tower ? `Tower ${number} · Lv ${stats.level}` : `Seed ${number}`;
-  $('towerGlyph').textContent = number;
+  $('towerGlyph').innerHTML = `${voxelArt(tower ? 'tower' : 'seed', { color: def.color })}<b class="tower-glyph-number">${number}</b>`;
   $('towerType').className = 'tower-type-level';
   $('towerType').textContent = tower ? `${Math.round(stats.damage * 10) / 10} DMG · ${(1 / stats.cooldown).toFixed(1)} SHOTS/SEC` : `FAMILY LEVEL ${family} · BASIC BOLT`;
   $('stockValue').textContent = `${game.inventory[number]} RESERVE SEEDS`;
@@ -191,7 +192,7 @@ function inspectTower() {
     for (let i = 0; i < 5; i++) {
       const item = tower.attachments[i], b = document.createElement('button');
       b.className = item ? 'filled' : ''; b.style.setProperty('--item-color', item?.color || '#526d80');
-      b.textContent = item ? ({ rapid: '»', electric: 'ϟ', frost: '❄', blast: '✹', venom: '◉', range: '◎', power: '▲', gravity: '◌', nova: '✦' })[item.kind] || '◆' : '+';
+      if (item) b.innerHTML = voxelArt(item.kind, { color: item.color, rarity: item.rarity }); else b.textContent = '+';
       b.title = item ? `${item.name} · ${item.description}` : `Empty slot ${i + 1}. Equip an attachment.`;
       b.setAttribute('aria-label', b.title); b.onclick = () => openRogue('tower'); slots.append(b);
     }
