@@ -1,0 +1,118 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {RARITIES,ATTACHMENTS,CONSUMABLES,SLOT_COST,SLOT_PAYTABLE,generateItem,itemDescription,rollRarity,rollChest,rollSlot} from '../dist/game/items.js';
+
+function seeded(seed=1337) {
+  let state=seed>>>0;
+  return ()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return state/4294967296;};
+}
+const sequence=(...values)=>{let index=0;return ()=>values[index++%values.length];};
+
+test('the loot catalogue has five ordered rarities, nine modules, and four consumables',()=>{
+  assert.deepEqual(RARITIES.map(r=>r.id),['common','uncommon','rare','epic','legendary']);
+  assert.equal(ATTACHMENTS.length,9);assert.equal(CONSUMABLES.length,4);
+  assert.equal(new Set([...ATTACHMENTS,...CONSUMABLES].map(def=>def.id)).size,13);
+  for(let i=1;i<RARITIES.length;i++){
+    assert.ok(RARITIES[i].multiplier>RARITIES[i-1].multiplier);
+    assert.ok(RARITIES[i].fragmentCost>RARITIES[i-1].fragmentCost);
+  }
+});
+
+test('all generated items have the contract shape and repeat exactly for a seed',()=>{
+  const a=seeded(21),b=seeded(21),seen=new Set();
+  for(let i=0;i<2000;i++){
+    const rarity=RARITIES[i%5].id;
+    const first=generateItem(a,rarity,i%50+1,`item-${i}`);
+    assert.deepEqual(first,generateItem(b,rarity,i%50+1,`item-${i}`));
+    assert.deepEqual(Object.keys(first).sort(),['color','description','id','kind','name','power','rarity','type']);
+    const definitions=first.type==='attachment'?ATTACHMENTS:CONSUMABLES;
+    assert.ok(definitions.some(def=>def.id===first.kind));
+    assert.ok(first.power>0);assert.equal(first.description,itemDescription(first));
+    assert.equal(first.rarity,rarity);assert.ok(first.name.length>8);
+    if(['rare','epic','legendary'].includes(rarity))assert.equal(first.type,'attachment');
+    seen.add(first.kind);
+  }
+  assert.equal(seen.size,13);
+});
+
+test('module stat rolls have useful rarity ranges and bounded round scaling',()=>{
+  for(const rarity of RARITIES){
+    const low=generateItem(sequence(.8,0,0,0,0),rarity.id,1,'low');
+    const high=generateItem(sequence(.8,0,.99999,0,0),rarity.id,50,'high');
+    assert.ok(Math.abs(low.power-rarity.multiplier*.9)<.006);
+    assert.ok(Math.abs(high.power-rarity.multiplier*1.1*1.294)<.006);
+    assert.ok(high.power>low.power);
+  }
+  assert.equal(generateItem(sequence(.8,0,.5), 'epic',10000).power,generateItem(sequence(.8,0,.5),'epic',50).power);
+  assert.equal(generateItem(sequence(.8,0,.5), 'common',-10).power,generateItem(sequence(.8,0,.5),'common',1).power);
+});
+
+test('descriptions expose actual scalar effects and fixed consumable durations',()=>{
+  assert.match(itemDescription({kind:'rapid',type:'attachment',power:2}),/\+40% attack speed/);
+  assert.match(itemDescription({kind:'power',type:'attachment',power:2}),/\+50% bolt damage/);
+  assert.match(itemDescription({kind:'range',type:'attachment',power:2}),/\+0.56 cells/);
+  assert.match(itemDescription({kind:'electric',type:'attachment',power:2}),/3 extra targets/);
+  assert.match(itemDescription({kind:'frost',type:'attachment',power:10}),/70% for 2 seconds/);
+  assert.match(itemDescription({kind:'venom',type:'attachment',power:2}),/60% bolt damage per second for 3 seconds/);
+  assert.match(itemDescription({kind:'overclock',type:'consumable'}),/2× as fast for 20 seconds/);
+  assert.match(itemDescription({kind:'freeze',type:'consumable'}),/60% slower for 12 seconds/);
+  assert.match(itemDescription({kind:'repair',type:'consumable'}),/10 core health/);
+});
+
+test('rarity rolls use the documented distribution and luck changes it monotonically',()=>{
+  const rng=seeded(87212),counts=Object.fromEntries(RARITIES.map(r=>[r.id,0])),samples=100000;
+  for(let i=0;i<samples;i++)counts[rollRarity(rng)]++;
+  const expected=[.58,.27,.10,.04,.01];
+  RARITIES.forEach((rarity,i)=>assert.ok(Math.abs(counts[rarity.id]/samples-expected[i])<.007));
+  const ordered=RARITIES.map(r=>r.id);
+  for(let i=0;i<1000;i++){
+    const draw=i/1000;
+    assert.ok(ordered.indexOf(rollRarity(()=>draw,1))>=ordered.indexOf(rollRarity(()=>draw,0)));
+  }
+  assert.equal(rollRarity(()=>0),'common');assert.equal(rollRarity(()=>.999999),'legendary');
+});
+
+test('chests preserve identity and charge the exact rarity fragment cost',()=>{
+  const a=seeded(902),b=seeded(902);
+  for(let i=0;i<100;i++){
+    const chest=rollChest(a,35,`chest-${i}`,.4);
+    assert.deepEqual(chest,rollChest(b,35,`chest-${i}`,.4));
+    assert.equal(chest.id,`chest-${i}`);
+    assert.equal(chest.cost,RARITIES.find(r=>r.id===chest.rarity).fragmentCost);
+  }
+});
+
+test('slot paytable totals 100%, pays 12 credits on average, and awards 10% chests',()=>{
+  assert.equal(SLOT_COST,20);
+  assert.ok(Math.abs(SLOT_PAYTABLE.reduce((sum,outcome)=>sum+outcome.probability,0)-1)<1e-9);
+  assert.ok(Math.abs(SLOT_PAYTABLE.reduce((sum,outcome)=>sum+outcome.credits*outcome.probability,0)-12)<1e-9);
+  assert.ok(Math.abs(SLOT_PAYTABLE.filter(p=>p.chestRarity).reduce((sum,p)=>sum+p.probability,0)-.1)<1e-9);
+  let cumulative=0;
+  for(const prize of SLOT_PAYTABLE){
+    const result=rollSlot(sequence(cumulative+prize.probability/2,.2,.4,.6));
+    assert.equal(result.credits,prize.credits);assert.equal(result.chestRarity,prize.chestRarity);
+    assert.equal(result.reels.length,3);
+    assert.equal(new Set(result.reels).size,prize.symbol?1:3);
+    cumulative+=prize.probability;
+  }
+});
+
+test('seeded slot outcomes follow advertised payout and chest frequency',()=>{
+  const a=seeded(770),b=seeded(770),samples=100000;
+  let credits=0,chests=0,losses=0;
+  for(let i=0;i<samples;i++){
+    const result=rollSlot(a);
+    if(i<100)assert.deepEqual(result,rollSlot(b));
+    credits+=result.credits;if(result.chestRarity)chests++;
+    if(!result.credits&&!result.chestRarity)losses++;
+  }
+  assert.ok(Math.abs(credits/samples-12)<.2);
+  assert.ok(Math.abs(chests/samples-.1)<.005);
+  assert.ok(Math.abs(losses/samples-.4)<.007);
+});
+
+test('loot rejects invalid RNGs and unknown rarity instead of creating corrupt items',()=>{
+  assert.throws(()=>generateItem(()=>.5,'mythical'),/Unknown rarity/);
+  assert.throws(()=>rollRarity(()=>1),/Random values/);
+  assert.throws(()=>rollSlot(()=>NaN),/Random values/);
+});

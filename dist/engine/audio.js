@@ -141,7 +141,7 @@ export class AudioEngine {
     const details = typeof event === 'string' ? { ...options, type: event } : event || {};
     const name = details.type || details.name;
     const now = this.context.currentTime;
-    const cooldown = { shot: .065, kill: .07, invalid: .12, leak: .15 }[name] || .025;
+    const cooldown = { shot: .065, kill: .07, invalid: .12, leak: .15, fragment: .16, chestDrop: .3, seed: .08, chestCharge: .4, slotSpin: .5 }[name] || .025;
     if (now - (this._cooldowns.get(name) ?? -100) < cooldown) return;
     this._cooldowns.set(name, now);
     const pan = details.pan || 0;
@@ -151,6 +151,11 @@ export class AudioEngine {
     const tone = (frequency, duration, level, extra = {}) => this._tone(frequency, duration, level, { pan, ...extra });
     const noise = (duration, level, extra = {}) => this._noise(duration, level, { pan, ...extra });
     switch (name) {
+      case 'seed':
+        tone(pitch * .5, .14, .095, { type: 'triangle', end: pitch });
+        tone(pitch * 2, .25, .048, { delay: .075, end: pitch * 2.05 });
+        noise(.035, .04, { frequency: 2100 });
+        break;
       case 'place':
         tone(pitch, .17, .17, { type: 'triangle' });
         tone(pitch * 2, .22, .07, { delay: .036 });
@@ -162,8 +167,92 @@ export class AudioEngine {
         noise(.075, .035, { frequency: 700 });
         break;
       case 'shot':
-        tone(pitch * 1.4, .065, .046, { end: pitch * .72, type: 'triangle' });
-        noise(.025, .021, { frequency: 2300 });
+        if (details.effect === 'electric') {
+          tone(880, .085, .034, { end: 210, type: 'sawtooth' });
+          noise(.045, .025, { frequency: 3700 });
+        } else if (['blast', 'nova'].includes(details.effect)) {
+          tone(150, .1, .058, { end: 65, type: 'triangle' });
+          noise(.08, .034, { frequency: 900, type: 'lowpass' });
+        } else if (details.effect === 'frost') {
+          tone(1420, .12, .032, { end: 1900 });
+          noise(.03, .02, { frequency: 5000 });
+        } else if (details.effect === 'gravity') {
+          tone(240, .14, .04, { end: 66 });
+          tone(360, .1, .02, { end: 90 });
+        } else {
+          tone(pitch * 1.4, .065, .046, { end: pitch * .72, type: 'triangle' });
+          noise(.025, .021, { frequency: 2300 });
+        }
+        break;
+      case 'fragment':
+        tone(1568, .08, .024, { end: 1865 });
+        break;
+      case 'upgrade':
+        [1, 1.25, 1.5, 2].forEach((n, i) => tone(pitch * n, .25, .075, { delay: i * .055, type: 'triangle' }));
+        tone(pitch * .5, .32, .08, { end: pitch });
+        noise(.08, .035, { frequency: 2500 });
+        break;
+      case 'equip':
+        noise(.045, .075, { frequency: 1200 });
+        tone(180, .1, .075, { end: 95, type: 'triangle' });
+        tone(784, .19, .07, { delay: .08 });
+        tone(1174.66, .2, .045, { delay: .13 });
+        break;
+      case 'itemUsed':
+        tone(220, .35, .09, { end: 880, type: 'triangle' });
+        [587.33, 880, 1174.66].forEach((n, i) => tone(n, .3, .04, { delay: .1 + i * .045 }));
+        noise(.15, .04, { frequency: 2600 });
+        break;
+      case 'chestDrop':
+        tone(196, .17, .08, { end: 130.81, type: 'triangle' });
+        [783.99, 1174.66, 1568].forEach((n, i) => tone(n, .35, .055, { delay: .11 + i * .08 }));
+        noise(.07, .04, { frequency: 900 });
+        break;
+      case 'chestOpen':
+        // The simulation unlocks the chest now. Its reveal UI owns the longer
+        // charge/reveal cues, keeping the reward synchronized with the lid.
+        tone(330, .08, .07, { type: 'triangle', end: 110 });
+        noise(.06, .06, { frequency: 1600 });
+        break;
+      case 'chestCharge': {
+        const rank = ['common', 'uncommon', 'rare', 'epic', 'legendary'].indexOf(details.rarity);
+        tone(98, .75, .09, { end: 196, attack: .12 });
+        for (let i = 0; i < 7; i++) tone(293.665 * 2 ** (i / 7), .13, .032 + i * .004, { delay: i * .075, type: 'triangle', pan: (i % 2 ? .25 : -.25) });
+        noise(.35, .045 + Math.max(0, rank) * .005, { delay: .28, frequency: 2900, type: 'highpass' });
+        break;
+      }
+      case 'chestReveal': {
+        const rank = Math.max(0, ['common', 'uncommon', 'rare', 'epic', 'legendary'].indexOf(details.rarity));
+        tone(73.416, .6, .11, { end: 55, attack: .012 });
+        [1, 1.25, 1.5, 2, 2.5].slice(0, 3 + Math.min(rank, 2)).forEach((n, i) => {
+          tone(587.33 * n, .48 + rank * .07, .075, { delay: i * .048, pan: (i - 2) * .12 });
+          if (rank >= 3) tone(293.665 * n, .65, .035, { delay: i * .05, type: 'triangle' });
+        });
+        noise(.15, .045, { frequency: 4200, type: 'highpass' });
+        if (rank === 4) [1174.66, 1468.32, 1760, 2349.32].forEach((n, i) => tone(n, .45, .045, { delay: .38 + i * .09 }));
+        break;
+      }
+      case 'slots':
+        tone(880, .1, .05, { end: 1174.66 });
+        noise(.035, .04, { frequency: 2000 });
+        break;
+      case 'slotSpin':
+        for (let i = 0; i < 13; i++) {
+          tone(250 + i * 18, .035, .025, { delay: i * .085 + i * i * .0015, type: 'triangle' });
+          if (i % 4 === 0) noise(.023, .025, { delay: i * .09, frequency: 1800 });
+        }
+        break;
+      case 'slotStop':
+        tone(165, .065, .065, { end: 90, type: 'triangle' });
+        noise(.025, .04, { frequency: 1800 });
+        break;
+      case 'slotWin':
+        [587.33, 739.99, 880, 1174.66, 1468.32].forEach((n, i) => tone(n, .35, .075, { delay: i * .065, type: i % 2 ? 'triangle' : 'sine' }));
+        tone(146.832, .45, .085);
+        break;
+      case 'slotLose':
+        tone(293.665, .17, .047, { type: 'triangle' });
+        tone(220, .21, .04, { delay: .1, type: 'triangle' });
         break;
       case 'kill':
         tone(660, .11, .075, { end: 1100 });

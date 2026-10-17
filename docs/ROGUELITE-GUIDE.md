@@ -1,0 +1,104 @@
+# Gridfall 0.2 player guide
+
+Gridfall mixes timed Sudoku with tower defense and a run-long collection of equipment. Your numbers create the towers; your loot determines how they fight.
+
+## Choose a run
+
+| Mode | Length | Difficulty choices |
+| --- | --- | --- |
+| Free play | One board and battle | Choose at the start |
+| Campaign | 50 rounds | Choose again before each new board |
+| Locked in | 50 rounds | Starting choices stay fixed |
+
+Sudoku and combat each have their own **Easy / Medium / Hard** setting. Harder Sudoku starts with fewer given numbers and offers more blanks to solve, stronger solve income, and better rarity luck. The generator targets 48 / 36 / 27 clues while retaining one solution; these are clue-density settings, not ratings from a human Sudoku solver. Combat difficulty changes enemy pressure and rewards. The 50-round progression is initial alpha tuning, not a claim of fully playtested balance.
+
+## Solve, prepare, defend, collect
+
+**Solve.** Select a blank square and enter a number. Each row, column, and 3×3 box must contain 1–9. Correct answers plant numbered seeds and earn credits; completed groups award bonuses. Your recent correct answers bend the upcoming enemy route. You can advance before finishing the entire puzzle.
+
+**War prep.** The board becomes a battlefield and seeds grow into high-tech towers. Click an existing tower to inspect its stats, upgrade it, or open its equipment. Open chests, fit attachments, and buy reserve seeds before launching combat.
+
+**Defend.** The route is fixed for this battle. Spend reserves to put extra towers in empty cells. An illegal Sudoku placement still fights, but increases corruption and disappears after the wave. Its equipment is returned. Enemies provide credits, energy fragments, and occasional chests. Keep the core alive and use temporary items when needed.
+
+**Loot.** Spend fragments to unlock chests, collect equipment and consumables, buy passives, or try the slot machine. In Campaign, choose the next board's Sudoku and combat difficulties. Locked in keeps your original choices. A new board starts each round; your collection and run upgrades continue.
+
+## Click a tower to upgrade it
+
+| Upgrade | What it affects | How long it lasts |
+| --- | --- | --- |
+| Individual tower | Only the selected tower | Current board |
+| Number family | All towers with that number, including new ones | Current run |
+| Attachment | The tower wearing it | Until removed; returned between boards |
+| Passive purchase | The run as described by its shop card | Current run |
+
+Individual and family levels combine. For example, upgrading the **1 family** raises every 1 tower, while upgrading one selected 1 gives that tower an additional level. Prices are shown before purchase.
+
+The nine numbers are tower families and colors. They all fire basic bolts initially. Equipment adds the special effects, so any number can become your lightning, frost, or rapid-fire build.
+
+## Inventory and five attachment slots
+
+Select a tower, open its gear panel, and equip items from the inventory. Each tower accepts **five attachments**. You can repeat a type—five electric attachments, for example—or mix rapid fire, lightning, and frost. Each attachment becomes a visible layer of the tower stack.
+
+| Attachment | Role |
+| --- | --- |
+| Rapid fire | Faster attacks |
+| Electric | Chain lightning |
+| Frost | Slow enemies |
+| Blast | Splash damage |
+| Venom | Damage over time |
+| Range | Reach farther |
+| Power | Stronger hits |
+| Gravity | Disrupt enemy movement |
+| Nova | Area bursts |
+
+Items have **Common, Uncommon, Rare, Epic, or Legendary** rarity. Rarity and rolled power affect their strength; compare the displayed stats rather than color alone. Remove attachments to move them to another tower. Equipped items return to the bag when you advance to a new board, including equipment from illegal emergency towers.
+
+Consumables remain in the inventory until used. Combat effects count down during battle, not while paused in a menu. Their active timers are displayed in the game; using the same effect again refreshes its duration.
+
+| Consumable | Effect |
+| --- | --- |
+| Rushbloom Capsule | All towers fire 2× as fast for 20 seconds |
+| Solar Sap Ampoule | All towers deal 60% more damage for 20 seconds |
+| Winterwake Flask | All enemies move 60% slower for 12 seconds |
+| Coremend Nectar | Repair up to 10 core health, including outside battle |
+
+## Chests, fragments, and credits
+
+These are separate resources:
+
+- **Credits** pay for reserves, tower levels, family levels, passive upgrades, chest purchases, and slot spins.
+- **Energy fragments** come from combat and pay a chest's opening cost.
+- **Chests** stay in the inventory until opened. Finding or buying one does not bypass its fragment requirement.
+
+Open chests in War prep or Loot. Check the displayed rarity and fragment cost, unlock the chest, then reveal its rewards. Higher rarities can produce stronger equipment. A lucky chest is a choice about how to build your towers, not an automatic upgrade to every tower.
+
+The between-round shop offers passive upgrades for damage, salvage, and core survival. These compete for the same credits you could spend on towers or the casino.
+
+## Slot machine
+
+The slot machine is available during Loot and costs **20 credits** per spin. Outcomes can return credits or award a chest; a losing spin consumes the stake. Chests won here still need fragments to open. Odds and payouts are shown in the casino.
+
+These are earned game credits with no purchase or cash-out system. This alpha includes slots only. Blackjack and NPC poker are planned possibilities, not playable modes yet.
+
+## Controls
+
+| Action | Keyboard / mouse | Standard gamepad |
+| --- | --- | --- |
+| Select a square | Click or arrow keys | D-pad / left stick |
+| Select a number | Click its card | LB / RB |
+| Place selected number | Number keys 1–9 | A |
+| Inspect a tower | Click an occupied square | Select tower and press A |
+| Open inventory | I or Inventory button | B or View / Select on the board |
+| Buy a reserve | B or Buy reserve | RT |
+| Next phase | Enter or phase button | Y |
+| Sound | Sound button | LT |
+| Pause | Space | Start / Menu |
+| Close a panel | Escape | B |
+
+Use **I** for inventory and **U** for the selected tower's upgrade panel. The in-game Help panel is the source of truth for the complete mapping. Menus use the same directional controls to move focus and A to activate the focused choice. For Steam Deck, begin with Steam Input's standard Gamepad layout.
+
+## Alpha scope
+
+The game includes an autosaved run on the current device. Browser data clearing or switching devices does not transfer that run; this is not Steam Cloud. Starting a new run resets the run's collection and progression.
+
+The 50-round economy, enemy scaling, and drop rates are an initial design that needs real play sessions. The Linux build supports offline testing, but has not yet been validated on physical Steam Deck hardware or submitted to Steam.

@@ -4,6 +4,15 @@
  * owns the state; this module owns projection, picking, and short-lived FX.
  */
 const PALETTE = ['#6de8ff', '#a4c7ff', '#c6a0ff', '#ffae68', '#fb86c3', '#9be878', '#ffe188', '#bb9bff', '#ff7289'];
+// Digits identify families. Equipment, never the digit, defines a weapon's FX.
+const MODULES = {
+  rapid: { color: '#6de8ff', glyph: '»' }, electric: { color: '#c6a0ff', glyph: 'ϟ' },
+  frost: { color: '#a4c7ff', glyph: '❄' }, blast: { color: '#ffae68', glyph: '✹' },
+  venom: { color: '#9be878', glyph: '●' }, range: { color: '#ffe188', glyph: '⊕' },
+  power: { color: '#fb86c3', glyph: '+' }, gravity: { color: '#bb9bff', glyph: '◉' },
+  nova: { color: '#ff7289', glyph: '✦' }
+};
+const RARITY_COLORS = { common: '#c4d2da', uncommon: '#8ee8a5', rare: '#78b6ff', epic: '#ca91ff', legendary: '#ffcb6b' };
 const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
 const ease = t => t * t * (3 - 2 * t);
@@ -29,10 +38,10 @@ export class VoxelRenderer {
     this.onCell = onCell;
     this.w = 0; this.h = 0; this.dpr = 1;
     this.morph = 0; this.mix = 0; this.time = 0;
-    this.particles = []; this.rings = []; this.labels = []; this.beams = [];
+    this.particles = []; this.rings = []; this.labels = []; this.beams = []; this.pickups = [];
     this.state = {}; this.shake = 0; this.flash = 0; this.reducedMotion = false;
-    this._frame = 0; this._lastPhase = null;
-    this._click = event => { const cell = this.cellAt(event.clientX, event.clientY); if (cell !== null && this.onCell) this.onCell(cell); };
+    this._frame = 0; this._lastPhase = null; this._towerHits = [];
+    this._click = event => { const cell = this.towerAt(event.clientX, event.clientY) ?? this.cellAt(event.clientX, event.clientY); if (cell !== null && this.onCell) this.onCell(cell); };
     canvas.addEventListener('click', this._click);
     this._observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => this.resize()) : null;
     this._observer?.observe(canvas);
@@ -52,7 +61,8 @@ export class VoxelRenderer {
   _layout() {
     const compact = this.w < 560;
     this.flatSize = Math.max(12, Math.min((this.w - (compact ? 24 : 66)) / 9, (this.h - 74) / 9));
-    this.isoSize = Math.max(10, Math.min((this.w - (compact ? 24 : 60)) / 18, (this.h - 96) / 10.6));
+    // Reserve headroom for a fully equipped five-module tower on the back row.
+    this.isoSize = Math.max(9, Math.min((this.w - (compact ? 28 : 60)) / 18.4, (this.h - 96) / 11.4));
     this.cx = this.w * .5;
     this.cy = lerp(this.h * .49, this.h * .55, this.mix);
     this.unit = lerp(this.flatSize, this.isoSize, this.mix);
@@ -77,6 +87,17 @@ export class VoxelRenderer {
     const x = (D * px - B * py) / det + 4, y = (-C * px + A * py) / det + 4;
     if (x < -.5 || y < -.5 || x >= 8.5 || y >= 8.5) return null;
     return Math.floor(y + .5) * 9 + Math.floor(x + .5);
+  }
+
+  towerAt(clientX, clientY) {
+    if (this.mix < .7) return null;
+    const rect = this.canvas.getBoundingClientRect();
+    const x = (clientX - rect.left) * this.w / (rect.width || this.w), y = (clientY - rect.top) * this.h / (rect.height || this.h);
+    for (let i = this._towerHits.length - 1; i >= 0; i--) {
+      const hit = this._towerHits[i];
+      if (x >= hit.left && x <= hit.right && y >= hit.top && y <= hit.bottom) return hit.cell;
+    }
+    return null;
   }
 
   _poly(points, fill, stroke = null, lineWidth = 1) {
@@ -109,26 +130,42 @@ export class VoxelRenderer {
   burst(event = {}) {
     const type = event.type || 'hit', cell = Number.isInteger(event.cell) ? event.cell : null;
     const x = finite(event.x, cell === null ? 4 : cell % 9), y = finite(event.y, cell === null ? 4 : Math.floor(cell / 9));
-    const color = event.color || PALETTE[(event.number || 2) - 1] || '#66eafa';
+    const effect = event.effect || event.kind || 'basic';
+    const color = event.color || MODULES[effect]?.color || RARITY_COLORS[event.rarity] || PALETTE[(event.number || 2) - 1] || '#66eafa';
+    if (type === 'upgrade' && event.family) {
+      for (const tower of this.state.towers || []) if (tower.number === event.number && this.rings.length < 50) {
+        this.rings.push({ x: tower.cell % 9, y: Math.floor(tower.cell / 9), color, age: 0, life: .85, size: .7 });
+      }
+    }
     if (type === 'shot') {
-      this.beams.push({ x, y, tx: finite(event.targetX, x), ty: finite(event.targetY, y), color, number: event.number || 1, age: 0, life: event.number === 5 ? .3 : .18 });
+      if (this.beams.length < 100) this.beams.push({ x, y, tx: finite(event.targetX, x), ty: finite(event.targetY, y), color: MODULES[effect]?.color || color, effect, height: finite(event.height, .65), age: 0, life: effect === 'range' ? .26 : .16 });
       return;
     }
-    const big = ['kill', 'explosion', 'wave', 'win'].includes(type);
+    if (type === 'fragment' || type === 'chestDrop') {
+      if (this.pickups.length < 36) this.pickups.push({ x, y, age: 0, life: type === 'chestDrop' ? 1.8 : .9, chest: type === 'chestDrop', amount: event.amount || 1, color: type === 'fragment' ? '#8effd1' : color });
+      if (type === 'fragment') return;
+    }
+    const reward = ['upgrade', 'equip', 'chestOpen', 'itemUsed', 'slots', 'chestReveal'].includes(type);
+    const big = ['kill', 'explosion', 'wave', 'win', 'chestOpen', 'chestReveal'].includes(type);
+    const planting = type === 'seed' || type === 'place';
     const invalid = type === 'invalid';
     if (type === 'phase' || type === 'path' || type === 'buy') return;
     const finalColor = invalid ? '#ff6e87' : color;
-    const count = this.reducedMotion ? (big ? 5 : 2) : big ? 24 : type === 'place' ? 14 : 7;
+    const count = this.reducedMotion ? (big ? 5 : 2) : big ? 24 : reward ? 20 : planting ? 12 : 7;
     for (let i = 0; i < count && this.particles.length < 320; i++) {
       const seed = ++this._frame * 3.721 + i;
       const angle = hash(seed) * Math.PI * 2, speed = .4 + hash(seed + 7) * (big ? 2.3 : 1.25);
-      this.particles.push({ x, y, z: type === 'place' ? .04 : .35, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, vz: 1.2 + hash(seed + 13) * 2.6, color: finalColor, size: .035 + hash(seed + 2) * .09, age: 0, life: .45 + hash(seed + 1) * .55, cube: i % 3 !== 0 });
+      this.particles.push({ x, y, z: planting ? .04 : reward ? .75 : .35, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, vz: 1.2 + hash(seed + 13) * 2.6, color: finalColor, size: .035 + hash(seed + 2) * .09, age: 0, life: .45 + hash(seed + 1) * .55, cube: i % 3 !== 0 });
     }
-    if (big || type === 'place' || invalid || type === 'leak') this.rings.push({ x, y, color: finalColor, age: 0, life: big ? .65 : .42, size: Number.isFinite(event.radius) ? event.radius : big ? 1.8 : .85, inward: event.number === 8 });
-    if (event.text) this.labels.push({ x, y, text: String(event.text), color: finalColor, age: 0, life: 1.1 });
+    if ((big || planting || invalid || reward || type === 'leak') && this.rings.length < 50) {
+      this.rings.push({ x, y, color: finalColor, age: 0, life: reward ? .9 : big ? .65 : .42, size: Number.isFinite(event.radius) ? event.radius : big ? 1.8 : .85, inward: effect === 'gravity' });
+      if (reward && !this.reducedMotion && this.rings.length < 50) this.rings.push({ x, y, color: '#f8ffe8', age: -.12, life: .7, size: .68 });
+    }
+    if (event.text && this.labels.length < 30) this.labels.push({ x, y, text: String(event.text), color: finalColor, age: 0, life: reward ? 1.5 : 1.1 });
     if (!this.reducedMotion) {
       if (type === 'explosion' || type === 'leak') this.shake = Math.max(this.shake, type === 'leak' ? 5 : 3);
       if (type === 'wave' || type === 'win') this.flash = .13;
+      if (type === 'chestOpen' && event.rarity === 'legendary') this.flash = .11;
     }
   }
 
@@ -137,7 +174,7 @@ export class VoxelRenderer {
     if (dt > 2) dt /= 1000;
     dt = clamp(dt, 0, .05);
     this.time += dt;
-    const battle = ['battle', 'reward', 'lost', 'won'].includes(state.phase);
+    const battle = ['prep', 'battle', 'loot', 'reward', 'lost', 'won'].includes(state.phase);
     const target = battle ? 1 : 0;
     const morphStep = dt * (this.reducedMotion ? 5 : 1.2);
     this.morph = target > this.morph ? Math.min(target, this.morph + morphStep) : Math.max(target, this.morph - morphStep);
@@ -153,6 +190,7 @@ export class VoxelRenderer {
     this._effects(dt);
     c.restore();
     this._annotations(state);
+    this._pickups(dt);
     if (this.flash > .002) { c.fillStyle = alpha('#c9f5ff', this.flash); c.fillRect(0, 0, this.w, this.h); this.flash *= Math.exp(-dt * 10); }
     this._lastPhase = state.phase;
   }
@@ -176,6 +214,7 @@ export class VoxelRenderer {
   }
 
   _board(state) {
+    this._towerHits = [];
     const c = this.ctx, t = this.mix;
     const towerMap = new Map((state.towers || []).map(tower => [tower.cell, tower]));
     const selected = Number.isInteger(state.selectedCell) ? state.selectedCell : -1;
@@ -263,6 +302,14 @@ export class VoxelRenderer {
       c.textAlign = 'center'; c.textBaseline = 'middle';
       c.font = `${given ? 500 : 700} ${Math.round(lerp(this.flatSize * .52, this.isoSize * .4, t))}px "Space Grotesk", "Segoe UI", system-ui, sans-serif`;
       c.fillText(number, p.x, p.y + this.flatSize * .025);
+      if (tower && t < .7) {
+        // Keep the solve board a regular Sudoku board. The little split seed is
+        // a promise of the machine that grows when preparation begins.
+        const seed = this._project(x + .29, y + .28), r = Math.max(2, this.flatSize * .075);
+        c.fillStyle = tower.illegal ? '#b43f67' : '#368c70';
+        c.beginPath(); c.ellipse(seed.x, seed.y, r * .8, r * 1.1, -.45, 0, Math.PI * 2); c.fill();
+        c.strokeStyle = '#b5f4d4'; c.lineWidth = 1; c.beginPath(); c.moveTo(seed.x - r * .25, seed.y + r * .65); c.lineTo(seed.x + r * .2, seed.y - r * .5); c.stroke();
+      }
       c.globalAlpha = 1;
     }
 
@@ -302,77 +349,110 @@ export class VoxelRenderer {
   _tower(tower) {
     const c = this.ctx, { x, y } = tower, n = clamp(Number(tower.number) || 1, 1, 9);
     const color = tower.illegal ? '#ff6a9a' : (this.state.towerColors || [])[n - 1] || PALETTE[n - 1];
+    const selected = tower.cell === this.state.selectedCell;
     const phase = this.reducedMotion ? 0 : Math.sin(this.time * 3 + tower.cell * .7);
-    const dark = '#405564', mid = shade(color, .73);
+    const attachments = (tower.attachments || []).slice(0, 5);
+    const level = Math.max(1, finite(tower.level, 1) + finite(this.state.familyLevels?.[n], 1) - 1);
+    const growth = this.reducedMotion ? 1 : Math.min(clamp(finite(tower.growth, 1)), clamp((this.mix - .08) / .8));
+    const build = ease(clamp((growth - .22) / .78));
+    const dark = '#364d5c', mid = shade(color, .72);
     const base = this._project(x, y, .025);
-    c.fillStyle = 'rgba(3,12,24,.25)'; c.beginPath(); c.ellipse(base.x, base.y + 3, this.isoSize * .46, this.isoSize * .2, 0, 0, Math.PI * 2); c.fill();
-    this._cube(x, y, .035, .61, .61, .1, dark, true);
-    this._cube(x, y, .135, .47, .47, .085, mid, true);
-    const cube = (dx, dy, z, w, d, h, col = color) => this._cube(x + dx, y + dy, z, w, d, h, col, true);
-    let tip = .85;
-    switch (n) {
-      case 1: // Bolt: amber brass turret with a square muzzle.
-        cube(0, 0, .22, .27, .27, .32, dark);
-        cube(0, 0, .52, .39, .34, .2);
-        cube(.27, -.03, .56, .42, .14, .11, mid);
-        cube(.47, -.03, .555, .055, .18, .13, '#ffeaa7');
-        tip = .74; break;
-      case 2: // Frost: glowing stepped ice crystal.
-        cube(0, 0, .22, .27, .27, .2, dark);
-        cube(0, 0, .42, .32, .32, .24);
-        cube(0, 0, .66, .21, .21, .24, '#cbfcff');
-        cube(0, 0, .9, .105, .105, .13);
-        cube(-.2, .05, .3, .1, .1, .27, mid); tip = 1.04; break;
-      case 4: // Mortar: squat twin launcher and hot core.
-        cube(0, 0, .22, .4, .4, .24, dark);
-        cube(-.12, -.1, .44, .19, .2, .31, mid);
-        cube(.13, .12, .44, .19, .2, .31);
-        cube(-.12, -.1, .75, .14, .15, .045, '#392c38');
-        cube(.13, .12, .75, .14, .15, .045, '#ffddb2'); tip = .8; break;
-      case 3: // Arc: spire with a floating charged prism.
-        cube(0, 0, .22, .17, .17, .54, dark);
-        cube(0, 0, .34, .38, .38, .08, mid);
-        cube(0, 0, .65, .33, .33, .085);
-        cube(0, 0, .85 + phase * .035, .24, .24, .22, '#dfc9ff'); tip = 1.12; break;
-      case 6: // Venom: glass flask carried in a metal cage.
-        cube(0, 0, .22, .31, .31, .38, mid);
-        cube(0, 0, .6, .18, .18, .2);
-        cube(0, 0, .8, .29, .29, .075, '#d6ffc1');
-        cube(-.2, -.2, .22, .075, .075, .47, dark);
-        cube(.2, .2, .22, .075, .075, .47, dark); tip = .9; break;
-      case 7: // Beacon: a cross-shaped radiant amplifier.
-        cube(0, 0, .22, .19, .19, .45, dark);
-        cube(0, 0, .5, .5, .18, .15);
-        cube(0, 0, .5, .18, .5, .15);
-        cube(0, 0, .65, .18, .18, .29, '#fff0ba'); tip = .95; break;
-      case 5: // Prism: a long-range beam on a high watchtower.
-        cube(0, 0, .22, .2, .2, .63, dark);
-        cube(0, 0, .58, .35, .35, .09, mid);
-        cube(.08, 0, .84, .48, .23, .16);
-        cube(.37, 0, .89, .34, .095, .07, '#d0e7ff'); tip = 1.02; break;
-      case 8: { // Gravity: dark suspended core and four orbiting blocks.
-        cube(0, 0, .22, .2, .2, .28, dark);
-        cube(0, 0, .56 + phase * .045, .28, .28, .28, mid);
-        const spin = this.reducedMotion ? .3 : this.time * .7;
-        for (let i = 0; i < 4; i++) {
-          const a = spin + i * Math.PI / 2;
-          cube(Math.cos(a) * .32, Math.sin(a) * .32, .69 + Math.sin(a) * .1, .11, .11, .11, color);
-        }
-        tip = .98; break;
-      }
-      case 9: // Nova: radiant core suspended between two pylons.
-        cube(-.2, -.1, .22, .12, .13, .62, mid);
-        cube(.2, .1, .22, .12, .13, .62, mid);
-        cube(0, 0, .68 + phase * .055, .29, .29, .29, '#f5eaff');
-        cube(0, 0, .96 + phase * .055, .14, .14, .14); tip = 1.12; break;
+    c.fillStyle = 'rgba(3,12,24,.32)'; c.beginPath(); c.ellipse(base.x, base.y + 3, this.isoSize * .44, this.isoSize * .2, 0, 0, Math.PI * 2); c.fill();
+    if (selected) {
+      const radius = this.isoSize * (.6 + phase * .025);
+      this._glow(base.x, base.y, radius * 1.6, color, .2);
+      c.strokeStyle = '#cefff1'; c.lineWidth = 1.8; c.beginPath(); c.ellipse(base.x, base.y, radius, radius * .44, 0, 0, Math.PI * 2); c.stroke();
     }
-    const top = this._project(x, y, tip);
-    this._glow(top.x, top.y, this.isoSize * .54, color, .13 + (phase + 1) * .035);
-    // Number badge keeps the transformation tactically legible.
-    const badge = this._project(x, y + .31, .08);
-    const radius = Math.max(5, this.isoSize * .15);
+    if (growth < .98) {
+      // A split seed becomes a living circuit stalk; metal plates unfurl around it.
+      const sprout = ease(clamp(growth / .5)), stem = .12 + sprout * .42;
+      this._cube(x - .09, y, .015, .17, .29, .14 * (1 - build) + .04, '#6caa77');
+      this._cube(x + .09, y, .015, .17, .29, .11 * (1 - build) + .04, '#3e8c68');
+      this._cube(x, y, .07, .065, .065, stem, '#b3f3ba');
+      this._cube(x - .11 * sprout, y, stem * .57, .24 * sprout + .01, .085, .055, '#89d995');
+      this._cube(x + .11 * sprout, y, stem * .76, .2 * sprout + .01, .09, .06, '#75d0a9');
+    }
+    if (build > .01) {
+      const cube = (dx, dy, z, w, d, h, col = color) => this._cube(x + dx, y + dy, z * build, w, d, h * build, col, true);
+      // Every number starts as this same seed-grown kinetic cannon.
+      cube(0, 0, .035, .6, .6, .095, dark);
+      cube(0, 0, .13, .47, .47, .065, mid);
+      cube(0, 0, .195, .26, .26, .19, dark);
+      cube(0, 0, .25, .3, .3, .055, color);
+      for (let i = 0; i < attachments.length; i++) this._module(tower, attachments[i], i, build);
+      const head = .385 + attachments.length * .18;
+      cube(0, 0, head, .33, .31, .18, color);
+      cube(.21, -.015, head + .055, .29, .11, .095, mid);
+      cube(.37, -.015, head + .06, .04, .145, .085, '#e8ffec');
+      cube(-.12, -.1, head + .18, .065, .065, .065, '#d6ffdf');
+      const tip = this._project(x, y, (head + .25) * build);
+      this._glow(tip.x, tip.y, this.isoSize * .36, color, .13 + (phase + 1) * .022);
+      const rarities = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
+      const highest = attachments.reduce((best, item) => Math.max(best, rarities.indexOf(item?.rarity)), 0);
+      if (highest >= 2) {
+        const aura = RARITY_COLORS[rarities[highest]];
+        this._glow(tip.x, tip.y + this.isoSize * .28, this.isoSize * .85, aura, .09 + highest * .014);
+        // Rarity sparks are deterministic ambient accents, not gameplay pickups.
+        if (!this.reducedMotion) for (let i = 0; i < highest - 1; i++) {
+          const a = this.time * .8 + tower.cell + i * 2.3, p = this._project(x + Math.cos(a) * .29, y + Math.sin(a) * .29, head * build + .1 + Math.sin(a * 1.7) * .22);
+          c.fillStyle = aura; c.fillRect(p.x - 1, p.y - 1, 2, 2);
+        }
+      }
+      // Hit region follows the visible raised machine; ground-cell picking remains
+      // a separate precise inverse projection for keyboard/controller navigation.
+      this._towerHits.push({ cell: tower.cell, left: base.x - this.isoSize * .29, right: base.x + this.isoSize * .35, top: tip.y - 3, bottom: base.y + 4 });
+      if (selected || level > 1) {
+        const badgeX = tip.x - this.isoSize * .25, badgeY = tip.y - 8;
+        const label = `L${level}`, fontSize = Math.max(8, Math.min(10, this.isoSize * .27));
+        c.font = `800 ${fontSize}px "Space Grotesk", system-ui`; c.textAlign = 'center'; c.textBaseline = 'middle';
+        const w = c.measureText(label).width + 8;
+        c.fillStyle = '#102536'; c.fillRect(badgeX - w / 2, badgeY - 6, w, 12);
+        c.fillStyle = selected ? '#d9fff0' : color; c.fillText(label, badgeX, badgeY + .3);
+      }
+    }
+    // Digit identity stays grounded and readable even under a five-item stack.
+    const badge = this._project(x, y + .33, .08);
+    const radius = Math.max(5, this.isoSize * .16);
     c.fillStyle = '#102536'; c.beginPath(); c.arc(badge.x, badge.y, radius, 0, Math.PI * 2); c.fill();
-    c.fillStyle = color; c.font = `800 ${Math.max(7, this.isoSize * .24)}px "Space Grotesk", system-ui`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(n, badge.x, badge.y + .3);
+    if (selected) { c.strokeStyle = '#c9ffef'; c.lineWidth = 1; c.stroke(); }
+    c.fillStyle = color; c.font = `800 ${Math.max(8, this.isoSize * .25)}px "Space Grotesk", system-ui`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(n, badge.x, badge.y + .3);
+  }
+
+  _module(tower, item, slot, growth) {
+    const { x, y } = tower, kind = item?.kind || 'power';
+    const color = MODULES[kind]?.color || item?.color || '#9ad2dd';
+    const z = .385 + slot * .18, pulse = this.reducedMotion ? 0 : Math.sin(this.time * 4 + slot + tower.cell);
+    const cube = (dx, dy, dz, w, d, h, col = color) => this._cube(x + dx, y + dy, (z + dz) * growth, w, d, h * growth, col, true);
+    cube(0, 0, 0, .37, .37, .045, '#294653');
+    cube(0, 0, .045, .32, .32, .105, shade(color, .82));
+    cube(0, 0, .15, .39, .39, .025, color);
+    switch (kind) {
+      case 'rapid':
+        cube(-.2, 0, .05, .105, .3, .08); cube(.2, 0, .05, .105, .3, .08); break;
+      case 'electric':
+        cube(-.18, -.18, .04, .08, .08, .19); cube(.18, .18, .04, .08, .08, .19, '#e7dbff'); break;
+      case 'frost':
+        cube(-.15, -.18, .05, .105, .105, .19, '#c4f9ff'); cube(.18, .14, .065, .1, .1, .14); break;
+      case 'blast':
+        cube(-.18, .05, .045, .12, .22, .13); cube(.18, -.05, .045, .12, .22, .13, '#ffe2b4'); break;
+      case 'venom':
+        cube(-.17, .16, .03, .14, .14, .18, '#c3ff8e'); cube(.15, -.17, .03, .13, .13, .18); break;
+      case 'range':
+        cube(.21, 0, .07, .22, .075, .065); cube(-.2, 0, .07, .16, .075, .065); break;
+      case 'power':
+        cube(0, 0, .09, .48, .13, .07); cube(0, 0, .09, .13, .48, .07); break;
+      case 'gravity': {
+        const a = this.reducedMotion ? .45 : this.time * .8 + slot;
+        cube(Math.cos(a) * .25, Math.sin(a) * .25, .06, .1, .1, .1, '#d2c5ff');
+        cube(-Math.cos(a) * .25, -Math.sin(a) * .25, .06, .1, .1, .1); break;
+      }
+      case 'nova':
+        cube(-.2, -.2, .035, .085, .085, .17); cube(.2, .2, .035, .085, .085, .17, '#fff4c5'); break;
+    }
+    // A front-face status lamp makes repeated modules countable on Deck's screen.
+    const lamp = this._project(x, y + .18, (z + .095) * growth);
+    this.ctx.fillStyle = color; this.ctx.fillRect(lamp.x - 1.4, lamp.y - 1, 2.8, 2);
+    if (tower.cell === this.state.selectedCell) this._glow(lamp.x, lamp.y, this.isoSize * .14, color, .2 + pulse * .03);
   }
 
   _enemy(enemy) {
@@ -415,20 +495,26 @@ export class VoxelRenderer {
     const c = this.ctx;
     for (let i = this.beams.length - 1; i >= 0; i--) {
       const b = this.beams[i]; b.age += dt; if (b.age >= b.life) { this.beams.splice(i, 1); continue; }
-      const p = this._project(b.x, b.y, .75), q = this._project(b.tx, b.ty, .22), fade = 1 - b.age / b.life;
+      const p = this._project(b.x, b.y, b.height), q = this._project(b.tx, b.ty, .22), fade = 1 - b.age / b.life;
       c.save(); c.globalAlpha = fade * this.mix; c.lineCap = 'round';
       c.beginPath(); c.moveTo(p.x, p.y);
-      if (b.number === 3) {
+      if (b.effect === 'electric') {
         for (let s = 1; s < 5; s++) { const f = s / 5; c.lineTo(lerp(p.x, q.x, f) + (s % 2 ? 1 : -1) * 5, lerp(p.y, q.y, f) + (s % 2 ? -1 : 1) * 3); }
       }
+      const heavy = ['range', 'power', 'nova'].includes(b.effect);
       c.lineTo(q.x, q.y);
-      c.strokeStyle = alpha(b.color, .18); c.lineWidth = b.number === 5 ? 9 : 6; c.stroke();
-      c.strokeStyle = b.color; c.lineWidth = b.number === 5 ? 2.7 : 1.5; c.stroke();
+      c.strokeStyle = alpha(b.color, .18); c.lineWidth = heavy ? 9 : 5; c.stroke();
+      c.strokeStyle = b.color; c.lineWidth = heavy ? 2.7 : 1.4; c.stroke();
       c.strokeStyle = '#f3fff8'; c.lineWidth = .7; c.stroke();
+      if (['frost', 'blast', 'gravity', 'nova'].includes(b.effect)) {
+        const radius = (1 - fade) * (b.effect === 'blast' || b.effect === 'nova' ? 15 : 8) + 2;
+        c.beginPath(); c.ellipse(q.x, q.y, radius, radius * .5, 0, 0, Math.PI * 2); c.strokeStyle = b.color; c.lineWidth = 1.4; c.stroke();
+      }
       this._glow(q.x, q.y, 15, b.color, .38); c.restore();
     }
     for (let i = this.rings.length - 1; i >= 0; i--) {
       const r = this.rings[i]; r.age += dt; if (r.age >= r.life) { this.rings.splice(i, 1); continue; }
+      if (r.age < 0) continue;
       const f = r.age / r.life, p = this._project(r.x, r.y, .035), radius = this.unit * r.size * (r.inward ? 1.2 - f : .2 + f);
       c.strokeStyle = alpha(r.color, (1 - f) * .8); c.lineWidth = 2 * (1 - f) + .5;
       c.beginPath(); c.ellipse(p.x, p.y, radius, radius * lerp(1, .48, this.mix), 0, 0, Math.PI * 2); c.stroke();
@@ -453,6 +539,36 @@ export class VoxelRenderer {
       c.fillStyle = label.color; c.fillText(label.text, p.x, p.y - f * 26 - 12);
     }
     c.globalAlpha = 1;
+  }
+
+  _pickups(dt) {
+    const c = this.ctx;
+    for (let i = this.pickups.length - 1; i >= 0; i--) {
+      const pickup = this.pickups[i]; pickup.age += dt;
+      if (pickup.age >= pickup.life) { this.pickups.splice(i, 1); continue; }
+      const f = pickup.age / pickup.life, p = this._project(pickup.x, pickup.y, .35);
+      // Feedback flies toward the resource / inventory rail; it never creates a
+      // second interactive chest or changes when the simulation grants a drop.
+      const travel = this.reducedMotion ? 0 : ease(clamp((f - (pickup.chest ? .56 : .18)) / (pickup.chest ? .44 : .82)));
+      const x = lerp(p.x, this.w - 25, travel), y = lerp(p.y, 22, travel) - (this.reducedMotion ? 0 : Math.sin(Math.PI * f) * (pickup.chest ? 22 : 15));
+      const fade = Math.min(1, (1 - f) * (pickup.chest ? 5 : 3));
+      c.save(); c.globalAlpha = fade;
+      this._glow(x, y, pickup.chest ? 27 : 12, pickup.color, pickup.chest ? .35 : .24);
+      if (pickup.chest) {
+        const size = 12 * (1 - travel * .5), bounce = this.reducedMotion ? 1 : 1 + Math.sin(f * Math.PI * 5) * .08 * (1 - f);
+        c.translate(x, y); c.scale(bounce, 2 - bounce);
+        c.fillStyle = '#13273a'; c.fillRect(-size, -size * .5, size * 2, size * 1.3);
+        c.strokeStyle = pickup.color; c.lineWidth = 1.7; c.strokeRect(-size, -size * .5, size * 2, size * 1.3);
+        c.fillStyle = pickup.color; c.fillRect(-size, -size * .56, size * 2, size * .3); c.fillRect(-2, -1, 4, 7);
+        if (f < .55) {
+          c.font = '800 9px "Space Grotesk", system-ui'; c.textAlign = 'center'; c.fillStyle = '#eefced'; c.fillText('CHEST FOUND', 0, -size - 8);
+        }
+      } else {
+        const s = 3.5 * (1 - travel * .45);
+        this._poly([{ x, y: y - s * 1.6 }, { x: x + s, y }, { x, y: y + s * 1.6 }, { x: x - s, y }], pickup.color);
+      }
+      c.restore();
+    }
   }
 
   _annotations(state) {
