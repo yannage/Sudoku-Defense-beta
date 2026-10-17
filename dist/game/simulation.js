@@ -196,7 +196,8 @@ export class Game {
     return {ok:true,message:`Round ${this.wave}: a fresh Sudoku. All attachments returned to your bag.`};
   }
   towerStats(cellOrTower){
-    const tower=this._getTower(cellOrTower);if(!tower)return null;
+    // Accept a read-only draft for equipment previews; mutations still resolve owned towers.
+    const tower=cellOrTower&&typeof cellOrTower==='object'?cellOrTower:this._getTower(cellOrTower);if(!tower)return null;
     const effects={};for(const item of tower.attachments||[])effects[item.kind]=(effects[item.kind]||0)+(Number(item.power)||1);
     const level=(tower.level||1)+(this.familyLevels[tower.number]||1)-1;
     const overclock=this.activeEffects.some(e=>e.kind==='overclock'&&e.remaining>0)?2:1;

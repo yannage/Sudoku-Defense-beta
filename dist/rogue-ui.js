@@ -19,9 +19,9 @@ const descriptions = {
 
 /** A DOM-only equipment, loot and expedition interface. Economy stays in Game. */
 export class RogueUI {
-  constructor({game, getSelectedCell = () => -1, onChange = () => {}, onNewRun = () => {}, onInspect = () => {}, onSound = () => {}, isReducedMotion = () => false} = {}) {
+  constructor({game, getSelectedCell = () => -1, onChange = () => {}, onNewRun = () => {}, onInspect = () => {}, onBoardEquip = () => {}, onSound = () => {}, isReducedMotion = () => false} = {}) {
     this.game=game; this.getSelectedCell=getSelectedCell; this.onChange=onChange; this.onNewRun=onNewRun;
-    this.onInspect=onInspect; this.onSound=onSound; this.isReducedMotion=isReducedMotion;
+    this.onInspect=onInspect; this.onBoardEquip=onBoardEquip; this.onSound=onSound; this.isReducedMotion=isReducedMotion;
     this.tab='inventory'; this.filter='all'; this.selectedItem=null; this.page=0; this.notice=''; this.lastKey=''; this.reveal=null; this.spin=null;
     this.options={mode:'campaign',sudokuDifficulty:'easy',combatDifficulty:'easy'};
     this.nextOptions={sudokuDifficulty:game.sudokuDifficulty||'easy',combatDifficulty:game.combatDifficulty||'easy'};
@@ -130,7 +130,7 @@ export class RogueUI {
     const r=rarity(item.rarity), tower=this._tower();
     const canEquip=['prep','loot','won'].includes(this.game.phase)&&tower&&(tower.attachments?.length||0)<5;
     const canUse=this.game.phase==='battle'||item.kind==='repair'&&!['won','lost'].includes(this.game.phase);
-    return `<section class="rg-detail-card" style="--loot:${r.color}"><span class="rg-rarity">${r.name} ${item.type==='consumable'?'consumable':'attachment'}</span><div class="rg-big-glyph" aria-hidden="true">${icon(item.kind,item.rarity)}</div><h3>${esc(item.name)}</h3><p>${esc(itemDescription(item)||item.description)}</p>${item.type==='attachment'?`<div class="rg-preview-note"><strong>Build preview</strong>${this._preview(tower,item)}<span>${ATTACHMENTS.find(a=>a.id===item.kind)?.description||'Adds another ability layer to this tower.'}</span><span>Uses 1 of 5 slots. Repeated kinds combine.</span></div><button class="rg-primary" type="button" data-action="equip" data-item="${esc(item.id)}" data-focus="equip" ${canEquip?'':'disabled'}>${tower?`Attach to ${tower.number} · R${Math.floor(tower.cell/9)+1} C${tower.cell%9+1}`:'Select a tower first'} <b>+</b></button><p class="rg-fineprint">${!['prep','loot','won'].includes(this.game.phase)?'Attachments can be changed in war prep and loot camp.':!tower?'Return to the grid and click one of your towers, or select one below.':tower.attachments.length>=5?'This tower is full. Remove a layer to make space.':'Gear is returned to your bag when removed.'}</p>`:`<button class="rg-primary" type="button" data-action="use" data-item="${esc(item.id)}" data-focus="use" ${canUse?'':'disabled'}>${item.kind==='repair'?'Repair the core':'Activate now'} <b>✦</b></button><p class="rg-fineprint">${item.kind==='repair'?'Consumed on use. Repairs core integrity.':'Consumed on use. Activate during a battle; effect timers pause with the battle.'}</p>`}</section>`;
+    return `<section class="rg-detail-card" style="--loot:${r.color}"><span class="rg-rarity">${r.name} ${item.type==='consumable'?'consumable':'attachment'}</span><div class="rg-big-glyph" aria-hidden="true">${icon(item.kind,item.rarity)}</div><h3>${esc(item.name)}</h3><p>${esc(itemDescription(item)||item.description)}</p>${item.type==='attachment'?`<div class="rg-preview-note"><strong>Build preview</strong>${this._preview(tower,item)}<span>${ATTACHMENTS.find(a=>a.id===item.kind)?.description||'Adds another ability layer to this tower.'}</span><span>Uses 1 of 5 slots. Repeated kinds combine.</span></div><button class="rg-primary" type="button" data-action="equip" data-item="${esc(item.id)}" data-focus="equip" ${canEquip?'':'disabled'}>${tower?`Attach to ${tower.number} · R${Math.floor(tower.cell/9)+1} C${tower.cell%9+1}`:'Select a tower first'} <b>+</b></button><button class="rg-secondary" type="button" data-action="board-equip" data-item="${esc(item.id)}" data-focus="board-equip" ${['prep','loot','won'].includes(this.game.phase)?'':'disabled'}>Choose a tower on the board <b>↗</b></button><p class="rg-fineprint">${!['prep','loot','won'].includes(this.game.phase)?'Attachments can be changed in war prep and loot camp.':!tower?'Return to the grid and click one of your towers, or select one below.':tower.attachments.length>=5?'This tower is full. Remove a layer to make space.':'Gear is returned to your bag when removed.'}</p>`:`<button class="rg-primary" type="button" data-action="use" data-item="${esc(item.id)}" data-focus="use" ${canUse?'':'disabled'}>${item.kind==='repair'?'Repair the core':'Activate now'} <b>✦</b></button><p class="rg-fineprint">${item.kind==='repair'?'Consumed on use. Repairs core integrity.':'Consumed on use. Activate during a battle; effect timers pause with the battle.'}</p>`}</section>`;
   }
   _preview(tower,item){
     if(!tower||(tower.attachments?.length||0)>=5)return '';
@@ -222,6 +222,7 @@ export class RogueUI {
       return;
     }
     if(a==='browse-attachments'){this.filter='attachment';this.open('inventory');return;}
+    if(a==='board-equip'){const id=button.dataset.item;this.close();this.onBoardEquip(id);return;}
     if(a==='equip'){this._result(this._call('equipItem',Number(this.getSelectedCell()),button.dataset.item));return;}
     if(a==='unequip'){this._result(this._call('unequipItem',Number(this.getSelectedCell()),Number(button.dataset.slot)));return;}
     if(a==='use'){this._result(this._call('useItem',button.dataset.item));return;}

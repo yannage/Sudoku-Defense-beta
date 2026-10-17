@@ -6,13 +6,17 @@ const titles = { tower: 'Tower workshop', inventory: 'Your field kit', chests: '
 
 /** Lightweight, mutually exclusive panels. Opening one holds the game clock. */
 export class QuickBar {
-  constructor({ game, onOpen, onToggle = () => {} }) {
+  constructor({ game, onOpen, onInventory, onTower, onToggle = () => {} }) {
     this.game = game; this.onOpen = onOpen; this.onToggle = onToggle;
     this.view = null; this.lastKey = '';
     this.buttons = [...document.querySelectorAll('[data-quick]')];
     for (const button of this.buttons) {
       button.querySelector('.quick-icon').innerHTML = voxelArt(artKinds[button.dataset.quick]);
-      button.addEventListener('click', () => this.toggle(button.dataset.quick));
+      button.addEventListener('click', () => {
+        if (button.dataset.quick === 'inventory' && onInventory) { onInventory(); return; }
+        if (button.dataset.quick === 'tower' && onTower?.()) return;
+        this.toggle(button.dataset.quick);
+      });
     }
     for (const element of document.querySelectorAll('[data-voxel]')) element.innerHTML = voxelArt(element.dataset.voxel);
     $('closeQuickPanel').addEventListener('click', () => this.close(true));

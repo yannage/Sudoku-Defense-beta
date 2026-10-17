@@ -170,3 +170,16 @@ test('hints cost exactly six credits without solve rewards, combo farming or pai
   assert.ok(result.ok);assert.equal(g.credits,before-6);assert.equal(g.score,score);assert.equal(g.combo,0);assert.equal(g.board[result.cell],result.number);assert.equal(g.place(result.cell,result.number).ok,false);
   const blanks=g.board.filter(n=>!n).length;for(let i=0;i<blanks;i++)assert.ok(g.hint().ok);assert.equal(g.credits,before-6*(blanks+1));assert.equal(g.score,score);assert.equal(g.board.filter(n=>!n).length,0);
 });
+
+test('attachment previews show the equipped result without changing gear ownership or saved state',()=>{
+  const g=new Game('loadout-preview');solve(g,1);g.endSolve();
+  const tower=g.towers[0],item=attachment('rapid',7100,2);g.items.push(item);
+  const before=g.exportSave(),base=g.towerStats(tower.cell);
+  const preview=g.towerStats({...tower,attachments:[...tower.attachments,item]});
+  assert.ok(preview.attackSpeed>base.attackSpeed);
+  assert.equal(preview.slotsUsed,base.slotsUsed+1);
+  assert.deepEqual(g.exportSave(),before);
+  assert.ok(g.equipItem(tower.cell,item.id).ok);
+  assert.deepEqual(g.towerStats(tower),preview);
+  assert.equal(g.items.some(i=>i.id===item.id),false);
+});

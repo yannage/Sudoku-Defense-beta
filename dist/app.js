@@ -4,6 +4,7 @@ import { AudioEngine } from './engine/audio.js';
 import { GamepadInput } from './engine/input.js';
 import { RogueUI } from './rogue-ui.js';
 import { QuickBar } from './quick-ui.js';
+import { LoadoutTray } from './loadout-ui.js';
 import { voxelArt } from './voxel-art.js';
 
 const $ = id => document.getElementById(id);
@@ -24,12 +25,13 @@ let paused = false, started = restored, configured = restored, notes = true, mut
 let reduced = storage.get('gridfall-motion', matchMedia('(prefers-reduced-motion: reduce)').matches);
 let saveAvailable = true;
 let lastPhase = game.phase, lastUI = '', toastTimer, bannerTimer, lastTime = 0, runEnded = false, saveClock = 0;
-let rogue, quick;
+let rogue, quick, loadout;
 const renderer = new VoxelRenderer($('gameCanvas'), { onCell: cell => {
   if (blocked()) return;
+  if (loadout?.isOpen()) { loadout.handleCell(cell); refresh(); return; }
   selectedCell = cell;
   const tower = selectedTower();
-  if (tower) { selectedNumber = tower.number; quick.open('tower'); }
+  if (tower) { selectedNumber = tower.number; openLoadout(); }
   else quick.close();
   refresh();
 } });
@@ -45,11 +47,35 @@ rogue = new RogueUI({
   onChange: result => { if (result?.message) notify(result.message, result.ok === false); syncPhase(); refresh(); save(); },
   onNewRun: options => newRun(options),
   onInspect: cell => { selectedCell = cell; selectedNumber = selectedTower()?.number || selectedNumber; refresh(); },
+  onBoardEquip: itemId => openLoadout({ itemId }),
   onSound: (type, data = {}) => { if (!muted) { audio.unlock(); audio.play({ type, ...data }); } },
   isReducedMotion: () => reduced
 });
-quick = new QuickBar({ game, onOpen: openRogue, onToggle: () => { audio.stop(); save(); } });
+quick = new QuickBar({ game, onOpen: openRogue, onInventory: toggleLoadout,
+  onTower: () => { if (!selectedTower()) return false; toggleLoadout(); return true; },
+  onToggle: open => { if (open) loadout?.close(); syncLoadoutState(); audio.stop(); save(); }
+});
+loadout = new LoadoutTray({
+  game, renderer, getSelectedCell: () => selectedCell,
+  onSelectCell: cell => { selectedCell = cell; selectedNumber = selectedTower()?.number || selectedNumber; },
+  onChange: result => after(result),
+  onClose: () => { syncLoadoutState(); save(); },
+  onLibrary: itemId => openRogue('inventory', itemId),
+  isBlocked: blocked
+});
+function syncLoadoutState() {
+  const open = !!loadout?.isOpen(), button = $('quickInventory');
+  button.setAttribute('aria-expanded', String(open)); button.classList.toggle('active', open);
+  button.setAttribute('aria-controls', 'loadoutTray');
+  $('menuHold').hidden = !(open || quick?.isOpen());
+}
+function openLoadout(options = {}) {
+  if (blocked()) return;
+  quick.close(); loadout.open(options); syncLoadoutState(); audio.stop(); save(); refresh();
+}
+function toggleLoadout() { if (loadout.isOpen()) loadout.close(true); else openLoadout(); }
 function openRogue(tab = 'inventory', itemId = null) {
+  loadout?.close(true);
   quick?.close(true);
   if (tab === 'inventory') { rogue.filter = 'all'; rogue.selectedItem = itemId; }
   rogue.open(tab);
@@ -82,7 +108,8 @@ function after(result) { if (result?.message) notify(result.message, result.ok =
 function selectNumber(number) { selectedNumber = ((number - 1 + 9) % 9) + 1; refresh(); }
 function place() {
   if (blocked()) return;
-  if (selectedTower()) { quick.open('tower'); return; }
+  if (loadout.isOpen()) { loadout.handleController('place'); return; }
+  if (selectedTower()) { openLoadout(); return; }
   quick.close();
   if (game.phase === 'prep') { notify('War prep: click a tower to equip or upgrade it. Launch when ready.'); return; }
   engageAudio(); $('gameCanvas').focus({ preventScroll: true });
@@ -99,6 +126,7 @@ function move(dx, dy) {
   if (rogue.isOpen()) { rogue.handleController('move', dx, dy); return; }
   if ($('helpDialog').open || $('pauseDialog').open) { moveModal(dy || dx); return; }
   if (paused) return;
+  if (loadout.isOpen()) { loadout.handleController('move', dx, dy); refresh(); return; }
   quick.close();
   selectedCell = ((Math.floor(selectedCell / 9) + dy + 9) % 9) * 9 + (selectedCell % 9 + dx + 9) % 9;
   refresh();
@@ -120,12 +148,12 @@ function phaseAction() {
   if ($('helpDialog').open) { closeHelp(); return; }
   if ($('pauseDialog').open) { if (runEnded) setup(); else togglePause(); return; }
   if (paused) return;
-  quick.close(); engageAudio(); let result;
+  loadout.close(); quick.close(); engageAudio(); let result;
   if (game.phase === 'solve') { started = configured = true; result = game.endSolve(); }
   else if (game.phase === 'prep') { started = configured = true; result = game.startBattle(); }
   else if (game.phase === 'loot') { openRogue('loot'); return; }
   else if (['won', 'lost'].includes(game.phase)) { setup(); return; }
-  else { openRogue('inventory'); return; }
+  else { openLoadout({ filter: 'consumable' }); return; }
   after(result); syncPhase(); $('gameCanvas').focus({ preventScroll: true });
 }
 function buyReserve() { if (blocked()) return; engageAudio(); after(game.buy(selectedNumber)); $('gameCanvas').focus({ preventScroll: true }); }
@@ -135,7 +163,7 @@ function togglePause() {
   if (rogue.isOpen()) { rogue.handleController('back'); return; }
   if ($('helpDialog').open) { closeHelp(); return; }
   if (runEnded) return;
-  quick.close();
+  loadout.close(); quick.close();
   paused = !paused;
   if (paused) {
     $('pauseTitle').textContent = 'Expedition on hold.';
@@ -145,11 +173,11 @@ function togglePause() {
   } else { $('pauseDialog').close(); engageAudio(); }
   refresh();
 }
-function openHelp() { if ($('pauseDialog').open || rogue.isOpen()) return; quick.close(true); $('helpDialog').showModal(); audio.stop(); }
+function openHelp() { if ($('pauseDialog').open || rogue.isOpen()) return; loadout.close(); quick.close(true); $('helpDialog').showModal(); audio.stop(); }
 function closeHelp() { $('helpDialog').close(); $('quickMore').focus({ preventScroll: true }); engageAudio(); }
-function setup() { quick.close(); $('pauseDialog').close(); paused = false; rogue.openSetup(); }
+function setup() { loadout.close(); quick.close(); $('pauseDialog').close(); paused = false; rogue.openSetup(); }
 function newRun(options) {
-  quick.close(); game.reset(`gridfall-${Date.now()}`, options);
+  loadout.close(); quick.close(); game.reset(`gridfall-${Date.now()}`, options);
   paused = false; started = false; configured = true; restored = false; runEnded = false; lastPhase = game.phase;
   selectedCell = game.board.findIndex(n => !n); selectedNumber = 1;
   $('pauseDialog').close(); renderer.particles = []; renderer.labels = []; renderer.rings = []; renderer.pickups = []; renderer.beams = [];
@@ -166,7 +194,7 @@ function showEnd() {
 }
 function syncPhase() {
   if (game.phase === lastPhase) return;
-  const previous = lastPhase; lastPhase = game.phase; quick.close();
+  const previous = lastPhase; lastPhase = game.phase; loadout.close(); quick.close();
   if (game.phase === 'solve') { started = false; selectedCell = game.board.findIndex(n => !n); if (selectedCell < 0) selectedCell = 0; }
   if (game.phase === 'prep') { banner('WAR PREP · GROW YOUR ARSENAL'); $('statusMessage').textContent = 'Click a tower to upgrade or equip. No timer during preparation.'; }
   if (game.phase === 'loot' && previous === 'battle') { banner('SECTOR SECURED'); openRogue('loot'); }
@@ -194,7 +222,7 @@ function inspectTower() {
       b.className = item ? 'filled' : ''; b.style.setProperty('--item-color', item?.color || '#526d80');
       if (item) b.innerHTML = voxelArt(item.kind, { color: item.color, rarity: item.rarity }); else b.textContent = '+';
       b.title = item ? `${item.name} · ${item.description}` : `Empty slot ${i + 1}. Equip an attachment.`;
-      b.setAttribute('aria-label', b.title); b.onclick = () => openRogue('tower'); slots.append(b);
+      b.setAttribute('aria-label', b.title); b.onclick = () => openLoadout(); slots.append(b);
     }
     $('gearBtn').innerHTML = `Manage attachments <span>${tower.attachments.length} / 5 slots</span>`;
     const cost = game.upgradeCost(tower.cell);
@@ -260,7 +288,7 @@ function refresh() {
   const legal = notes && !filled && phase === 'solve' ? game.candidates(selectedCell) : [];
   for (const b of deck.children) b.classList.toggle('candidate', legal.includes(Number(b.dataset.number)));
   $('campBtn').hidden = !['prep', 'loot', 'won'].includes(phase);
-  inspectTower(); rogue.refresh(); quick?.refresh();
+  inspectTower(); rogue.refresh(); quick?.refresh(); loadout?.refresh(); syncLoadoutState();
   $('motionBtn').textContent = `Reduce motion: ${reduced ? 'on' : 'off'}`;
   $('bestScore').textContent = `BEST SCORE ${storage.get('gridfall-best', 0).toLocaleString()}`;
 }
@@ -270,7 +298,7 @@ function toggleSound() {
   $('soundBtn').setAttribute('aria-label', $('soundBtn').title); notify(muted ? 'Sound muted.' : 'Sound on. Headphones recommended.');
 }
 $('phaseBtn').onclick = phaseAction; $('hintBtn').onclick = hint; $('buyBtn').onclick = buyReserve;
-$('upgradeTowerBtn').onclick = upgradeOne; $('upgradeFamilyBtn').onclick = upgradeFamily; $('gearBtn').onclick = () => openRogue('tower');
+$('upgradeTowerBtn').onclick = upgradeOne; $('upgradeFamilyBtn').onclick = upgradeFamily; $('gearBtn').onclick = () => openLoadout();
 $('inventoryBtn').onclick = () => openRogue('inventory'); $('campBtn').onclick = () => openRogue('loot'); $('chestsBtn').onclick = () => openRogue('chests');
 $('helpBtn').onclick = openHelp; $('closeHelp').onclick = closeHelp; $('pauseBtn').onclick = togglePause;
 $('resumeBtn').onclick = () => runEnded ? setup() : togglePause(); $('restartBtn').onclick = setup;
@@ -286,25 +314,27 @@ document.addEventListener('keydown', event => {
   if (event.ctrlKey || event.metaKey || event.altKey || (event.repeat && !event.key.startsWith('Arrow'))) return;
   if (rogue.isOpen()) return;
   const key = event.key;
+  if (key === 'Escape' && loadout.isOpen()) { event.preventDefault(); loadout.handleController('back'); return; }
   if (key === 'Escape' && quick.isOpen()) { event.preventDefault(); quick.close(true); return; }
   if (key === 'Escape') { if ($('helpDialog').open) { event.preventDefault(); closeHelp(); } else if (!$('pauseDialog').open) { event.preventDefault(); togglePause(); } return; }
   if (key === ' ') { if (document.activeElement?.tagName === 'BUTTON') return; event.preventDefault(); if (!$('helpDialog').open) togglePause(); return; }
   if (key.toLowerCase() === 'h') { event.preventDefault(); if ($('helpDialog').open) closeHelp(); else openHelp(); return; }
-  if (key === 'Enter' && document.activeElement?.tagName !== 'BUTTON') { event.preventDefault(); phaseAction(); return; }
+  if (key === 'Enter' && document.activeElement?.tagName !== 'BUTTON') { event.preventDefault(); if (loadout.isOpen()) loadout.handleController('place'); else phaseAction(); return; }
   if (blocked()) return;
-  if (key.toLowerCase() === 'i') { event.preventDefault(); openRogue('inventory'); return; }
-  if (key.toLowerCase() === 'u') { event.preventDefault(); quick.toggle('tower'); return; }
+  if (key.toLowerCase() === 'i') { event.preventDefault(); toggleLoadout(); return; }
+  if (key.toLowerCase() === 'u') { event.preventDefault(); if (selectedTower()) toggleLoadout(); else quick.toggle('tower'); return; }
   if (key.toLowerCase() === 'f') { fullscreen(); return; }
-  if (key.toLowerCase() === 'b') { event.preventDefault(); buyReserve(); return; }
-  if (/^[1-9]$/.test(key)) { event.preventDefault(); selectNumber(Number(key)); place(); return; }
+  if (key.toLowerCase() === 'b' && !loadout.isOpen()) { event.preventDefault(); buyReserve(); return; }
+  if (/^[1-9]$/.test(key) && !loadout.isOpen()) { event.preventDefault(); selectNumber(Number(key)); place(); return; }
   const dirs = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
   if (dirs[key]) { event.preventDefault(); move(...dirs[key]); }
 });
 const controller = new GamepadInput({
   onMove: (dx, dy) => { if (quick.isOpen() && !rogue.isOpen()) quick.moveFocus(dy || dx); else move(dx, dy); },
-  onNumber: delta => { if (rogue.isOpen()) rogue.handleController('number', delta); else if (!blocked()) selectNumber(selectedNumber + delta); },
+  onNumber: delta => { if (rogue.isOpen()) rogue.handleController('number', delta); else if (loadout.isOpen()) loadout.handleController('number', delta); else if (!blocked()) selectNumber(selectedNumber + delta); },
   onAction: action => {
     if (action === 'sound') { toggleSound(); return; }
+    if (loadout.isOpen() && !blocked()) { if (action === 'phase') phaseAction(); else loadout.handleController(action); refresh(); return; }
     if (quick.isOpen() && !rogue.isOpen()) {
       if (action === 'back') quick.close(true);
       else if (action === 'place') document.activeElement?.click?.();
@@ -318,17 +348,17 @@ const controller = new GamepadInput({
       return;
     }
     if (action === 'phase') phaseAction(); else if (action === 'place') place(); else if (action === 'hint') hint();
-    else if (action === 'buy') buyReserve(); else if (action === 'back') openRogue('inventory');
+    else if (action === 'buy') buyReserve(); else if (action === 'back') openLoadout();
   },
   onPause: togglePause,
-  onHelp: () => { if (rogue.isOpen()) rogue.handleController('back'); else openRogue('inventory'); }
+  onHelp: () => { if (rogue.isOpen()) rogue.handleController('back'); else toggleLoadout(); }
 });
 document.addEventListener('visibilitychange', () => { if (document.hidden) { save(); if (started && !blocked() && !runEnded) togglePause(); } });
 window.addEventListener('pagehide', save);
 function frame(ms) {
   const dt = Math.min((ms - lastTime) / 1000 || 0, .06); lastTime = ms;
   controller.update(dt); rogue.tick(dt);
-  const stopped = blocked() || quick.isOpen();
+  const stopped = blocked() || quick.isOpen() || loadout.isOpen();
   if (!stopped && started) game.update(dt);
   if (!stopped && !muted) audio.update(dt, game.phase);
   for (const event of game.drainEvents()) {
@@ -339,7 +369,7 @@ function frame(ms) {
     if (event.type === 'combo') notify(event.text?.replace('coins', 'credits'));
     if (event.type === 'leak') $('statusMessage').textContent = 'Core hit! Reinforce the exit or use a combat item.';
   }
-  renderer.render({ ...game, selectedCell, selectedNumber, towerColors: TOWERS.map(t => t.color) }, paused ? 0 : dt, ms / 1000);
+  renderer.render({ ...game, selectedCell, selectedNumber, towerColors: TOWERS.map(t => t.color), equipPreview: loadout.overlay() }, paused ? 0 : dt, ms / 1000);
   syncPhase();
   const key = [game.phase, game.wave, Math.ceil(game.timer), game.credits, game.fragments, game.health, game.score, game.enemies.length, game.corruption, game.combo, game.solvedCount, game.roundSolvedCount, game.chests.length, game.items.length, game.activeEffects.map(e => Math.ceil(e.remaining)).join(','), controller.connected].join('|');
   if (key !== lastUI) { refresh(); lastUI = key; }

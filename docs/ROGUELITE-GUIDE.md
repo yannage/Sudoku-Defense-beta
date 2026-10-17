@@ -1,22 +1,22 @@
-# Gridfall 0.2.2 player guide
+# Gridfall 0.2.3 player guide
 
 Gridfall mixes timed Sudoku with tower defense and a run-long collection of equipment. Your numbers create the towers; your loot determines how they fight.
 
 ## The board and quick bar
 
-The main screen keeps the board, phase action, and all **nine number buttons** in the viewport. Tap a blank square, then a number to plant it. Secondary controls live in the bottom quick bar:
+The play screen keeps the board, phase action, and all **nine number buttons** in the viewport. Tap a blank square, then a number to plant it. Bag replaces the number rail with an equipment tray while keeping the board visible; close the tray to return to planting. Secondary controls live in the bottom quick bar:
 
 | Tab | What it opens |
 | --- | --- |
-| Tower | The selected tower's stats, attachments, individual upgrade, number-family upgrade, and reserve purchase |
-| Bag | A short item list and access to full inventory management |
+| Tower | The selected tower's equipment tray; seed controls and reserve purchase when no tower is selected |
+| Bag | The Equipment / Boosts tray with direct access to the board |
 | Chests | Sealed chests, fragment requirements, and the chest collection |
 | Notes | Legal candidates, smart notes, and the paid hint |
 | More | Run details, Loot camp, casino, help, and fullscreen |
 
-Only **one quick panel** opens at a time. Tap its tab again, press the close button or Escape, or tap a blank board square to collapse it. Clicking a planted tower opens Tower. The game clock and combat pause while a quick panel or full menu is open, so you can inspect and make decisions without losing time.
+Only **one quick panel or equipment tray** opens at a time. Quick panels collapse when you tap their tab again, press the close button or Escape, or tap a blank board square. Clicking a planted tower opens its equipment tray. Close that tray using × or Bag; Escape cancels a selected item first, then closes the tray. The game clock and combat pause while a tray, quick panel, or full menu is open.
 
-On smaller screens, the full inventory uses a compact item list. Select an item to inspect its effect and equipment action; **Back to items** returns to the list. Open Bag → **Manage inventory** to see the collection, or choose an item directly from the short list.
+For the full inventory, open Bag → **Details**. On smaller screens it uses a compact item list. Select an item to inspect its effect and equipment action; **Back to items** returns to the list.
 
 Chests, equipment, and quick-bar controls use matching voxel artwork. Item names, rarity labels, costs, and descriptions remain available alongside the art.
 
@@ -55,7 +55,15 @@ The nine numbers are tower families and colors. They all fire basic bolts initia
 
 ## Inventory and five attachment slots
 
-Select a tower, open Tower → **Equip attachments**, and equip items from the inventory. Each tower accepts **five attachments**. You can repeat a type—five electric attachments, for example—or mix rapid fire, lightning, and frost. Each attachment becomes a visible layer of the tower stack.
+Open **Bag → Equipment** during War prep or Loot. The tray sits alongside the board so you equip the actual towers:
+
+- **Mouse:** drag an equipment card onto a planted tower.
+- **Touch:** drag the card's dotted handle, or tap the card and then tap the tower. Swipe the card list to browse more equipment.
+- **Selected tower:** tap a tower first, select an equipment card, then use **Attach**. Valid towers and full towers are marked on the board while an attachment is selected.
+
+Each tower accepts **five attachments**. You can repeat a type—five electric attachments, for example—or mix rapid fire, lightning, and frost. Each attachment becomes a visible layer of the tower stack. Dropping on a blank, a printed clue, or a full tower does not consume the item.
+
+Select a tower to see its five slots in the tray. Tap an occupied slot to return that attachment to the bag. **This tower** buys an upgrade for this map; **All Ns** raises that number's family level for the whole run. Equipment changes retain the existing War prep / Loot restriction; opening the tray during battle does not allow re-equipping.
 
 | Attachment | Role |
 | --- | --- |
@@ -71,7 +79,7 @@ Select a tower, open Tower → **Equip attachments**, and equip items from the i
 
 Items have **Common, Uncommon, Rare, Epic, or Legendary** rarity. Rarity and rolled power affect their strength; compare the displayed stats rather than color alone. Remove attachments to move them to another tower. Equipped items return to the bag when you advance to a new board, including equipment from illegal emergency towers.
 
-Consumables remain in the inventory until used. Combat effects count down during battle, not while paused in a menu. Their active timers are displayed in the game; using the same effect again refreshes its duration.
+Consumables remain in the inventory until used. Open **Bag → Boosts**, select an item, and press **Use boost** to consume it. Selecting or dragging a card does not activate a boost. Close the tray to resume battle and the effect timer. Combat effects count down during battle, not while paused in a menu; using the same effect again refreshes its duration.
 
 | Consumable | Effect |
 | --- | --- |
@@ -106,14 +114,16 @@ These are earned game credits with no purchase or cash-out system. This alpha in
 | Select a number | Click its numbered button | LB / RB |
 | Place selected number | Number keys 1–9 | A |
 | Inspect a tower | Click an occupied square | Select tower and press A |
-| Open inventory | I or Bag → Manage inventory | B or View / Select on the board |
+| Open equipment tray | I or Bag | B or View / Select on the board |
 | Buy a reserve | B or Buy reserve | RT |
 | Next phase | Enter or phase button | Y |
 | Sound | Sound button | LT |
 | Pause | Space | Start / Menu |
 | Close a panel | Escape | B |
 
-Use **I** for inventory and **U** to toggle the selected tower's quick panel. The in-game Help panel under More is the source of truth for the complete mapping. Menus use the same directional controls to move focus and A to activate the focused choice. For Steam Deck, begin with Steam Input's standard Gamepad layout.
+Use **I** to toggle Bag and **U** for the selected tower's tray or seed controls. In the tray, **LB / RB** cycles items. With an attachment selected, the **D-pad** cycles towers and **A** attaches it. **B** cancels the item selection first, then closes the tray. Open **Details** for the full inventory.
+
+The in-game Help panel under More is the source of truth for the complete mapping. Menus use directional controls to move focus and A to activate the focused choice. For Steam Deck, begin with Steam Input's standard Gamepad layout.
 
 ## Alpha scope
 

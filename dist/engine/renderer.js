@@ -285,6 +285,15 @@ export class VoxelRenderer {
     const sx = selected % 9, sy = Math.floor(selected / 9);
     const recent = new Set((state.recentMoves || []).map(m => typeof m === 'number' ? m : m.cell));
     const selectedNumber = state.selectedNumber || (state.board || [])[selected];
+    // Equipment placement stays a presentation-only overlay. The caller owns
+    // eligibility; a filled/given square can never masquerade as a target.
+    const preview = state.equipPreview;
+    this._equipFeedback = preview?.active ? {
+      placing: !!preview.itemSelected,
+      valid: new Set((preview.validCells || []).filter(cell => towerMap.has(cell))),
+      full: new Set((preview.fullCells || []).filter(cell => towerMap.has(cell))),
+      hover: Number.isInteger(preview.hoverCell) ? preview.hoverCell : -1
+    } : null;
     const corners = [this._project(-.62, -.62), this._project(8.62, -.62), this._project(8.62, 8.62), this._project(-.62, 8.62)];
 
     // Ambient shadow, then the sculpted floating-island foundation.
@@ -341,6 +350,21 @@ export class VoxelRenderer {
           const p = this._project(x + .31, y - .28);
           c.fillStyle = '#bd335c'; c.font = `700 ${Math.max(8, this.flatSize * .2)}px system-ui`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('!', p.x, p.y);
         }
+        const equip = this._equipFeedback;
+        if (equip?.placing) {
+          const valid = equip.valid.has(cell), full = equip.full.has(cell), hover = equip.hover === cell;
+          if (valid || full || hover) {
+            const color = valid ? '#8ef8d4' : hover ? '#ff8e99' : '#b9717d';
+            this._poly(this._tile(x, y, hover ? .025 : .065), hover ? alpha(color, .16) : null, alpha(color, hover ? 1 : valid ? .8 : .55), hover ? 2.8 : valid ? 1.6 : 1.1);
+            if (hover && !valid) {
+              // Invalid empty/given cells get a quiet cross as well as color.
+              const p = this._project(x, y), size = Math.max(3, this.unit * .12);
+              c.strokeStyle = '#ffb7bd'; c.lineWidth = 1.5; c.beginPath();
+              c.moveTo(p.x - size, p.y - size); c.lineTo(p.x + size, p.y + size);
+              c.moveTo(p.x + size, p.y - size); c.lineTo(p.x - size, p.y + size); c.stroke();
+            }
+          }
+        }
       }
     }
 
@@ -373,6 +397,15 @@ export class VoxelRenderer {
         c.fillStyle = tower.illegal ? '#b43f67' : '#368c70';
         c.beginPath(); c.ellipse(seed.x, seed.y, r * .8, r * 1.1, -.45, 0, Math.PI * 2); c.fill();
         c.strokeStyle = '#b5f4d4'; c.lineWidth = 1; c.beginPath(); c.moveTo(seed.x - r * .25, seed.y + r * .65); c.lineTo(seed.x + r * .2, seed.y - r * .5); c.stroke();
+        if (this._equipFeedback) {
+          const count = Math.min(5, tower.attachments?.length || 0);
+          const slot = Math.max(1.4, this.flatSize * .052), gap = Math.max(2.4, this.flatSize * .09);
+          const origin = this._project(x - .32, y + .32);
+          for (let i = 0; i < 5; i++) {
+            c.fillStyle = i < count ? '#147b79' : '#98b6b4';
+            c.fillRect(origin.x + gap * i - slot / 2, origin.y - slot / 2, slot, slot);
+          }
+        }
       }
       c.globalAlpha = 1;
     }
@@ -489,6 +522,30 @@ export class VoxelRenderer {
     c.fillStyle = '#102536'; c.beginPath(); c.arc(badge.x, badge.y, radius, 0, Math.PI * 2); c.fill();
     if (selected) { c.strokeStyle = '#c9ffef'; c.lineWidth = 1; c.stroke(); }
     c.fillStyle = color; c.font = `800 ${Math.max(8, this.isoSize * .25)}px "Space Grotesk", system-ui`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(n, badge.x, badge.y + .3);
+    if (this._equipFeedback) this._equipmentBadge(tower);
+  }
+
+  _equipmentBadge(tower) {
+    const c = this.ctx, equip = this._equipFeedback;
+    const used = Math.min(5, tower.attachments?.length || 0), valid = equip.valid.has(tower.cell);
+    const hover = equip.placing && equip.hover === tower.cell;
+    const tint = equip.placing && used >= 5 ? '#ffb2bb' : valid ? '#abffe0' : '#c0d2d8';
+    // The family digit sits on the left of the base; occupancy sits to its
+    // right, away from the rotating head and the individual-level badge.
+    const p = this._project(tower.x + .44, tower.y - .06, -.05);
+    const font = Math.max(8, Math.min(10, this.isoSize * .27));
+    c.font = `800 ${font}px "Space Grotesk", system-ui`; c.textAlign = 'center'; c.textBaseline = 'middle';
+    const label = `${used}/5`, width = c.measureText(label).width + 4, height = font + 3;
+    c.fillStyle = valid && used === 0 ? '#154137' : '#102536';
+    c.fillRect(p.x - width / 2, p.y - height / 2, width, height);
+    if (hover || tower.cell === this.state.selectedCell) {
+      c.strokeStyle = hover && !valid ? '#ff8e99' : '#b6ffe4'; c.lineWidth = 1;
+      c.strokeRect(p.x - width / 2, p.y - height / 2, width, height);
+    }
+    c.fillStyle = tint; c.fillText(label, p.x, p.y + .4);
+    // A tiny ready lamp makes unused towers identifiable without another icon
+    // or a moving effect on the compact isometric board.
+    if (valid && used === 0) { c.fillStyle = '#8ef8d4'; c.fillRect(p.x + width / 2 - 2, p.y - height / 2 - 2, 2, 2); }
   }
 
   _module(tower, item, slot, growth) {
