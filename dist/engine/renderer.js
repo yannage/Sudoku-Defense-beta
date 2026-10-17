@@ -60,7 +60,7 @@ export class VoxelRenderer {
 
   _layout() {
     const compact = this.w < 560;
-    this.flatSize = Math.max(12, Math.min((this.w - (compact ? 24 : 66)) / 9, (this.h - 74) / 9));
+    this.flatSize = Math.max(12, Math.min((this.w - (compact ? 24 : 66)) / 9, (this.h - (compact ? 44 : 74)) / 9));
     // Reserve headroom for a fully equipped five-module tower on the back row.
     this.isoSize = Math.max(9, Math.min((this.w - (compact ? 28 : 60)) / 18.4, (this.h - 96) / 11.4));
     this.cx = this.w * .5;

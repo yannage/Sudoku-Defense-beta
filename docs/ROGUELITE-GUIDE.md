@@ -1,6 +1,22 @@
-# Gridfall 0.2 player guide
+# Gridfall 0.2.1 player guide
 
 Gridfall mixes timed Sudoku with tower defense and a run-long collection of equipment. Your numbers create the towers; your loot determines how they fight.
+
+## The board and quick bar
+
+The main screen keeps the board, phase action, and all **nine number buttons** in the viewport. Tap a blank square, then a number to plant it. Secondary controls live in the bottom quick bar:
+
+| Tab | What it opens |
+| --- | --- |
+| Tower | The selected tower's stats, attachments, individual upgrade, number-family upgrade, and reserve purchase |
+| Bag | A short item list and access to full inventory management |
+| Chests | Sealed chests, fragment requirements, and the chest collection |
+| Notes | Legal candidates, smart notes, and the paid hint |
+| More | Run details, Loot camp, casino, help, and fullscreen |
+
+Only **one quick panel** opens at a time. Tap its tab again, press the close button or Escape, or tap a blank board square to collapse it. Clicking a planted tower opens Tower. The game clock and combat pause while a quick panel or full menu is open, so you can inspect and make decisions without losing time.
+
+On smaller screens, the full inventory uses a compact item list. Select an item to inspect its effect and equipment action; **Back to items** returns to the list. Open Bag → **Manage inventory** to see the collection, or choose an item directly from the short list.
 
 ## Choose a run
 
@@ -37,7 +53,7 @@ The nine numbers are tower families and colors. They all fire basic bolts initia
 
 ## Inventory and five attachment slots
 
-Select a tower, open its gear panel, and equip items from the inventory. Each tower accepts **five attachments**. You can repeat a type—five electric attachments, for example—or mix rapid fire, lightning, and frost. Each attachment becomes a visible layer of the tower stack.
+Select a tower, open Tower → **Equip attachments**, and equip items from the inventory. Each tower accepts **five attachments**. You can repeat a type—five electric attachments, for example—or mix rapid fire, lightning, and frost. Each attachment becomes a visible layer of the tower stack.
 
 | Attachment | Role |
 | --- | --- |
@@ -76,7 +92,7 @@ The between-round shop offers passive upgrades for damage, salvage, and core sur
 
 ## Slot machine
 
-The slot machine is available during Loot and costs **20 credits** per spin. Outcomes can return credits or award a chest; a losing spin consumes the stake. Chests won here still need fragments to open. Odds and payouts are shown in the casino.
+The slot machine is available during Loot and costs **20 credits** per spin. Open More → **Loot camp & casino**, then choose **Slots**. Outcomes can return credits or award a chest; a losing spin consumes the stake. Chests won here still need fragments to open. Odds and payouts are shown in the casino.
 
 These are earned game credits with no purchase or cash-out system. This alpha includes slots only. Blackjack and NPC poker are planned possibilities, not playable modes yet.
 
@@ -85,17 +101,17 @@ These are earned game credits with no purchase or cash-out system. This alpha in
 | Action | Keyboard / mouse | Standard gamepad |
 | --- | --- | --- |
 | Select a square | Click or arrow keys | D-pad / left stick |
-| Select a number | Click its card | LB / RB |
+| Select a number | Click its numbered button | LB / RB |
 | Place selected number | Number keys 1–9 | A |
 | Inspect a tower | Click an occupied square | Select tower and press A |
-| Open inventory | I or Inventory button | B or View / Select on the board |
+| Open inventory | I or Bag → Manage inventory | B or View / Select on the board |
 | Buy a reserve | B or Buy reserve | RT |
 | Next phase | Enter or phase button | Y |
 | Sound | Sound button | LT |
 | Pause | Space | Start / Menu |
 | Close a panel | Escape | B |
 
-Use **I** for inventory and **U** for the selected tower's upgrade panel. The in-game Help panel is the source of truth for the complete mapping. Menus use the same directional controls to move focus and A to activate the focused choice. For Steam Deck, begin with Steam Input's standard Gamepad layout.
+Use **I** for inventory and **U** to toggle the selected tower's quick panel. The in-game Help panel under More is the source of truth for the complete mapping. Menus use the same directional controls to move focus and A to activate the focused choice. For Steam Deck, begin with Steam Input's standard Gamepad layout.
 
 ## Alpha scope
 

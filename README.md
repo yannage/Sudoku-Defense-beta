@@ -4,7 +4,9 @@ A Sudoku tower-defense roguelite alpha by Yak Studios. Solve a traditional grid,
 
 [Play Gridfall](https://gridfall.yakstudios.chatgpt.site) · [Player guide](docs/ROGUELITE-GUIDE.md)
 
-Version **0.2.0** adds independent Sudoku and combat difficulties, a 50-round campaign, tower and number-family upgrades, five-slot equipment stacks, fragment-powered chests, consumables, passive upgrades, and a credit-only slot machine. The rendering foundation is stylized 2.5D Canvas. This is an evolving game framework and playable alpha; campaign balance has not undergone a full human playtest.
+Version **0.2.1** gives the board more room with a compact layout that fits the viewport, keeps all nine number buttons visible, and moves secondary controls into a collapsible quick bar. Tower, Bag, Chests, Notes, and More share one panel; opening it pauses the game clock. The inventory also has a compact item list and focused item details for smaller screens.
+
+The game includes independent Sudoku and combat difficulties, a 50-round campaign, tower and number-family upgrades, five-slot equipment stacks, fragment-powered chests, consumables, passive upgrades, and a credit-only slot machine. The rendering foundation is stylized 2.5D Canvas. This is an evolving game framework and playable alpha; campaign balance has not undergone a full human playtest.
 
 ## Play
 
@@ -19,6 +21,8 @@ All numbered towers start with basic bolts. Attachments provide rapid fire, ligh
 
 Read the [player guide](docs/ROGUELITE-GUIDE.md) for progression, controls, and loot. Blackjack and poker are future additions; only slots are included in this alpha.
 
+Use the bottom quick bar for **Tower / Bag / Chests / Notes / More**. Tap the active tab again, use the close button, or tap a blank board square to collapse it. Only one quick panel opens at a time; the board and number buttons remain the main play surface. Full inventory management opens from Bag, while Loot camp and the casino are under More.
+
 ## Develop
 
 Node.js 22 or newer is needed. The web game has no runtime npm dependencies and its assets are local.
@@ -31,7 +35,7 @@ npm run build
 
 Open `http://127.0.0.1:4173`. `dist/` contains the deployable web game and readable source; no bundler is required. The build command checks the static files, and tests exercise the simulation, items, input, and desktop boundaries.
 
-`dist/engine/` contains rendering, visual effects, procedural audio, and gamepad systems. `dist/game/simulation.js` owns Sudoku, economy, progression, and combat; `dist/game/items.js` defines equipment, rarity, and slot outcomes. `dist/app.js` connects the game to the board UI, and `dist/rogue-ui.js` owns the inventory, loot, and run setup panels. Another game can reuse the engine modules, deployment, and desktop shell with its own simulation and UI.
+`dist/engine/` contains rendering, visual effects, procedural audio, and gamepad systems. `dist/game/simulation.js` owns Sudoku, economy, progression, and combat; `dist/game/items.js` defines equipment, rarity, and slot outcomes. `dist/app.js` connects the game to the board UI. `dist/quick-ui.js` owns the collapsible quick bar, `dist/cockpit.css` defines the compact game layout, and `dist/rogue-ui.js` owns the inventory, loot, and run setup panels. Another game can reuse the engine modules, deployment, and desktop shell with its own simulation and UI.
 
 ## Web deployment
 
@@ -46,7 +50,7 @@ npm run desktop
 npm run package:linux
 ```
 
-Packaging produces `release/Gridfall-0.2.0-x64.AppImage` and `release/linux-unpacked/`. Run `release/linux-unpacked/gridfall` directly or add it as a non-Steam game. Make the AppImage executable with `chmod +x release/*.AppImage`. The GitHub Actions artifact also contains a depot tarball that preserves executable permissions.
+Packaging produces `release/Gridfall-0.2.1-x64.AppImage` and `release/linux-unpacked/`. Run `release/linux-unpacked/gridfall` directly or add it as a non-Steam game. Make the AppImage executable with `chmod +x release/*.AppImage`. The GitHub Actions artifact also contains a depot tarball that preserves executable permissions.
 
 The Linux application embeds Electron and plays the web game offline. It uses the browser Gamepad API; start Deck testing with Steam Input's standard Gamepad layout. **F11** toggles desktop fullscreen. The shell serves local assets only on `127.0.0.1`, isolates web content from Node, blocks external navigation, and retains local data under Electron's user-data directory. It does not upload player data.
 

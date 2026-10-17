@@ -3,6 +3,7 @@ import { VoxelRenderer } from './engine/renderer.js';
 import { AudioEngine } from './engine/audio.js';
 import { GamepadInput } from './engine/input.js';
 import { RogueUI } from './rogue-ui.js';
+import { QuickBar } from './quick-ui.js';
 
 const $ = id => document.getElementById(id);
 const storage = {
@@ -22,12 +23,13 @@ let paused = false, started = restored, configured = restored, notes = true, mut
 let reduced = storage.get('gridfall-motion', matchMedia('(prefers-reduced-motion: reduce)').matches);
 let saveAvailable = true;
 let lastPhase = game.phase, lastUI = '', toastTimer, bannerTimer, lastTime = 0, runEnded = false, saveClock = 0;
-let rogue;
+let rogue, quick;
 const renderer = new VoxelRenderer($('gameCanvas'), { onCell: cell => {
   if (blocked()) return;
   selectedCell = cell;
   const tower = selectedTower();
-  if (tower) { selectedNumber = tower.number; rogue.open('tower'); }
+  if (tower) { selectedNumber = tower.number; quick.open('tower'); }
+  else quick.close();
   refresh();
 } });
 renderer.setReducedMotion(reduced);
@@ -45,6 +47,12 @@ rogue = new RogueUI({
   onSound: (type, data = {}) => { if (!muted) { audio.unlock(); audio.play({ type, ...data }); } },
   isReducedMotion: () => reduced
 });
+quick = new QuickBar({ game, onOpen: openRogue, onToggle: () => { audio.stop(); save(); } });
+function openRogue(tab = 'inventory', itemId = null) {
+  quick?.close(true);
+  if (tab === 'inventory') { rogue.filter = 'all'; rogue.selectedItem = itemId; }
+  rogue.open(tab);
+}
 const deck = $('towerDeck');
 for (const t of TOWERS) {
   const button = document.createElement('button');
@@ -73,7 +81,8 @@ function after(result) { if (result?.message) notify(result.message, result.ok =
 function selectNumber(number) { selectedNumber = ((number - 1 + 9) % 9) + 1; refresh(); }
 function place() {
   if (blocked()) return;
-  if (selectedTower()) { rogue.open('tower'); return; }
+  if (selectedTower()) { quick.open('tower'); return; }
+  quick.close();
   if (game.phase === 'prep') { notify('War prep: click a tower to equip or upgrade it. Launch when ready.'); return; }
   engageAudio(); $('gameCanvas').focus({ preventScroll: true });
   const result = game.place(selectedCell, selectedNumber);
@@ -89,6 +98,7 @@ function move(dx, dy) {
   if (rogue.isOpen()) { rogue.handleController('move', dx, dy); return; }
   if ($('helpDialog').open || $('pauseDialog').open) { moveModal(dy || dx); return; }
   if (paused) return;
+  quick.close();
   selectedCell = ((Math.floor(selectedCell / 9) + dy + 9) % 9) * 9 + (selectedCell % 9 + dx + 9) % 9;
   refresh();
 }
@@ -109,12 +119,12 @@ function phaseAction() {
   if ($('helpDialog').open) { closeHelp(); return; }
   if ($('pauseDialog').open) { if (runEnded) setup(); else togglePause(); return; }
   if (paused) return;
-  engageAudio(); let result;
+  quick.close(); engageAudio(); let result;
   if (game.phase === 'solve') { started = configured = true; result = game.endSolve(); }
   else if (game.phase === 'prep') { started = configured = true; result = game.startBattle(); }
-  else if (game.phase === 'loot') { rogue.open('loot'); return; }
+  else if (game.phase === 'loot') { openRogue('loot'); return; }
   else if (['won', 'lost'].includes(game.phase)) { setup(); return; }
-  else { notify('Defend the core. Open your inventory to use a combat item.'); return; }
+  else { openRogue('inventory'); return; }
   after(result); syncPhase(); $('gameCanvas').focus({ preventScroll: true });
 }
 function buyReserve() { if (blocked()) return; engageAudio(); after(game.buy(selectedNumber)); $('gameCanvas').focus({ preventScroll: true }); }
@@ -124,6 +134,7 @@ function togglePause() {
   if (rogue.isOpen()) { rogue.handleController('back'); return; }
   if ($('helpDialog').open) { closeHelp(); return; }
   if (runEnded) return;
+  quick.close();
   paused = !paused;
   if (paused) {
     $('pauseTitle').textContent = 'Expedition on hold.';
@@ -133,11 +144,11 @@ function togglePause() {
   } else { $('pauseDialog').close(); engageAudio(); }
   refresh();
 }
-function openHelp() { if ($('pauseDialog').open || rogue.isOpen()) return; $('helpDialog').showModal(); audio.stop(); }
-function closeHelp() { $('helpDialog').close(); engageAudio(); }
-function setup() { $('pauseDialog').close(); paused = false; rogue.openSetup(); }
+function openHelp() { if ($('pauseDialog').open || rogue.isOpen()) return; quick.close(true); $('helpDialog').showModal(); audio.stop(); }
+function closeHelp() { $('helpDialog').close(); $('quickMore').focus({ preventScroll: true }); engageAudio(); }
+function setup() { quick.close(); $('pauseDialog').close(); paused = false; rogue.openSetup(); }
 function newRun(options) {
-  game.reset(`gridfall-${Date.now()}`, options);
+  quick.close(); game.reset(`gridfall-${Date.now()}`, options);
   paused = false; started = false; configured = true; restored = false; runEnded = false; lastPhase = game.phase;
   selectedCell = game.board.findIndex(n => !n); selectedNumber = 1;
   $('pauseDialog').close(); renderer.particles = []; renderer.labels = []; renderer.rings = []; renderer.pickups = []; renderer.beams = [];
@@ -154,10 +165,10 @@ function showEnd() {
 }
 function syncPhase() {
   if (game.phase === lastPhase) return;
-  const previous = lastPhase; lastPhase = game.phase;
+  const previous = lastPhase; lastPhase = game.phase; quick.close();
   if (game.phase === 'solve') { started = false; selectedCell = game.board.findIndex(n => !n); if (selectedCell < 0) selectedCell = 0; }
   if (game.phase === 'prep') { banner('WAR PREP · GROW YOUR ARSENAL'); $('statusMessage').textContent = 'Click a tower to upgrade or equip. No timer during preparation.'; }
-  if (game.phase === 'loot' && previous === 'battle') { banner('SECTOR SECURED'); rogue.open('loot'); }
+  if (game.phase === 'loot' && previous === 'battle') { banner('SECTOR SECURED'); openRogue('loot'); }
   if (['won', 'lost'].includes(game.phase)) showEnd();
   save(); refresh();
 }
@@ -167,7 +178,7 @@ function inspectTower() {
   const family = game.familyLevels[number] || 1;
   document.documentElement.style.setProperty('--selected', def.color);
   $('app').classList.toggle('tower-selected', !!tower); $('app').classList.toggle('seed-selected', !tower);
-  $('inspectorEyebrow').textContent = tower ? 'TOWER WORKSHOP · CLICK TO UPGRADE' : 'SELECTED SEED';
+  $('inspectorEyebrow').textContent = tower ? 'SELECTED TOWER' : 'SELECTED SEED';
   $('towerName').textContent = tower ? `Tower ${number} · Lv ${stats.level}` : `Seed ${number}`;
   $('towerGlyph').textContent = number;
   $('towerType').className = 'tower-type-level';
@@ -182,7 +193,7 @@ function inspectTower() {
       b.className = item ? 'filled' : ''; b.style.setProperty('--item-color', item?.color || '#526d80');
       b.textContent = item ? ({ rapid: '»', electric: 'ϟ', frost: '❄', blast: '✹', venom: '◉', range: '◎', power: '▲', gravity: '◌', nova: '✦' })[item.kind] || '◆' : '+';
       b.title = item ? `${item.name} · ${item.description}` : `Empty slot ${i + 1}. Equip an attachment.`;
-      b.setAttribute('aria-label', b.title); b.onclick = () => rogue.open('tower'); slots.append(b);
+      b.setAttribute('aria-label', b.title); b.onclick = () => openRogue('tower'); slots.append(b);
     }
     $('gearBtn').innerHTML = `Manage attachments <span>${tower.attachments.length} / 5 slots</span>`;
     const cost = game.upgradeCost(tower.cell);
@@ -209,24 +220,23 @@ function refresh() {
   $('scoreValue').textContent = String(game.score).padStart(4, '0');
   $('corruptionValue').textContent = `${Math.round(game.corruption * 7.5)}%`; $('corruptionValue').style.color = game.corruption ? '#ffad7b' : '';
   $('timer').textContent = battle ? `${game.enemies.length} LIVE` : prep ? '∞' : loot ? 'CLEAR' : finished ? 'END' : `${String(Math.floor(Math.ceil(game.timer) / 60)).padStart(2, '0')}:${String(Math.ceil(game.timer) % 60).padStart(2, '0')}`;
-  $('enemyCounter').textContent = battle ? `${game.kills} DEFEATED THIS RUN` : prep ? 'EQUIP · UPGRADE · LAUNCH' : loot ? 'BREACH CONTAINED' : 'PLANT YOUR DEFENSE';
-  $('phaseTitle').innerHTML = battle ? 'The garden is alive.<br>Hold your ground.' : prep ? 'Grow something<br>dangerous.' : loot ? 'Spoils of the siege.<br>What will you build?' : 'A little logic.<br>A lot of possibility.';
-  $('phaseSubtitle').textContent = battle ? 'Break the rules. Save the core.' : prep ? 'Click any planted tower to open its workshop.' : loot ? 'Recover. Refit. Push one round further.' : 'Plant answers. Harvest firepower.';
-  $('phaseChip').textContent = battle ? 'DEFENSE PHASE' : prep ? 'WAR PREPARATION' : loot ? 'LOOT CAMP' : 'SOLVE PHASE';
+  $('phaseChip').textContent = battle ? 'DEFEND' : prep ? 'WAR PREP' : loot ? 'LOOT CAMP' : finished ? 'RUN COMPLETE' : 'SOLVE';
   $('objectiveTitle').textContent = battle ? 'Make every tower count.' : prep ? 'Your build. Your rules.' : loot ? 'A moment to regroup.' : 'Build your advantage.';
   $('objectiveText').textContent = battle ? 'Use items from your bag. Plant reserve seeds in blanks to reinforce the line.' : prep ? 'Equip up to five modules per tower. Repeated modules stack their effects.' : loot ? 'Open chests, buy passives, or try your luck before the next map.' : 'Correct answers grow towers and earn credits. Harder puzzles offer more planting space.';
   $('boardMode').textContent = battle ? 'LIVE BATTLEFIELD' : prep ? 'WAR PREP · CLICK A TOWER' : loot ? 'SECTOR SECURED' : 'TACTICAL GRID';
-  $('routeLabel').textContent = battle ? 'ENEMY ROUTE LOCKED THIS ROUND' : 'YOUR MOVES SHAPE THE ROUTE';
+
   const total = game.givens.filter(n => !n).length;
   $('solveCount').textContent = `${game.roundSolvedCount ?? game.solvedCount} / ${total} PLANTED`; $('comboValue').textContent = `${game.combo} STREAK`;
   $('solveProgress').style.width = `${(game.roundSolvedCount ?? game.solvedCount) / total * 100}%`;
-  $('phaseButtonText').textContent = battle ? 'Defending…' : prep ? 'Launch siege' : loot ? 'Enter loot camp' : finished ? 'New expedition' : 'Enter war prep';
-  $('phaseBtn').disabled = battle;
+  $('phaseButtonText').textContent = battle ? 'Open bag'  : prep ? 'Launch siege' : loot ? 'Enter loot camp' : finished ? 'New expedition' : 'Enter war prep';
+  $('phaseBtn').disabled = false;
+  $('phaseBtn').setAttribute('aria-label', battle ? 'Open inventory for combat items' : $('phaseButtonText').textContent);
   $('phaseHint').innerHTML = battle ? 'Open your bag for usable combat boosts.' : prep ? 'No timer. Build your tower stacks. <kbd>Enter</kbd>' : loot ? 'Equipment carries to your next board.' : !started ? 'Clock starts with your first answer.' : 'Solve, then prepare. <kbd>Enter</kbd>';
   $('selectedLabel').textContent = `R${Math.floor(selectedCell / 9) + 1} · C${selectedCell % 9 + 1}`;
+  $('notesSelectedLabel').textContent = $('selectedLabel').textContent;
   const tower = selectedTower(), filled = game.board[selectedCell];
   $('intelTitle').textContent = tower ? 'PLANTED TOWER' : battle ? 'EMERGENCY SEED' : 'FIELD NOTES';
-  $('intelText').textContent = tower ? 'Click this tower again, press U, or use its upgrade buttons above.' : filled ? 'A printed clue. Plant seeds in empty squares.' : battle ? 'Any reserve seed can go here. Wrong answers add +7.5% enemy health.' : prep ? 'Prep your planted towers. New legal seeds are planted during solving.' : notes ? 'Legal candidates for this square:' : 'Use each digit once per row, column and 3×3 box.';
+  $('intelText').textContent = tower ? 'Open Tower to upgrade this seed or every matching number.' : filled ? 'A printed clue. Plant seeds in empty squares.' : battle ? 'Any reserve seed can go here. Wrong answers add +7.5% enemy health.' : prep ? 'Prep your planted towers. New legal seeds are planted during solving.' : notes ? 'Legal candidates for this square:' : 'Use each digit once per row, column and 3×3 box.';
   $('candidateList').replaceChildren();
   if (notes && !filled && phase === 'solve') for (const n of game.candidates(selectedCell)) {
     const b = document.createElement('button'); b.textContent = n; b.title = `Plant ${n}`;
@@ -241,7 +251,15 @@ function refresh() {
   }
   $('activeEffects').replaceChildren();
   for (const effect of game.activeEffects) { const el = document.createElement('span'); el.className = 'buff-pill'; el.textContent = `${effect.name} · ${Math.ceil(effect.remaining)}s`; $('activeEffects').append(el); }
-  inspectTower(); rogue.refresh();
+  $('selectionHint').textContent = tower ? `Tower ${tower.number} · tap to upgrade` : filled ? 'Printed clue · choose a blank' : `${battle ? 'Plant a reserve' : prep ? 'Tap a tower to upgrade' : 'Tap a number to plant'}`;
+  $('boardTip').textContent = battle ? 'Your latest moves shaped this route' : prep ? 'Tap a tower · equip & upgrade' : loot ? 'Loot camp is ready' : 'Tap a square, then a number';
+  $('boardNotesState').textContent = notes ? 'NOTES ON' : 'NOTES OFF';
+  $('seedRailLabel').textContent = battle ? 'RESERVE SEEDS' : prep || loot ? 'NUMBER FAMILIES' : 'PLANT A NUMBER';
+  $('railHint').textContent = battle ? 'Any blank · illegal seeds add danger' : prep ? 'Tap a planted tower to build its stack' : 'Tap a tower for upgrades';
+  const legal = notes && !filled && phase === 'solve' ? game.candidates(selectedCell) : [];
+  for (const b of deck.children) b.classList.toggle('candidate', legal.includes(Number(b.dataset.number)));
+  $('campBtn').hidden = !['prep', 'loot', 'won'].includes(phase);
+  inspectTower(); rogue.refresh(); quick?.refresh();
   $('motionBtn').textContent = `Reduce motion: ${reduced ? 'on' : 'off'}`;
   $('bestScore').textContent = `BEST SCORE ${storage.get('gridfall-best', 0).toLocaleString()}`;
 }
@@ -251,11 +269,11 @@ function toggleSound() {
   $('soundBtn').setAttribute('aria-label', $('soundBtn').title); notify(muted ? 'Sound muted.' : 'Sound on. Headphones recommended.');
 }
 $('phaseBtn').onclick = phaseAction; $('hintBtn').onclick = hint; $('buyBtn').onclick = buyReserve;
-$('upgradeTowerBtn').onclick = upgradeOne; $('upgradeFamilyBtn').onclick = upgradeFamily; $('gearBtn').onclick = () => rogue.open('tower');
-$('inventoryBtn').onclick = () => rogue.open('inventory'); $('chestsBtn').onclick = () => rogue.open('chests');
+$('upgradeTowerBtn').onclick = upgradeOne; $('upgradeFamilyBtn').onclick = upgradeFamily; $('gearBtn').onclick = () => openRogue('tower');
+$('inventoryBtn').onclick = () => openRogue('inventory'); $('campBtn').onclick = () => openRogue('loot'); $('chestsBtn').onclick = () => openRogue('chests');
 $('helpBtn').onclick = openHelp; $('closeHelp').onclick = closeHelp; $('pauseBtn').onclick = togglePause;
 $('resumeBtn').onclick = () => runEnded ? setup() : togglePause(); $('restartBtn').onclick = setup;
-$('spoilsBtn').onclick = () => { $('pauseDialog').close(); rogue.open('inventory'); };
+$('spoilsBtn').onclick = () => { $('pauseDialog').close(); openRogue('inventory'); };
 $('soundBtn').onclick = toggleSound;
 $('notesBtn').onclick = () => { notes = !notes; $('notesBtn').textContent = `◈ Smart notes ${notes ? 'on' : 'off'}`; $('notesBtn').setAttribute('aria-pressed', String(notes)); refresh(); };
 $('motionBtn').onclick = () => { reduced = !reduced; storage.set('gridfall-motion', reduced); renderer.setReducedMotion(reduced); document.body.classList.toggle('reduced-motion', reduced); refresh(); };
@@ -267,13 +285,14 @@ document.addEventListener('keydown', event => {
   if (event.ctrlKey || event.metaKey || event.altKey || (event.repeat && !event.key.startsWith('Arrow'))) return;
   if (rogue.isOpen()) return;
   const key = event.key;
+  if (key === 'Escape' && quick.isOpen()) { event.preventDefault(); quick.close(true); return; }
   if (key === 'Escape') { if ($('helpDialog').open) { event.preventDefault(); closeHelp(); } else if (!$('pauseDialog').open) { event.preventDefault(); togglePause(); } return; }
   if (key === ' ') { if (document.activeElement?.tagName === 'BUTTON') return; event.preventDefault(); if (!$('helpDialog').open) togglePause(); return; }
   if (key.toLowerCase() === 'h') { event.preventDefault(); if ($('helpDialog').open) closeHelp(); else openHelp(); return; }
   if (key === 'Enter' && document.activeElement?.tagName !== 'BUTTON') { event.preventDefault(); phaseAction(); return; }
   if (blocked()) return;
-  if (key.toLowerCase() === 'i') { event.preventDefault(); rogue.open('inventory'); return; }
-  if (key.toLowerCase() === 'u') { event.preventDefault(); rogue.open('tower'); return; }
+  if (key.toLowerCase() === 'i') { event.preventDefault(); openRogue('inventory'); return; }
+  if (key.toLowerCase() === 'u') { event.preventDefault(); quick.toggle('tower'); return; }
   if (key.toLowerCase() === 'f') { fullscreen(); return; }
   if (key.toLowerCase() === 'b') { event.preventDefault(); buyReserve(); return; }
   if (/^[1-9]$/.test(key)) { event.preventDefault(); selectNumber(Number(key)); place(); return; }
@@ -281,10 +300,16 @@ document.addEventListener('keydown', event => {
   if (dirs[key]) { event.preventDefault(); move(...dirs[key]); }
 });
 const controller = new GamepadInput({
-  onMove: move,
+  onMove: (dx, dy) => { if (quick.isOpen() && !rogue.isOpen()) quick.moveFocus(dy || dx); else move(dx, dy); },
   onNumber: delta => { if (rogue.isOpen()) rogue.handleController('number', delta); else if (!blocked()) selectNumber(selectedNumber + delta); },
   onAction: action => {
     if (action === 'sound') { toggleSound(); return; }
+    if (quick.isOpen() && !rogue.isOpen()) {
+      if (action === 'back') quick.close(true);
+      else if (action === 'place') document.activeElement?.click?.();
+      else if (action === 'phase') phaseAction();
+      return;
+    }
     if (rogue.isOpen()) { rogue.handleController(action); return; }
     if ($('helpDialog').open || $('pauseDialog').open) {
       if (action === 'place') document.activeElement?.click?.();
@@ -292,17 +317,17 @@ const controller = new GamepadInput({
       return;
     }
     if (action === 'phase') phaseAction(); else if (action === 'place') place(); else if (action === 'hint') hint();
-    else if (action === 'buy') buyReserve(); else if (action === 'back') rogue.open('inventory');
+    else if (action === 'buy') buyReserve(); else if (action === 'back') openRogue('inventory');
   },
   onPause: togglePause,
-  onHelp: () => { if (rogue.isOpen()) rogue.handleController('back'); else rogue.open('inventory'); }
+  onHelp: () => { if (rogue.isOpen()) rogue.handleController('back'); else openRogue('inventory'); }
 });
 document.addEventListener('visibilitychange', () => { if (document.hidden) { save(); if (started && !blocked() && !runEnded) togglePause(); } });
 window.addEventListener('pagehide', save);
 function frame(ms) {
   const dt = Math.min((ms - lastTime) / 1000 || 0, .06); lastTime = ms;
   controller.update(dt); rogue.tick(dt);
-  const stopped = blocked();
+  const stopped = blocked() || quick.isOpen();
   if (!stopped && started) game.update(dt);
   if (!stopped && !muted) audio.update(dt, game.phase);
   for (const event of game.drainEvents()) {
