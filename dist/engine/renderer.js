@@ -54,7 +54,7 @@ export class VoxelRenderer {
     this.onCell = onCell;
     this.w = 0; this.h = 0; this.dpr = 1;
     this.morph = 0; this.mix = 0; this.time = 0;
-    this.particles = []; this.rings = []; this.labels = []; this.beams = []; this.pickups = [];
+    this.particles = []; this.rings = []; this.labels = []; this.beams = []; this.pickups = []; this.gearFX = [];
     this.state = {}; this.shake = 0; this.flash = 0; this.reducedMotion = false;
     this._frame = 0; this._lastPhase = null; this._towerHits = [];
     this._aims = new Map(); this._lastAimClock = null;
@@ -115,6 +115,17 @@ export class VoxelRenderer {
       if (x >= hit.left && x <= hit.right && y >= hit.top && y <= hit.bottom) return hit.cell;
     }
     return null;
+  }
+
+  // DOM gear cards use this public projection when snapping to a socket. It
+  // returns viewport coordinates and never expands the canvas picking region.
+  attachmentDropPoint(cell) {
+    const tower = (this.state.towers || []).find(tower => tower.cell === cell);
+    if (!tower || !Number.isInteger(cell) || cell < 0 || cell > 80) return null;
+    const height = .7 + Math.min(5, tower.attachments?.length || 0) * .18;
+    const point = this._project(cell % 9, Math.floor(cell / 9), height);
+    const rect = this.canvas.getBoundingClientRect();
+    return { x: rect.left + point.x * rect.width / this.w, y: rect.top + point.y * rect.height / this.h };
   }
 
   _poly(points, fill, stroke = null, lineWidth = 1) {
@@ -186,6 +197,15 @@ export class VoxelRenderer {
     const x = finite(event.x, cell === null ? 4 : cell % 9), y = finite(event.y, cell === null ? 4 : Math.floor(cell / 9));
     const effect = event.effect || event.kind || 'basic';
     const color = event.color || MODULES[effect]?.color || RARITY_COLORS[event.rarity] || PALETTE[(event.number || 2) - 1] || '#66eafa';
+    if (['gearLift', 'gearHover', 'gearLand', 'gearReturn', 'gearReject'].includes(type)) {
+      // Invalid drops outside the board have no world-space target. The tray
+      // owns their return flight; do not flash an unrelated center square.
+      if (cell === null || cell < 0 || cell > 80) return;
+      const life = type === 'gearLand' ? .62 : type === 'gearReturn' ? .38 : type === 'gearReject' ? .3 : .22;
+      if (this.gearFX.length >= 24) this.gearFX.shift();
+      this.gearFX.push({ type, cell, x, y, color: type === 'gearReject' ? '#ffabb3' : color, age: 0, life });
+      return;
+    }
     if (type === 'upgrade' && event.family) {
       for (const tower of this.state.towers || []) if (tower.number === event.number && this.rings.length < 50) {
         this.rings.push({ x: tower.cell % 9, y: Math.floor(tower.cell / 9), color, age: 0, life: .85, size: .7 });
@@ -292,7 +312,10 @@ export class VoxelRenderer {
       placing: !!preview.itemSelected,
       valid: new Set((preview.validCells || []).filter(cell => towerMap.has(cell))),
       full: new Set((preview.fullCells || []).filter(cell => towerMap.has(cell))),
-      hover: Number.isInteger(preview.hoverCell) ? preview.hoverCell : -1
+      hover: Number.isInteger(preview.hoverCell) ? preview.hoverCell : -1,
+      dragging: !!preview.dragActive, kind: preview.dragKind,
+      color: preview.color || MODULES[preview.dragKind]?.color || '#8ef8d4',
+      source: Number.isInteger(preview.sourceCell) ? preview.sourceCell : -1
     } : null;
     const corners = [this._project(-.62, -.62), this._project(8.62, -.62), this._project(8.62, 8.62), this._project(-.62, 8.62)];
 
@@ -420,6 +443,7 @@ export class VoxelRenderer {
       c.globalAlpha = 1;
     }
     if (state.phase === 'battle') this._projectiles(state.projectiles || []);
+    this._attachmentGhost(towerMap);
   }
 
   _route(route) {
@@ -451,7 +475,9 @@ export class VoxelRenderer {
     const attachments = (tower.attachments || []).slice(0, 5);
     const level = Math.max(1, finite(tower.level, 1) + finite(this.state.familyLevels?.[n], 1) - 1);
     const growth = this.reducedMotion ? 1 : Math.min(clamp(finite(tower.growth, 1)), clamp((this.mix - .08) / .8));
-    const build = ease(clamp((growth - .22) / .78));
+    const landed = this.gearFX.findLast(fx => fx.cell === tower.cell && fx.type === 'gearLand');
+    const pop = landed && !this.reducedMotion ? Math.sin(Math.PI * clamp(landed.age / .32)) * .065 : 0;
+    const build = ease(clamp((growth - .22) / .78)) * (1 + pop);
     const dark = '#364d5c', mid = shade(color, .72);
     const base = this._project(x, y, .025);
     c.fillStyle = 'rgba(3,12,24,.32)'; c.beginPath(); c.ellipse(base.x, base.y + 3, this.isoSize * .44, this.isoSize * .2, 0, 0, Math.PI * 2); c.fill();
@@ -523,6 +549,61 @@ export class VoxelRenderer {
     if (selected) { c.strokeStyle = '#c9ffef'; c.lineWidth = 1; c.stroke(); }
     c.fillStyle = color; c.font = `800 ${Math.max(8, this.isoSize * .25)}px "Space Grotesk", system-ui`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(n, badge.x, badge.y + .3);
     if (this._equipFeedback) this._equipmentBadge(tower);
+  }
+
+  _attachmentGhost(towerMap) {
+    const equip = this._equipFeedback;
+    if (!equip?.dragging || !equip.placing || !equip.valid.has(equip.hover) || this.mix < .7) return;
+    const tower = towerMap.get(equip.hover); if (!tower) return;
+    const x = tower.cell % 9, y = Math.floor(tower.cell / 9);
+    const z = .87 + Math.min(5, tower.attachments?.length || 0) * .18;
+    const c = this.ctx, p = this._project(x, y, z), socket = this._project(x, y, z - .18);
+    c.save();
+    this._glow(p.x, p.y, this.isoSize * .55, equip.color, .16);
+    c.strokeStyle = alpha(equip.color, .66); c.lineWidth = 1; c.setLineDash([2, 3]);
+    c.beginPath(); c.moveTo(p.x, p.y); c.lineTo(socket.x, socket.y + 3); c.stroke(); c.setLineDash([]);
+    c.globalAlpha = .68;
+    this._cube(x, y, z, .31, .31, .07, equip.color, true);
+    this._cube(x, y, z + .07, .16, .16, .1, shade(equip.color, 1.15), true);
+    c.restore();
+  }
+
+  _gearEffects(dt) {
+    const c = this.ctx;
+    for (let i = this.gearFX.length - 1; i >= 0; i--) {
+      const fx = this.gearFX[i]; fx.age += dt;
+      if (fx.age >= fx.life) { this.gearFX.splice(i, 1); continue; }
+      const t = clamp(fx.age / fx.life), fade = 1 - t;
+      const tower = (this.state.towers || []).find(tower => tower.cell === fx.cell);
+      const z = .48 + Math.min(5, tower?.attachments?.length || 0) * .18;
+      const p = this._project(fx.x, fx.y, z), base = this._project(fx.x, fx.y, .03);
+      c.save();
+      if (this.reducedMotion) {
+        this._poly(this._tile(fx.x, fx.y, .055), null, alpha(fx.color, fade * .85), 2);
+        c.restore(); continue;
+      }
+      if (fx.type === 'gearLand') {
+        this._glow(p.x, p.y, this.isoSize * (.55 + t * .4), fx.color, fade * .32);
+        const radius = this.isoSize * (.2 + t * .68);
+        c.strokeStyle = alpha(fx.color, fade * .8); c.lineWidth = 2 * fade + .5;
+        c.beginPath(); c.ellipse(base.x, base.y, radius, radius * .46, 0, 0, Math.PI * 2); c.stroke();
+        // Eight bounded voxel chips form a compact socket-lock celebration.
+        for (let j = 0; j < 8; j++) {
+          const angle = j * Math.PI / 4 + fx.cell, travel = t * .52;
+          const q = this._project(fx.x + Math.cos(angle) * travel, fx.y + Math.sin(angle) * travel, z + Math.sin(Math.PI * t) * .33);
+          const size = Math.max(1, this.isoSize * .07 * fade);
+          c.fillStyle = alpha(j % 3 ? fx.color : '#efffeb', fade);
+          c.fillRect(q.x - size / 2, q.y - size / 2, size, size);
+        }
+      } else if (fx.type === 'gearReject') {
+        this._poly(this._tile(fx.x, fx.y, .055), null, alpha(fx.color, fade * .8), 2);
+      } else {
+        const inward = fx.type === 'gearReturn', radius = this.isoSize * (inward ? .54 - t * .28 : .24 + t * .2);
+        c.strokeStyle = alpha(fx.color, fade * .55); c.lineWidth = 1.4;
+        c.beginPath(); c.ellipse(p.x, p.y - (inward ? t * 6 : 0), radius, radius * .45, 0, 0, Math.PI * 2); c.stroke();
+      }
+      c.restore();
+    }
   }
 
   _equipmentBadge(tower) {
@@ -623,6 +704,7 @@ export class VoxelRenderer {
 
   _effects(dt) {
     const c = this.ctx;
+    this._gearEffects(dt);
     for (let i = this.beams.length - 1; i >= 0; i--) {
       const b = this.beams[i]; b.age += dt; if (b.age >= b.life) { this.beams.splice(i, 1); continue; }
       const p = this._project(b.x, b.y, b.height), q = this._project(b.tx, b.ty, .22), fade = 1 - b.age / b.life;

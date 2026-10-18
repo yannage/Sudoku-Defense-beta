@@ -4,7 +4,7 @@ A Sudoku tower-defense roguelite alpha by Yak Studios. Solve a traditional grid,
 
 [Play Gridfall](https://gridfall.yakstudios.chatgpt.site) · [Player guide](docs/ROGUELITE-GUIDE.md)
 
-Version **0.2.3** adds an equipment tray beside the board. Drag an attachment onto a tower, or tap the item and then its target. The tray shows valid targets, the selected tower's five slots, and individual or number-family upgrades. Consumables have a separate Boosts tab with an explicit use button.
+Version **0.2.4** makes equipment easier to understand and move around the board. Attachments show their combat role, a plain-language effect, and guidance for combining them. Drag from the bag onto a tower, move fitted gear between towers, or drop it back into the bag. Chest rewards give each find its own reveal and a clear explanation of what it can do.
 
 The compact play layout fits the viewport and shows all nine number buttons. Bag opens the equipment tray in place of the number rail while keeping the board visible. Secondary controls live in the collapsible quick bar; open trays and menus pause the game clock. The full inventory remains available through Details.
 
@@ -23,7 +23,7 @@ All numbered towers start with basic bolts. During combat, their heads turn towa
 
 Read the [player guide](docs/ROGUELITE-GUIDE.md) for progression, controls, and loot. Blackjack and poker are future additions; only slots are included in this alpha.
 
-Use the bottom quick bar for **Tower / Bag / Chests / Notes / More**. Bag or a planted tower opens the equipment tray. Mouse users can drag an equipment card; on touch, drag its dotted handle or tap the card and then a tower. Tap a filled slot to return equipment to the bag. Close the tray with its × button or Bag to resume playing. Other quick panels also collapse when you tap a blank board square. Loot camp and the casino are under More.
+Use the bottom quick bar for **Tower / Bag / Chests / Notes / More**. Bag or a planted tower opens the equipment tray. Mouse users can drag an equipment card; on touch, drag its dotted handle or tap the card and then a tower. Drag a fitted slot onto another tower or back to Bag; tap it to return it without dragging. Drop spare gear onto a specific filled slot to swap it, keeping the previous item. Close the tray with its × button or Bag to resume playing. Other quick panels also collapse when you tap a blank board square. Loot camp and the casino are under More.
 
 ## Develop
 
@@ -52,7 +52,7 @@ npm run desktop
 npm run package:linux
 ```
 
-Packaging produces `release/Gridfall-0.2.3-x64.AppImage` and `release/linux-unpacked/`. Run `release/linux-unpacked/gridfall` directly or add it as a non-Steam game. Make the AppImage executable with `chmod +x release/*.AppImage`. The GitHub Actions artifact also contains a depot tarball that preserves executable permissions.
+Packaging produces `release/Gridfall-0.2.4-x64.AppImage` and `release/linux-unpacked/`. Run `release/linux-unpacked/gridfall` directly or add it as a non-Steam game. Make the AppImage executable with `chmod +x release/*.AppImage`. The GitHub Actions artifact also contains a depot tarball that preserves executable permissions.
 
 The Linux application embeds Electron and plays the web game offline. It uses the browser Gamepad API; start Deck testing with Steam Input's standard Gamepad layout. **F11** toggles desktop fullscreen. The shell serves local assets only on `127.0.0.1`, isolates web content from Node, blocks external navigation, and retains local data under Electron's user-data directory. It does not upload player data.
 

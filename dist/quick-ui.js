@@ -1,5 +1,6 @@
 import { RARITIES } from './game/items.js';
 import { voxelArt } from './voxel-art.js';
+import { itemGuide, chestGuide } from './game/item-guide.js';
 const $ = id => document.getElementById(id);
 const artKinds = { tower: 'tower', inventory: 'bag', chests: 'chest', notes: 'notes', more: 'settings' };
 const titles = { tower: 'Tower workshop', inventory: 'Your field kit', chests: 'Sealed chests', notes: 'Sudoku notes', more: 'Run & settings' };
@@ -58,15 +59,16 @@ export class QuickBar {
     if (this.view === 'inventory') {
       const gear = g.items.filter(i => i.type === 'attachment').length;
       const boosts = g.items.length - gear;
-      $('quickBagSummary').textContent = `${gear} attachment${gear === 1 ? '' : 's'} · ${boosts} consumable${boosts === 1 ? '' : 's'}. ${g.phase === 'battle' ? 'Use a boost to turn the battle.' : 'Equip attachments during war prep.'}`;
+      $('quickBagSummary').textContent = `${gear} reusable modules · ${boosts} one-use boosts. ${g.phase === 'battle' ? 'Use a boost to turn the battle.' : 'Equip modules during war prep.'}`;
       const list = $('quickItems'); list.replaceChildren();
       const items = [...g.items].sort((a,b) => (g.phase === 'battle' ? Number(b.type === 'consumable') - Number(a.type === 'consumable') : 0));
       for (const item of items.slice(0, 3)) {
         const r = RARITIES.find(r => r.id === item.rarity);
         const button = document.createElement('button'); button.className = 'quick-item';
         button.style.setProperty('--loot', r?.color || '#aabdc5');
-        const type = document.createElement('small'); type.textContent = `${r?.name || item.rarity} · ${item.type}`;
-        const name = document.createElement('strong'); name.textContent = item.name;
+        const guide = itemGuide(item);
+        const type = document.createElement('small'); type.textContent = `${guide.rarityName} · ${item.type === 'consumable' ? 'One use' : 'Reusable'}`;
+        const name = document.createElement('strong'); name.textContent = `${guide.name} · ${guide.effect}`;
         const art = document.createElement('span'); art.className = 'quick-item-art'; art.innerHTML = voxelArt(item.kind, { color: item.color || r?.color, rarity: item.rarity });
         const copy = document.createElement('span'); copy.className = 'quick-item-copy'; copy.append(type, name);
         button.append(art, copy); button.onclick = () => this.onOpen('inventory', item.id); list.append(button);
@@ -81,8 +83,9 @@ export class QuickBar {
       for (const chest of g.chests.slice(0, 3)) {
         const r = RARITIES.find(r => r.id === chest.rarity), cost = chest.cost ?? r?.fragmentCost ?? 5;
         const button = document.createElement('button'); button.className = 'quick-item'; button.style.setProperty('--loot', r?.color || '#aabdc5');
-        const name = document.createElement('strong'); name.textContent = `${r?.name || chest.rarity} cache`;
-        const desc = document.createElement('small'); desc.textContent = `◈ ${cost} to unlock · ${g.fragments < cost ? `${cost - g.fragments} more needed` : allowed ? 'Ready to open' : 'Wait for prep / camp'}`;
+        const guide = chestGuide(chest.rarity);
+        const name = document.createElement('strong'); name.textContent = `${r?.name || chest.rarity} chest · ${guide.count} reward${guide.count === 1 ? '' : 's'}`;
+        const desc = document.createElement('small'); desc.textContent = `${cost} fragments · ${g.fragments < cost ? `need ${cost - g.fragments} more` : allowed ? 'Ready to open' : 'Open in prep / camp'}`;
         const art = document.createElement('span'); art.className = 'quick-item-art chest'; art.innerHTML = voxelArt('chest', { rarity: chest.rarity });
         const copy = document.createElement('span'); copy.className = 'quick-item-copy'; copy.append(name, desc);
         button.append(art, copy); button.onclick = () => this.onOpen('chests'); list.append(button);

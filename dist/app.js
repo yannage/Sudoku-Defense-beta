@@ -6,6 +6,7 @@ import { RogueUI } from './rogue-ui.js';
 import { QuickBar } from './quick-ui.js';
 import { LoadoutTray } from './loadout-ui.js';
 import { voxelArt } from './voxel-art.js';
+import { itemGuide } from './game/item-guide.js';
 
 const $ = id => document.getElementById(id);
 const storage = {
@@ -48,7 +49,7 @@ rogue = new RogueUI({
   onNewRun: options => newRun(options),
   onInspect: cell => { selectedCell = cell; selectedNumber = selectedTower()?.number || selectedNumber; refresh(); },
   onBoardEquip: itemId => openLoadout({ itemId }),
-  onSound: (type, data = {}) => { if (!muted) { audio.unlock(); audio.play({ type, ...data }); } },
+  onSound: playMenuSound,
   isReducedMotion: () => reduced
 });
 quick = new QuickBar({ game, onOpen: openRogue, onInventory: toggleLoadout,
@@ -61,8 +62,14 @@ loadout = new LoadoutTray({
   onChange: result => after(result),
   onClose: () => { syncLoadoutState(); save(); },
   onLibrary: itemId => openRogue('inventory', itemId),
-  isBlocked: blocked
+  isBlocked: blocked,
+  isReducedMotion: () => reduced,
+  onFeedback: (type, data = {}) => { renderer.burst({ type, ...data }); playMenuSound(type, data); }
 });
+function playMenuSound(type, data = {}) {
+  if (muted) return;
+  audio.unlock().then(ready => { if (ready && !muted && !document.hidden) audio.play({ type, ...data }); });
+}
 function syncLoadoutState() {
   const open = !!loadout?.isOpen(), button = $('quickInventory');
   button.setAttribute('aria-expanded', String(open)); button.classList.toggle('active', open);
@@ -279,7 +286,7 @@ function refresh() {
     button.querySelector('small').textContent = `Family level ${game.familyLevels[n] || 1}`;
   }
   $('activeEffects').replaceChildren();
-  for (const effect of game.activeEffects) { const el = document.createElement('span'); el.className = 'buff-pill'; el.textContent = `${effect.name} · ${Math.ceil(effect.remaining)}s`; $('activeEffects').append(el); }
+  for (const effect of game.activeEffects) { const el = document.createElement('span'); el.className = 'buff-pill'; el.textContent = `${itemGuide({ ...effect, type: 'consumable' }).name} · ${Math.ceil(effect.remaining)}s`; $('activeEffects').append(el); }
   $('selectionHint').textContent = tower ? `Tower ${tower.number} · tap to upgrade` : filled ? 'Printed clue · choose a blank' : `${battle ? 'Plant a reserve' : prep ? 'Tap a tower to upgrade' : 'Tap a number to plant'}`;
   $('boardTip').textContent = battle ? 'Your latest moves shaped this route' : prep ? 'Tap a tower · equip & upgrade' : loot ? 'Loot camp is ready' : 'Tap a square, then a number';
   $('boardNotesState').textContent = notes ? 'NOTES ON' : 'NOTES OFF';
@@ -362,6 +369,8 @@ function frame(ms) {
   if (!stopped && started) game.update(dt);
   if (!stopped && !muted) audio.update(dt, game.phase);
   for (const event of game.drainEvents()) {
+    // Tray interactions supply their own precise transfer / return / snap feedback.
+    if (event.type === 'equip' && loadout.isOpen()) continue;
     renderer.burst({ ...event, text: ({ equip: 'LAYER EQUIPPED', chestOpen: 'LOOT RECOVERED', itemUsed: 'BOOST ACTIVATED' })[event.type] || event.text });
     if (!muted) audio.play({ ...event, type: ({ waveComplete: 'reward', combo: 'reward', win: 'reward', lose: 'leak' })[event.type] || event.type });
     if (event.type === 'wave') banner(`ROUND ${game.wave} · INCOMING`);

@@ -141,7 +141,7 @@ export class AudioEngine {
     const details = typeof event === 'string' ? { ...options, type: event } : event || {};
     const name = details.type || details.name;
     const now = this.context.currentTime;
-    const cooldown = { shot: .065, kill: .07, invalid: .12, leak: .15, fragment: .16, chestDrop: .3, seed: .08, chestCharge: .4, slotSpin: .5 }[name] || .025;
+    const cooldown = { shot: .065, kill: .07, invalid: .12, leak: .15, fragment: .16, chestDrop: .3, seed: .08, chestCharge: .4, slotSpin: .5, gearLift: .1, gearHover: .07, gearLand: .055, gearReturn: .075, gearReject: .1, lootFlip: .12 }[name] || .025;
     if (now - (this._cooldowns.get(name) ?? -100) < cooldown) return;
     this._cooldowns.set(name, now);
     const pan = details.pan || 0;
@@ -198,6 +198,42 @@ export class AudioEngine {
         tone(784, .19, .07, { delay: .08 });
         tone(1174.66, .2, .045, { delay: .13 });
         break;
+      case 'gearLift':
+        // A light magnetic lift; deliberately quieter than the final socket.
+        tone(320, .07, .026, { end: 590, type: 'triangle' });
+        noise(.025, .013, { frequency: 1900 });
+        break;
+      case 'gearHover':
+        tone(960, .042, .018, { end: 1120 });
+        break;
+      case 'gearLand': {
+        const rank = Math.max(0, ['common', 'uncommon', 'rare', 'epic', 'legendary'].indexOf(details.rarity));
+        // Short mechanical lock, followed by a small rarity-colored glint.
+        noise(.028, .05, { frequency: 1200 });
+        tone(185, .075, .06, { end: 115, type: 'triangle' });
+        tone(pitch * 2, .15, .05, { delay: .045 });
+        tone(pitch * 3, .2, .028, { delay: .09 });
+        if (rank >= 3) tone(pitch * 4, .22, .023, { delay: .13 });
+        break;
+      }
+      case 'gearReturn':
+        tone(650, .11, .027, { end: 360, type: 'triangle' });
+        noise(.065, .018, { frequency: 2300, type: 'highpass' });
+        break;
+      case 'gearReject':
+        // A soft wooden stop, not the punitive wrong-answer buzzer.
+        tone(150, .075, .038, { end: 105 });
+        noise(.021, .016, { frequency: 600, type: 'lowpass' });
+        break;
+      case 'lootFlip': {
+        const rank = Math.max(0, ['common', 'uncommon', 'rare', 'epic', 'legendary'].indexOf(details.rarity));
+        noise(.038, .025, { frequency: 2600, type: 'highpass' });
+        tone(587.33, .14, .035, { end: 783.99, type: 'triangle' });
+        tone(1174.66, .21 + rank * .03, .035, { delay: .055 });
+        if (rank >= 2) tone(1568, .24, .023, { delay: .095 });
+        if (rank === 4) tone(2349.32, .32, .025, { delay: .15 });
+        break;
+      }
       case 'itemUsed':
         tone(220, .35, .09, { end: 880, type: 'triangle' });
         [587.33, 880, 1174.66].forEach((n, i) => tone(n, .3, .04, { delay: .1 + i * .045 }));

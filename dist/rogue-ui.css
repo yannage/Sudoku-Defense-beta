@@ -169,3 +169,120 @@
 .rg-wallet .vx-art{transform:scale(1.4);transform-origin:50% 67%}
 /* Decorative rays and voxel shadows must never create a sideways loot scroll. */
 .rogue-dialog .rg-body { overflow-x:hidden; }
+
+/* Make the effect readable before the flavor name or rarity. */
+.rg-item-copy .rg-card-effect{color:#c5e9db;line-height:1.4}
+.rg-flavor{display:block!important;color:#758e9f!important;font-size:10px!important;line-height:1.35!important;font-weight:400!important}
+.rg-item-copy .rg-flavor{margin-top:7px}
+.rg-detail-card .rg-detail-effect{color:#c6f5df;font-size:15px;font-weight:650;line-height:1.45;margin-bottom:7px}
+.rg-detail-card>.rg-flavor{margin-bottom:13px}
+.rg-item-facts{display:grid;gap:9px;clear:both;padding:12px 0;border-top:1px solid #304451}
+.rg-item-facts>span{display:grid;grid-template-columns:58px 1fr;gap:9px;color:#9db6c3;font-size:11px;line-height:1.45}
+.rg-item-facts b{color:#d4e9e2;font-size:10px}
+.rg-build-summary{color:#b9dece!important;font-size:12px;margin:11px 0!important}
+.rg-loot-rule{font-size:11px!important;margin:0 0 14px!important;color:#a4bebf!important;line-height:1.5!important}
+.rg-chest-card.is-ready{border-color:color-mix(in srgb,var(--loot),#283d48 48%)}
+.rg-chest-card.is-ready .rg-secondary{background:color-mix(in srgb,var(--loot),#172a34 86%);border-color:color-mix(in srgb,var(--loot),#334954 35%);color:#e4f1e5}
+.rg-chest-card .rg-ready{line-height:1.45}
+.rg-shop-card p{min-height:30px;line-height:1.4}
+
+/* Opening is cosmetic: the bag already owns the rewards. */
+.rg-reveal-mode{width:min(900px,calc(100vw - 24px))}
+.rg-reveal-mode .rg-header{padding:15px 24px}
+.rg-reveal-mode .rg-header h2{font-size:25px}
+.rg-reveal-body{padding:0 24px 22px}
+.rg-reveal-stage{height:170px;position:relative;display:flex;align-items:center;justify-content:center;isolation:isolate}
+.rg-hero-chest{width:198px;height:170px;position:relative;z-index:1}
+.rg-chest-trigger{display:block;background:none;border:0;padding:0;cursor:pointer;color:inherit;filter:drop-shadow(0 12px 14px #0008)}
+.rg-chest-trigger:not(:disabled):active{transform:translateY(5px) scale(.96)}
+.rg-reveal-rays{position:absolute;pointer-events:none;inset:0;display:block;z-index:-1;overflow:hidden;opacity:.35;animation:none}
+.rg-reveal-rays i{left:50%;top:50%;width:5px;height:50px;transform:rotate(calc(var(--ray)*45deg)) translateY(-65px);transform-origin:center top;background:linear-gradient(var(--loot),transparent);border-radius:0;opacity:.3}
+.stage-1 .rg-reveal-stage,.stage-2 .rg-reveal-stage{height:100px;margin-top:1px}
+.stage-1 .rg-hero-chest,.stage-2 .rg-hero-chest{width:128px;height:110px;transform:none;animation:none}
+.stage-1 .rg-reveal-halo,.stage-2 .rg-reveal-halo{width:115px;height:80px;transform:translateY(26px) scaleY(.55)}
+.rg-reveal-copy{text-align:center;position:relative;margin:0 0 17px}
+.rg-reveal-copy>strong{font-size:13px;line-height:1.5;color:#d7eee3;display:block;font-weight:600}
+.rg-reveal-copy>p{font-size:10px;margin-top:4px}
+.rg-reward-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:13px;transform:none;max-width:800px;margin:0 auto;align-items:stretch}
+.rg-reward-card{position:relative;display:flex;flex-direction:column;min-width:0;max-width:none;min-height:248px;padding:16px;text-align:left;border:1px solid color-mix(in srgb,var(--loot),#243942 42%);border-top:3px solid var(--loot);border-radius:9px;background:radial-gradient(ellipse at 0 0,color-mix(in srgb,var(--loot),transparent 92%),transparent 75%),#10222c;box-shadow:0 5px 0 #030c1366;overflow:hidden;animation:none}
+.rg-reward-card:focus-visible{outline:3px solid #a3ffdd;outline-offset:3px}
+.rg-reward-card.is-flipped{animation:rg-unpack .34s cubic-bezier(.16,.85,.28,1) both}
+.rg-reward-card.is-flipped:after{content:'';position:absolute;inset:0;pointer-events:none;background:linear-gradient(115deg,transparent 15%,color-mix(in srgb,var(--loot),transparent 75%) 48%,transparent 72%);transform:translateX(130%);animation:rg-loot-sheen .6s ease-out both}
+.rg-reward-heading{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.rg-reward-glyph{width:54px;height:49px;margin:0;flex:none}
+.rg-reward-heading .rg-rarity{font-size:8px!important;line-height:1.7;letter-spacing:.7px}
+.rg-reward-card h4{font-size:19px;line-height:1.2;letter-spacing:-.3px;margin:0 0 7px}
+.rg-reward-card .rg-reward-effect{color:#d9f5e3;font-size:13px;font-weight:650;line-height:1.4;margin:0 0 9px}
+.rg-reward-card .rg-reward-purpose{font-size:11px;line-height:1.45;color:#a3bfcb;margin:0 0 9px}
+.rg-reward-card .rg-reward-pair{font-size:10px;line-height:1.5;color:#8cd3bc;margin:0 0 13px;padding-top:8px;border-top:1px solid #2e4550}
+.rg-reward-card>.rg-secondary{margin-top:auto;padding:10px;min-height:44px;font-size:11px;gap:8px;width:100%}
+.rg-reward-saved{display:block;margin-top:auto;padding-top:9px;color:#8bc5ac;font-size:11px}
+.rg-reward-card.is-mystery{padding:0;background:repeating-linear-gradient(135deg,#b9e6ce05 0 8px,transparent 8px 18px),#10222c}
+.rg-mystery-face{width:100%;height:100%;flex:1;padding:20px 12px;display:flex;flex-direction:column;align-items:center;justify-content:center;border:0;background:radial-gradient(ellipse,color-mix(in srgb,var(--loot),transparent 93%),transparent);color:#e4f4e9;cursor:pointer;min-height:248px;border-radius:6px}
+.rg-mystery-art{display:block;width:118px;height:95px;filter:drop-shadow(0 7px 7px #0005)}
+.rg-mystery-face>.rg-rarity{margin:8px 0;font-size:9px!important;letter-spacing:1px}
+.rg-mystery-face>strong{font-size:17px;letter-spacing:-.2px}
+.rg-mystery-face>small{font-size:10px;color:#7fa296;margin-top:8px}
+.rg-mystery-face:focus-visible{outline-offset:-5px!important}
+.rg-mystery-face:not(:disabled):active{transform:scale(.98)}
+.rg-reveal-footer>div{display:flex;align-items:center;gap:9px}
+.rg-reveal-footer>span{line-height:1.4}
+.rg-reveal-footer button{min-height:44px;font-size:12px;gap:12px}
+@media(hover:hover){.rg-mystery-face:hover{background:radial-gradient(ellipse,color-mix(in srgb,var(--loot),transparent 84%),transparent)}.rg-mystery-face:hover .rg-mystery-art{transform:translateY(-4px) rotate(-3deg);transition:transform .15s ease-out}}
+@keyframes rg-unpack{from{opacity:.3;transform:perspective(550px) rotateY(-18deg) translateY(6px) scale(.97)}to{opacity:1;transform:none}}
+@keyframes rg-loot-sheen{from{transform:translateX(-130%)}to{transform:translateX(130%)}}
+@media(max-width:700px){
+  .rg-item-copy .rg-card-effect{font-size:11px;line-height:1.35}
+  .rg-item-copy .rg-flavor{font-size:9px!important;line-height:1.35!important;margin-top:6px}
+  .rg-item-card{min-height:174px}
+  .rg-detail-card .rg-detail-effect{font-size:14px}
+  .rg-item-facts{gap:8px;padding:10px 0}
+  .rg-item-facts>span{font-size:11px;grid-template-columns:53px 1fr}
+  .rg-inventory-tip{display:none}
+  .rg-chest-card h4{font-size:15px;margin-top:5px}
+  .rg-chest-card p{line-height:1.4;min-height:29px}
+  .rg-shop-card p{font-size:9px;min-height:34px}
+  .rg-reveal-mode{width:calc(100vw - 12px)}
+  .rg-reveal-mode .rg-header{padding:11px 14px}
+  .rg-reveal-mode .rg-header h2{font-size:21px}
+  .rg-reveal-mode .rg-body{padding:0 14px 15px}
+  .rg-reveal-stage{height:164px}
+  .rg-hero-chest{width:190px;height:163px}
+  .stage-1 .rg-reveal-stage,.stage-2 .rg-reveal-stage{height:88px}
+  .stage-1 .rg-hero-chest,.stage-2 .rg-hero-chest{width:111px;height:96px}
+  .rg-reveal-copy{margin:0 0 13px}
+  .rg-reveal-copy>strong{font-size:12px;line-height:1.45}
+  .rg-reveal-copy>p{font-size:10px;margin-top:4px}
+  .rg-reward-grid{display:grid;justify-content:start;grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:min(74vw,270px);gap:10px;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x proximity;overscroll-behavior-x:contain;padding:3px 3px 9px;scrollbar-width:thin;scrollbar-color:#597466 #10222c}
+  .rg-reward-card{min-height:255px;scroll-snap-align:center;padding:14px}
+  .rg-reward-card:only-child{width:min(100%,285px)}
+  .rg-reward-grid:has(.rg-reward-card:only-child){grid-auto-columns:1fr;max-width:285px}
+  .rg-reward-card h4{font-size:20px;margin-bottom:7px}
+  .rg-reward-card .rg-reward-effect{font-size:13px}
+  .rg-reward-card .rg-reward-purpose{font-size:11px}
+  .rg-reward-glyph{width:51px;height:46px}
+  .rg-reward-heading{margin-bottom:10px}
+  .rg-reward-card .rg-reward-pair{font-size:10px}
+  .rg-mystery-face{min-height:255px}
+  .rg-reveal-footer{padding:10px 14px;gap:10px}
+  .rg-reveal-footer>span{font-size:9px!important;max-width:26%}
+  .rg-reveal-footer>div{gap:7px}
+  .rg-reveal-footer button{font-size:11px;padding:10px 12px}
+}
+@media(max-height:540px) and (min-width:701px){
+  .rg-reveal-mode .rg-header{padding:8px 20px}
+  .rg-reveal-mode .rg-header h2{font-size:20px}
+  .rg-reveal-stage{height:125px}
+  .rg-hero-chest{width:150px;height:130px}
+  .stage-1 .rg-reveal-stage,.stage-2 .rg-reveal-stage{height:65px}
+  .stage-1 .rg-hero-chest,.stage-2 .rg-hero-chest{width:90px;height:78px}
+  .rg-reveal-copy{margin-bottom:10px}
+  .rg-reward-card,.rg-mystery-face{min-height:230px}
+}
+@media(prefers-reduced-motion:reduce){.rg-reward-card:after{display:none}}
+.rg-reduced-motion .rg-reward-card:after,.reduced-motion .rg-reward-card:after{display:none}
+.rg-chest-explanation{font-size:10px!important;line-height:1.4!important;color:#89a699!important;min-height:0!important}
+.rg-chest-trigger{pointer-events:auto}
+.stage-1 .rg-reveal-rays,.stage-2 .rg-reveal-rays{animation:none;opacity:.4}
+.is-mystery .vx-chest-lid{transform:none!important;animation:none!important}
+.is-mystery .vx-chest-glow,.is-mystery .vx-chest-particles{opacity:0!important;animation:none!important}

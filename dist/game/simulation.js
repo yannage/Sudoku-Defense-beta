@@ -239,6 +239,32 @@ export class Game {
     const item=tower.attachments.splice(slotIndex,1)[0];this.items.push(item);
     this._emit('equip',{cell:tower.cell,...xy(tower.cell),color:item.color,text:'Attachment returned'});return {ok:true,message:`${item.name} returned to your bag.`,item};
   }
+  moveAttachment(sourceCell,slotIndex,targetCell,expectedItemId){
+    if(!GEAR_PHASES.includes(this.phase))return this._invalid('Move equipment during war prep or loot camp.');
+    const source=this._getTower(sourceCell),target=this._getTower(targetCell);slotIndex=Number(slotIndex);
+    if(!source||!target)return this._invalid('Drop equipment on one of your planted towers.');
+    if(source===target)return this._invalid('This module is already on that tower.');
+    if(!Number.isInteger(slotIndex)||slotIndex<0||slotIndex>=source.attachments.length)return this._invalid('That module is no longer in this slot.');
+    const item=source.attachments[slotIndex];
+    if(expectedItemId!==undefined&&String(item.id)!==String(expectedItemId))return this._invalid('That slot changed. Pick up the module again.');
+    if(target.attachments.length>=5)return this._invalid('Tower full. Return a module to your bag to make room.',target.cell);
+    // Validate everything first: no intermediate bag state, duplication, or partial move.
+    source.attachments.splice(slotIndex,1);target.attachments.push(item);
+    this._emit('equip',{cell:target.cell,...xy(target.cell),sourceCell:source.cell,number:target.number,color:item.color,operation:'move',text:'MODULE TRANSFERRED'});
+    return {ok:true,item,operation:'move',sourceCell:source.cell,cell:target.cell,message:`Module moved to Tower ${target.number}.`};
+  }
+  swapAttachment(cell,slotIndex,itemId,expectedSlotItemId){
+    if(!GEAR_PHASES.includes(this.phase))return this._invalid('Swap equipment during war prep or loot camp.');
+    const tower=this._getTower(cell),index=this.items.findIndex(i=>String(i.id)===String(itemId));slotIndex=Number(slotIndex);
+    if(!tower||!Number.isInteger(slotIndex)||slotIndex<0||slotIndex>=tower.attachments.length)return this._invalid('Drop on an occupied module slot to replace it.');
+    if(index<0||this.items[index].type!=='attachment')return this._invalid('Choose equipment from your bag.');
+    const returned=tower.attachments[slotIndex],item=this.items[index];
+    if(expectedSlotItemId!==undefined&&String(returned.id)!==String(expectedSlotItemId))return this._invalid('That slot changed. Pick up the module again.');
+    // Replacing exchanges ownership in place, so even a full tower keeps exactly five slots.
+    tower.attachments[slotIndex]=item;this.items[index]=returned;
+    this._emit('equip',{cell:tower.cell,...xy(tower.cell),number:tower.number,color:item.color,operation:'swap',text:'MODULE SWAPPED'});
+    return {ok:true,item,returned,operation:'swap',cell:tower.cell,message:`Module swapped. Previous equipment is back in your bag.`};
+  }
   useItem(itemId){
     const index=this.items.findIndex(i=>String(i.id)===String(itemId)),item=this.items[index];
     if(!item||item.type!=='consumable')return this._invalid('Choose a consumable from your bag.');

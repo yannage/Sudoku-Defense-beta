@@ -1,6 +1,6 @@
 {
   "name": "gridfall",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "private": true,
   "description": "A Sudoku tower-defense game and reusable voxel game foundation by Yak Studios.",
   "desktopName": "studio.yak.gridfall",
