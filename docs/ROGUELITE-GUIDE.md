@@ -1,4 +1,4 @@
-# Gridfall 0.2.5 player guide
+# Gridfall 0.2.6 player guide
 
 Gridfall mixes timed Sudoku with tower defense and a run-long collection of equipment. Your numbers create the towers; your loot determines how they fight.
 
@@ -50,6 +50,10 @@ Sudoku and combat each have their own **Easy / Medium / Hard** setting. Harder S
 | Passive purchase | The run as described by its shop card | Current run |
 
 Individual and family levels combine. For example, upgrading the **1 family** raises every 1 tower, while upgrading one selected 1 gives that tower an additional level. Prices are shown before purchase.
+
+The workshop's **miniature 9×9 board** matches the real Sudoku grid. Tap a mint tower to inspect it; the selected tower turns gold. Each tower tile shows its number, combined tower/family level, and five filled or empty equipment marks. Printed Sudoku clues are subdued and cannot be selected as towers. The selected row and column, stats, upgrade prices, and fitted equipment update together. Arrow keys move between towers; Home and End jump to the first or last tower.
+
+The full inventory also has a collapsible **Equip target** map. Choose an item, then switch towers on this map without losing that item selection. Inspect the chosen tower and attach when ready.
 
 The nine numbers are tower families and colors. They all fire basic bolts initially. Equipment adds the special effects, so any number can become your lightning, frost, or rapid-fire build.
 
@@ -106,7 +110,18 @@ The between-round shop offers passive upgrades for damage, salvage, and core sur
 
 ## Slot machine
 
-The slot machine is available during Loot and costs **20 credits** per spin. Open More → **Loot camp & casino**, then choose **Slots**. Outcomes can return credits or award a chest; a losing spin consumes the stake. Chests won here still need fragments to open. Odds and payouts are shown in the casino.
+The slot machine is available during Loot and costs **10 credits** per spin. Open More → **Loot camp & casino**, then choose **Slots**. The voxel reels reveal your result, and the outcome card separates the credits returned from your net gain or loss. Every spin gives you something: if the returned credits are less than the stake, a **Common reusable attachment** goes straight into your bag. It needs no fragments to claim and can be fitted to a tower like other equipment.
+
+| Chance | Credits returned | Extra reward |
+| --- | --- | --- |
+| 25% | 0 | Common attachment |
+| 20% | 5 | Common attachment |
+| 25% | 10 | — |
+| 20% | 20 | — |
+| 5% | 30 | — |
+| 5% | 10 | Sealed chest |
+
+The last row includes Common (2%), Uncommon (1.5%), Rare (1%), Epic (0.4%), and Legendary (0.1%) chests. These chests still need fragments to open; winning one also returns the full spin cost. A total of **55% of spins return the stake or better**, including **25% that make a credit profit**. The average credit return is 9.5 per 10-credit spin, before equipment and chests. These are long-run odds, not a guarantee for a short session. Equipment has no credit resale price.
 
 These are earned game credits with no purchase or cash-out system. This alpha includes slots only. Blackjack and NPC poker are planned possibilities, not playable modes yet.
 

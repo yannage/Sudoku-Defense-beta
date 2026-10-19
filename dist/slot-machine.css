@@ -1,0 +1,137 @@
+/* The supply arcade is a physical cabinet built around the shared voxel props. */
+.sm-casino{--sm-brass:#dfb778;--sm-ink:#122a28;--sm-mint:#b8e5b2;--sm-paper:#eee7cc;max-width:920px;margin:0 auto}
+.sm-intro{display:flex;align-items:center;justify-content:space-between;gap:18px;margin:0 0 21px}
+.sm-intro h3{font-size:29px;letter-spacing:-1px;margin:5px 0 0;color:#f0ead8}
+.sm-guarantee{display:flex;align-items:center;gap:7px;padding:8px 10px;border:1px solid #527355;border-radius:4px;color:#c0e8b2;font-size:10px;white-space:nowrap;background:#28482f}
+.sm-guarantee i,.sm-machine-status i{width:5px;height:5px;flex:none;display:inline-block;background:#b4eac4;box-shadow:0 0 8px #a6e5ad70}
+.sm-layout{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(240px,1fr);gap:23px;align-items:start}
+.sm-cabinet{position:relative;background:linear-gradient(120deg,#e0be84,#bb905a 36%,#e2bf86 70%,#a98354);padding:9px 10px 0;border:1px solid #f3d4a3;border-radius:17px 17px 4px 4px;box-shadow:0 7px 0 #6b5b3a,0 12px 0 #0a1b16,0 19px 25px #0003;isolation:isolate}
+.sm-cabinet::before,.sm-cabinet::after{content:'';position:absolute;top:56px;width:3px;bottom:44px;background:repeating-linear-gradient(to bottom,#eaf2bc 0 3px,#8f7949 3px 11px);opacity:.7;z-index:-1}
+.sm-cabinet::before{left:3px}.sm-cabinet::after{right:3px}
+.sm-cabinet-crown{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:9px;text-align:center;min-height:40px;padding:0 6px 9px;color:#314132}
+.sm-cabinet-crown>span{font-size:6px;letter-spacing:1px;font-weight:750;line-height:1.5}
+.sm-cabinet-crown>span:first-child{text-align:left}.sm-cabinet-crown>span:last-child{text-align:right}
+.sm-cabinet-crown>b{font-size:16px;letter-spacing:1.5px;line-height:1.1;text-shadow:0 1px #f6e1b6}
+.sm-cabinet-face{position:relative;background:#263e31;border:2px solid #685d3b;border-bottom-color:#ead19b;border-radius:7px 7px 3px 3px;padding:14px 12px 11px;box-shadow:inset 0 3px 8px #0006}
+.sm-machine-status{display:flex;align-items:center;justify-content:space-between;gap:9px;color:#b4c8a7;font-size:6px;letter-spacing:1.2px;margin-bottom:12px;line-height:1.3}
+.sm-machine-status>span:first-child{display:flex;align-items:center;gap:6px}
+.sm-machine-status>span:last-child{color:#7a977f;font-size:5px;letter-spacing:.9px}
+.sm-reels{position:relative;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;background:#0a1d17;padding:6px;border:1px solid #779775;border-bottom-color:#516c4f;border-radius:3px}
+.sm-reels::before,.sm-reels::after{content:'';position:absolute;top:calc(50% - 17px);width:6px;height:8px;background:#e4b875;z-index:1;clip-path:polygon(0 0,100% 50%,0 100%)}
+.sm-reels::before{left:-4px}.sm-reels::after{right:-4px;transform:rotate(180deg)}
+.sm-reel{min-width:0;background:var(--sm-paper);box-shadow:inset 0 0 0 1px #6e795d;--sm-reel-height:132px;overflow:hidden}
+.sm-reel-window{position:relative;height:var(--sm-reel-height);overflow:hidden;background:linear-gradient(#b7b79b,#eee9d4 28%,#f8f2da 48%,#e0daba 80%,#b7b99b);box-shadow:inset 0 5px 7px #25392260,inset 0 -3px 3px #53623b40}
+.sm-reel-window::after{content:'';position:absolute;inset:0;pointer-events:none;background:linear-gradient(#29391c28,transparent 23% 77%,#29391c28);border:1px solid #fff3}
+.sm-reel-track{display:flex;flex-direction:column;will-change:auto}
+.sm-reel-face{height:var(--sm-reel-height);flex:none;display:grid;place-items:center;padding:5px}
+.sm-reel-face .vx-art{width:100%;height:auto;max-height:112px;filter:drop-shadow(0 6px 2px #41582c24);transform:translateY(-3px) scale(1.12)}
+.sm-reel-caption{display:block;min-height:28px;padding:8px 2px 6px;text-align:center;font-size:7px;font-weight:800;color:#324c3b;border-top:1px solid #889473;white-space:normal;line-height:1.15;background:linear-gradient(#d2d6b8,#bfc7a5)}
+.sm-machine-plaque{display:flex;align-items:center;justify-content:center;gap:17px;padding-top:13px;color:#8fa687;text-align:center}
+.sm-machine-plaque>span{font-size:6px;letter-spacing:1px;line-height:1.4}
+.sm-machine-plaque strong{display:block;font-size:11px;color:#e3e8c9;letter-spacing:.1px;margin-top:3px}
+.sm-machine-plaque .sm-plaque-rule{width:1px;height:24px;background:#53714f}
+.sm-cabinet-base{height:33px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 8px;color:#495438;font-size:6px;letter-spacing:1.2px;font-weight:800}
+.sm-vent{width:38px;height:9px;flex:none;background:repeating-linear-gradient(90deg,#625f3a 0 2px,transparent 2px 5px)}
+.sm-reward-panel{display:flex;flex-direction:column;align-self:stretch;min-width:0;border:1px solid #425a44;border-radius:4px 14px 4px 4px;background:linear-gradient(140deg,#2a43312e,#122b2280);padding:18px 17px 12px;box-shadow:inset 0 1px #b5d99b0c}
+.sm-result-copy{flex:1;min-height:210px;position:relative}
+.sm-result-eyebrow{display:block;font-size:7px;color:#b9ce96;letter-spacing:1.45px;font-weight:750;margin-bottom:10px}
+.sm-result-copy>h4{font-size:23px!important;letter-spacing:-.65px;color:#eee7ce;line-height:1.15}
+.sm-result-copy>p{font-size:11px;line-height:1.55;color:#aabc9e;margin:10px 0}
+.sm-result-copy>small{display:block;font-size:8px;color:#9ab191;margin:-2px 0 12px;text-align:center}
+.sm-prize-preview{display:flex;justify-content:center;height:91px;padding:0 9px}
+.sm-prize-preview .vx-art{width:33.333%;transform:scale(1.12)}
+.sm-result-copy .sm-ledger{font-size:8px;color:#a8baa0;margin:7px 0 13px;padding-bottom:10px;border-bottom:1px solid #4f684a80;letter-spacing:.15px}
+.sm-reward-item{display:flex;align-items:center;gap:8px;padding:3px 0 5px;min-width:0}
+.sm-reward-art{width:75px;height:77px;flex:none;position:relative;background:radial-gradient(ellipse at 50% 65%,color-mix(in srgb,var(--sm-prize),transparent 84%),transparent 63%)}
+.sm-reward-art .vx-art{transform:scale(1.25)}
+.sm-reward-item>div{min-width:0}.sm-reward-item small{color:var(--sm-prize);font-size:7px;letter-spacing:.7px;text-transform:uppercase;font-weight:700}
+.sm-reward-item h4{font-size:16px;margin:5px 0;color:#eee9d1}.sm-reward-item p{font-size:10px;color:#c6ddba;line-height:1.4}.sm-reward-item div>span{display:block;font-size:8px;color:#8da58a;margin-top:7px;line-height:1.4}
+.sm-reward-panel .sm-equip{margin:5px 0 15px;min-height:34px;padding:8px 10px;width:100%;font-size:10px;background:#273f31;border-color:#5e7e59;color:#bce1a7;box-shadow:none;white-space:normal}
+.sm-credit-prize{display:flex;align-items:center;justify-content:center;height:101px;gap:8px;color:#f0bd77}
+.sm-credit-prize .vx-art{width:90px;transform:scale(1.2)}.sm-credit-prize>b{font-size:44px;font-weight:800;letter-spacing:-2px;text-shadow:0 3px #27371c}
+.sm-result-copy .sm-deposited{text-align:center;font-size:9px;color:#b8cda6;margin:0 0 14px}
+.sm-reward-panel .sm-spin-button{width:100%;background:linear-gradient(#ebc995,#d5ae72);border-color:#f6d8a4;color:#283d2a;min-height:48px;padding:12px 13px;box-shadow:0 4px 0 #5b613c;gap:8px;white-space:normal;margin-top:auto;font-size:12px}
+.sm-reward-panel .sm-spin-button:not(:disabled):hover{background:linear-gradient(#f9dba9,#ebc186);border-color:#ffe7bd}
+.sm-spin-button>b{display:flex;align-items:center;gap:3px;font-size:16px}.sm-spin-button small{font-size:8px;font-weight:600}.sm-spin-button i{font-size:21px;font-style:normal;margin-left:7px;line-height:1}
+.sm-reward-panel .sm-spin-note{font-size:8px;color:#90a68c;text-align:center;line-height:1.5;margin:11px 0 0}
+.sm-odds-strip{display:grid;grid-template-columns:1fr 1fr 1.15fr;margin:26px 0 18px;padding:15px 0 14px;border-top:1px solid #536543;border-bottom:1px solid #536543;gap:15px}
+.sm-odds-strip>div{border-right:1px solid #4b6242;padding-right:10px}.sm-odds-strip>div:last-child{border-right:0;padding-right:0}
+.sm-odds-strip strong{display:block;color:#dfebbd;font-size:23px;letter-spacing:-.8px;line-height:1.2}.sm-odds-strip span{display:block;color:#a1b295;font-size:9px;margin-top:4px;line-height:1.4}
+.sm-odds{border:1px solid #435c44;border-radius:4px;background:#162e2480}
+.sm-odds summary{display:flex;align-items:center;justify-content:space-between;gap:15px;padding:12px 14px;color:#c3d5b0;font-size:11px;cursor:pointer;list-style:none;min-height:42px}
+.sm-odds summary::-webkit-details-marker{display:none}.sm-odds summary>b{font-weight:400;font-size:17px;line-height:1;transition:transform .2s}.sm-odds[open] summary>b{transform:rotate(45deg)}
+.sm-odds>p{font-size:10px;color:#9fb195;line-height:1.6;margin:0 14px 12px}.sm-odds strong{color:#d7e5bd}
+.sm-odds table{width:calc(100% - 28px);border-collapse:collapse;margin:8px 14px 14px;font-size:10px;color:#c9d6b8;text-align:left;table-layout:fixed}
+.sm-odds td,.sm-odds th{padding:8px 9px;border-bottom:1px solid #3e583e;line-height:1.4}
+.sm-odds th{color:#92ad89;font-size:8px;letter-spacing:.7px;text-transform:uppercase;background:#263e2e}
+.sm-odds th:last-child,.sm-odds td:last-child{width:75px;text-align:right;font-variant-numeric:tabular-nums}.sm-odds td:last-child{color:#e6d2a7}
+.sm-odds .sm-game-only{font-size:8px;color:#8a9f83;border-top:1px solid #3b5339;padding-top:10px}
+.sm-loading{display:flex;gap:6px;margin-top:28px}.sm-loading i{display:block;width:8px;height:8px;background:#b6dfa1;animation:sm-indicator .7s ease-in-out infinite alternate}.sm-loading i:nth-child(2){animation-delay:.16s}.sm-loading i:nth-child(3){animation-delay:.32s}
+.sm-cabinet.is-spinning .sm-reel-track{animation:sm-reel-roll .58s linear infinite;animation-delay:calc(var(--sm-reel) * -.14s);will-change:transform}
+.sm-cabinet.is-spinning .sm-machine-status i{animation:sm-indicator .45s ease-in-out infinite alternate}
+.sm-cabinet.has-result .sm-reel-face{animation:sm-reel-settle .38s cubic-bezier(.2,1.5,.4,1) both;animation-delay:calc(var(--sm-reel) * .07s)}
+.sm-result-copy.is-awarded{animation:sm-reward-in .32s ease-out both}
+@keyframes sm-reel-roll{to{transform:translateY(-80%)}}
+@keyframes sm-indicator{to{opacity:.35;box-shadow:0 0 7px #b9e79580}}
+@keyframes sm-reel-settle{from{transform:translateY(-12px);opacity:.65}to{transform:translateY(0);opacity:1}}
+@keyframes sm-reward-in{from{opacity:.3;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:700px){
+  .sm-intro{gap:10px;margin-bottom:17px}.sm-intro h3{font-size:25px}.sm-intro .rg-eyebrow{font-size:6px;letter-spacing:1px}.sm-guarantee{font-size:7px;gap:5px;padding:7px}.sm-guarantee i{width:4px;height:4px}
+  .sm-layout{grid-template-columns:1fr;gap:23px}.sm-cabinet{max-width:430px;width:100%;margin:0 auto;padding:8px 9px 0}.sm-cabinet-crown{min-height:34px;padding-bottom:7px}.sm-cabinet-crown>b{font-size:15px}.sm-cabinet-crown>span{font-size:5px;letter-spacing:.7px}
+  .sm-cabinet-face{padding:10px 9px 9px}.sm-machine-status{font-size:5px;margin-bottom:9px;letter-spacing:.9px}.sm-reel{--sm-reel-height:106px}.sm-reel-caption{font-size:7px;min-height:24px;padding:6px 1px}.sm-cabinet-base{height:28px;font-size:5px}.sm-machine-plaque{padding-top:10px;gap:13px}.sm-machine-plaque strong{font-size:10px}
+  .sm-reward-panel{padding:15px 15px 12px}.sm-result-copy{min-height:0}.sm-result-copy>h4{font-size:22px!important}.sm-result-copy>p{font-size:11px}.sm-prize-preview{height:70px;padding:0 35px}.sm-result-copy>small{margin-bottom:16px}
+  .sm-reward-item{max-width:340px;margin:0 auto}.sm-reward-art{width:75px;height:75px}.sm-credit-prize{height:77px}.sm-credit-prize .vx-art{width:80px}.sm-reward-panel .sm-spin-button{min-height:48px}.sm-loading{margin:15px 0 23px}
+  .sm-odds-strip{gap:12px;margin:18px 0 14px;padding:13px 0}.sm-odds-strip strong{font-size:21px}.sm-odds-strip>div:last-child strong{font-size:17px;line-height:1.45}.sm-odds-strip span{font-size:8px}.sm-odds-strip>div{padding-right:8px}.sm-odds summary{font-size:10px}.sm-odds>p,.sm-odds table{font-size:9px}
+}
+@media(max-width:350px){
+  .sm-intro{align-items:flex-start}.sm-intro h3{font-size:23px}.sm-guarantee{max-width:89px;white-space:normal;line-height:1.4;font-size:7px}
+  .sm-cabinet-crown>b{font-size:12px;letter-spacing:1px}.sm-cabinet-crown>span{font-size:4px}.sm-machine-status>span:last-child{font-size:4px}.sm-reel{--sm-reel-height:85px}.sm-reel-caption{font-size:6px}.sm-machine-plaque strong{font-size:9px}.sm-machine-plaque>span{font-size:5px}.sm-vent{width:25px}
+  .sm-reward-panel{padding:13px 12px 10px}.sm-reward-item h4{font-size:15px}.sm-reward-art{width:62px;height:68px}.sm-result-copy>h4{font-size:21px!important}.sm-prize-preview{padding:0 15px}.sm-odds-strip{gap:9px}.sm-odds-strip strong{font-size:20px}.sm-odds-strip>div:last-child strong{font-size:15px;line-height:1.55}.sm-odds-strip span{font-size:7px}
+}
+@media(min-width:701px) and (max-height:850px){
+  .sm-intro{margin-bottom:15px}.sm-intro h3{font-size:25px}.sm-cabinet-crown{min-height:34px}.sm-reel{--sm-reel-height:110px}.sm-reward-panel{padding:14px 15px 10px}.sm-result-copy{min-height:187px}.sm-result-copy>h4{font-size:21px!important}.sm-prize-preview{height:78px}.sm-reward-item{padding-top:0}.sm-reward-art{height:65px;width:65px}.sm-result-copy .sm-ledger{margin-bottom:8px}.sm-reward-panel .sm-equip{margin-bottom:10px}.sm-odds-strip{margin-top:23px;padding:12px 0;margin-bottom:12px}.sm-odds-strip strong{font-size:21px}
+}
+.rg-reduced-motion .sm-casino *,.reduced-motion .sm-casino *{animation:none!important;transition:none!important}
+@media(prefers-reduced-motion:reduce){.sm-casino *{animation:none!important;transition:none!important}}
+
+/* Financial outcomes and equipment effects stay readable on handheld displays. */
+.sm-reel-caption{font-size:10px;min-height:34px;padding:7px 2px;display:flex;align-items:center;justify-content:center;line-height:1.25}
+.sm-machine-plaque strong{font-size:11px}
+.sm-result-copy>p{font-size:12px}
+.sm-result-copy .sm-ledger{font-size:11px;line-height:1.6}
+.sm-reward-item small{font-size:10px;letter-spacing:.35px}
+.sm-reward-item p{font-size:12px;line-height:1.5}
+.sm-reward-item div>span{font-size:10px;line-height:1.5}
+.sm-reward-panel .sm-equip{font-size:12px;min-height:40px}
+.sm-result-copy>small,.sm-result-copy .sm-deposited{font-size:11px}
+.sm-reward-panel .sm-spin-note{font-size:11px}
+.sm-odds-strip span{font-size:11px}
+.sm-odds summary{font-size:12px}
+.sm-odds>p,.sm-odds table{font-size:11px}
+.sm-odds th{font-size:10px}
+@media(max-width:350px){.sm-reel-caption{font-size:10px;min-height:40px}.sm-reward-art{width:56px}.sm-odds-strip span{font-size:10px}.sm-odds td,.sm-odds th{padding:8px 5px}}
+
+/* Keep the reels and their control together above the fold on a phone. */
+@media(max-width:700px){
+  .sm-intro{margin-bottom:12px}
+  .sm-layout{gap:17px}
+  .sm-cabinet{padding-top:6px}
+  .sm-cabinet-crown{min-height:27px;padding-bottom:5px}
+  .sm-cabinet-face{padding:8px}
+  .sm-machine-status{margin-bottom:6px}
+  .sm-reels{padding:4px;gap:5px}
+  .sm-reel{--sm-reel-height:78px}
+  .sm-reel-face{padding:2px 6px}
+  .sm-reel-caption{min-height:29px;padding:4px 2px}
+  .sm-machine-plaque{padding-top:8px}
+  .sm-machine-plaque strong{margin-top:2px}
+  .sm-cabinet-base{height:24px}
+  .sm-reward-panel{padding-top:12px}
+  .sm-reward-panel .sm-spin-button{order:-2;margin-top:0}
+  .sm-reward-panel .sm-spin-note{order:-1;margin:9px 0 12px}
+  .sm-result-copy{border-top:1px solid #496141;padding-top:13px}
+  .sm-result-copy:not(.is-awarded) .sm-prize-preview,
+  .sm-result-copy:not(.is-awarded)>small{display:none}
+  .sm-result-copy:not(.is-awarded)>.sm-result-eyebrow{margin-bottom:7px}
+  .sm-result-copy:not(.is-awarded)>h4{font-size:19px!important}
+}

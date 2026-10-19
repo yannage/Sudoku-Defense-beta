@@ -1,0 +1,129 @@
+/* The workshop's mini battlefield uses the actual Sudoku cells and tower state. */
+.rg-visual-lab{grid-template-columns:minmax(0,320px) minmax(0,1fr);gap:25px}
+.rg-visual-lab .rg-tower-summary{display:block;min-width:0;padding:14px}
+.rg-workshop-pick{display:grid;grid-template-columns:minmax(0,320px) minmax(0,1fr);gap:32px;align-items:center}
+.rg-workshop-pick>.rg-tower-map{padding:14px;background:#1b302a;border:1px solid #657c60;border-radius:3px 14px 3px 3px}
+.rg-workshop-pick .rg-empty-tower{padding:16px 12px}
+.rg-tower-map{min-width:0;text-align:left}
+.rg-map-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 9px;font-size:9px;letter-spacing:1.2px;color:#bfceb5}
+.rg-map-heading>b{font-size:9px;letter-spacing:0;font-weight:500;color:#92c9aa}
+.rg-map-columns{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));margin:0 0 4px;padding:0 3px;color:#93a990;text-align:center;font:9px/1.2 ui-monospace,monospace}
+.rg-mini-board{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));aspect-ratio:1;border:3px solid #a5b5a0;background:#a5b5a0;box-shadow:0 4px 0 #0b211b,0 7px 20px #05130e55;border-radius:2px;overflow:visible}
+.rg-mini-board>[role="row"]{display:contents}
+.rg-map-cell{position:relative;min-width:0;min-height:0;display:grid;place-items:center;border-right:1px solid #8c9e91;border-bottom:1px solid #8c9e91;background:#ececdd;color:#53695c;font:500 16px/1 ui-monospace,monospace}
+.rg-map-cell:nth-child(9){border-right:0}
+.rg-mini-board>[role="row"]:last-child>.rg-map-cell{border-bottom:0}
+.rg-map-cell.block-right{border-right:2px solid #506d5e}
+.rg-map-cell.block-bottom{border-bottom:2px solid #506d5e}
+.rg-map-cell.is-empty{background:#dce5d5;color:#b2bfad}
+.rg-map-cell.is-clue{background:#e8e7d7;color:#72806c}
+.rg-map-cell.is-tower{background:#183f32}
+.rogue-dialog .rg-map-cell>button{position:relative;width:100%;height:100%;padding:0;display:grid;place-items:center;background:linear-gradient(145deg,#3b7560,#244f41);border:0;border-radius:0;color:#d6ffdb;box-shadow:inset 0 1px 0 #a9dcb350,inset 0 -3px 0 #0f3328;font:700 17px/1 ui-monospace,monospace;cursor:pointer;isolation:isolate}
+.rogue-dialog .rg-map-cell>button:hover{background:#54886d;color:#fffbed}
+.rogue-dialog .rg-map-cell>button:focus-visible{outline:3px solid #fff6cb;outline-offset:1px;z-index:3;box-shadow:0 0 0 5px #18382f,inset 0 -3px 0 #0f3328}
+.rogue-dialog .rg-map-cell.is-selected>button{background:linear-gradient(145deg,#fff0b3,#d5c27e);color:#254436;box-shadow:inset 0 0 0 2px #ffeeb7,inset 0 -3px 0 #b09451}
+.rg-map-digit{transform:translateY(-1px)}
+.rg-map-level{position:absolute;top:1px;right:2px;font-size:7px;line-height:1;color:#acd8b9;opacity:.95}
+.is-selected .rg-map-level{color:#476342}
+.rg-map-sockets{position:absolute;bottom:3px;left:50%;transform:translateX(-50%);display:flex;gap:2px}
+.rg-map-sockets>i{display:block;width:3px;height:3px;background:#102d24;border:1px solid #b5dec33d;border-radius:1px}
+.rg-map-sockets>i.filled{background:#b0efc5;border-color:#d3ffd9;box-shadow:0 0 2px #9cf7be}
+.is-selected .rg-map-sockets>i{background:#a99b67;border-color:#4d5c4238}
+.is-selected .rg-map-sockets>i.filled{background:#2c7652;border-color:#305f43;box-shadow:none}
+.rg-map-cell.is-emergency>button:after{content:"";position:absolute;top:1px;left:1px;border-top:5px solid #ffab87;border-right:5px solid transparent}
+.rg-map-legend{display:flex;flex-wrap:wrap;gap:7px 10px;align-items:center;margin:13px 0 7px;color:#bfd2bd;font-size:8px}
+.rg-map-legend>span{display:flex;align-items:center;gap:5px;white-space:nowrap}
+.rg-map-legend i{width:8px;height:8px;display:inline-block;border:1px solid #bed4ac}
+.rg-map-legend .tower{background:#4c9774}
+.rg-map-legend .clue{background:#e8e7d7;border-color:#9aa88f}
+.rg-map-legend b{font:10px/1 ui-monospace,monospace;letter-spacing:-1px;color:#9ed7b0}
+.rogue-dialog .rg-map-help{font-size:10px;color:#a8bba1;line-height:1.5;margin:0}
+.rg-selected-tower{display:flex;align-items:center;gap:13px;border-top:1px solid #4b604d;margin-top:16px;padding:14px 0 0}
+.rg-selected-tower-art{display:block;flex:none;width:61px;height:58px;background:radial-gradient(ellipse,#a0e9af26,transparent 70%)}
+.rg-selected-tower-art svg{width:100%;height:100%}
+.rg-selected-tower-label{min-width:0}
+.rg-selected-tower-label>small{color:#a6b79a;font-size:9px;letter-spacing:1.5px}
+.rogue-dialog .rg-selected-tower-label h3{font-size:23px;line-height:1.2;color:#f5efd7;letter-spacing:-.6px;margin:3px 0}
+.rg-selected-tower-label>span{color:#a5d7b3;font-size:10px}
+.rg-visual-lab .rg-stat-grid{margin:14px 0;padding:14px 0;gap:13px;grid-template-columns:repeat(2,minmax(0,1fr))}
+.rg-visual-lab .rg-upgrade-card{margin-top:0;padding-top:0}
+.rg-visual-lab .rg-upgrade-card+.rg-upgrade-card{margin-top:18px;padding-top:17px;border-top:1px solid #4b604d}
+.rg-tower-map-picker{min-width:0}
+.rg-tower-map-picker>summary{display:flex;align-items:center;justify-content:space-between;gap:10px;list-style:none;min-height:44px;cursor:pointer;color:#e7ebd4;padding:1px 0}
+.rg-tower-map-picker>summary::-webkit-details-marker{display:none}
+.rg-tower-map-picker>summary>span{min-width:0}
+.rg-tower-map-picker>summary small{display:block;font-size:8px;letter-spacing:1.3px;color:#b5c7a7;margin-bottom:5px}
+.rg-tower-map-picker>summary strong{font-size:12px;font-weight:600;display:block;line-height:1.4}
+.rg-tower-map-picker>summary>b{font-size:10px;font-weight:500;display:flex;gap:6px;align-items:center;color:#b1ecc0}
+.rg-tower-map-picker>summary i{font-style:normal;font-size:17px;transition:transform .15s}
+.rg-tower-map-picker[open]>summary i{transform:rotate(180deg)}
+.rg-tower-map-picker>.rg-tower-map{margin-top:12px;padding-top:14px;border-top:1px solid #4b604d}
+.rg-inventory-layout:has(.rg-tower-map-picker[open]){grid-template-columns:minmax(0,1fr) 300px}
+@media(max-width:900px) and (min-width:701px){
+  .rg-visual-lab{grid-template-columns:minmax(0,300px) minmax(0,1fr);gap:17px}
+  .rg-visual-lab .rg-tower-summary{padding:12px}
+  .rg-workshop-pick{grid-template-columns:minmax(0,300px) minmax(0,1fr);gap:20px}
+}
+@media(max-width:700px){
+  .rg-visual-lab,.rg-workshop-pick{grid-template-columns:minmax(0,1fr);gap:20px}
+  .rg-visual-lab .rg-tower-summary{padding:13px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px 12px}
+  .rg-visual-lab .rg-tower-map{grid-column:1/-1;margin:-6px -7px 0}
+  .rg-map-cell{font-size:18px}
+  .rogue-dialog .rg-map-cell>button{font-size:20px}
+  .rg-map-level{font-size:8px;top:2px;right:3px}
+  .rg-map-sockets{bottom:4px}
+  .rg-map-heading{font-size:9px;margin-bottom:8px}
+  .rg-map-columns{font-size:9px}
+  .rg-map-legend{font-size:8px;gap:7px 11px}
+  .rg-selected-tower{grid-column:1/-1;margin-top:0;padding-top:11px;gap:12px}
+  .rg-selected-tower-art{width:47px;height:47px}
+  .rogue-dialog .rg-selected-tower-label h3{font-size:20px}
+  .rg-visual-lab .rg-stat-grid{grid-template-columns:repeat(4,minmax(0,1fr));margin:0;grid-column:1/-1;gap:8px;padding:10px 0}
+  .rg-visual-lab .rg-stat-grid strong{font-size:19px}
+  .rg-visual-lab .rg-stat-grid span{font-size:6px;letter-spacing:.3px}
+  .rg-visual-lab .rg-upgrade-card+.rg-upgrade-card{margin-top:0;padding-top:0;border:0}
+  .rg-visual-lab .rg-upgrade-card p{min-height:0;font-size:10px;margin:7px 0 12px}
+  .rg-visual-lab .rg-upgrade-card h4{font-size:12px}
+  .rg-visual-lab .rg-upgrade-card button{font-size:11px;min-height:44px;padding:9px 8px;display:flex;flex-wrap:wrap;gap:6px}
+  .rg-visual-lab .rg-upgrade-card button b{font-size:11px}
+  .rg-workshop-pick>.rg-tower-map{padding:9px 7px 12px}
+  .rg-workshop-pick .rg-empty-tower{padding:4px 5px 12px}
+  .rg-inventory-layout:has(.rg-tower-map-picker[open]){grid-template-columns:minmax(0,1fr)}
+  .rg-tower-map-picker>summary strong{font-size:12px}
+  .rg-tower-map-picker>summary>b{font-size:11px}
+  .rg-mini-tower .rg-tower-map-picker>.rg-tower-map{margin-left:-6px;margin-right:-6px}
+}
+@media(max-width:360px){
+  .rg-map-cell{font-size:15px}
+  .rogue-dialog .rg-map-cell>button{font-size:17px}
+  .rg-map-level{font-size:7px;right:1px;top:1px}
+  .rg-map-sockets{bottom:3px;gap:1px}
+  .rg-map-legend{gap:6px 8px;font-size:7px}
+  .rg-visual-lab .rg-upgrade-card button{font-size:10px;gap:5px}
+}
+@media(prefers-reduced-motion:reduce){.rg-tower-map-picker>summary i{transition:none}}
+.rg-reduced-motion .rg-tower-map-picker>summary i{transition:none}
+
+/* Touch selections on a small screen bring the upgrade controls into view. */
+.rogue-dialog .rg-map-return{display:none}
+@media(max-width:700px){
+  .rg-selected-tower{flex-wrap:wrap}
+  .rogue-dialog .rg-map-return{display:flex;flex-basis:100%;align-items:center;justify-content:space-between;gap:12px;min-height:44px;padding:9px 11px;margin:0 0 2px;border:1px solid #61775b;border-radius:4px;background:#152d24;color:#c8e6ba;font-size:11px;text-align:left;scroll-margin-top:9px;cursor:pointer}
+  .rg-map-return>span{font-size:21px;color:#b0d4a5}
+}
+/* At Deck and desktop widths keep both upgrade choices beside the mini board. */
+@media(min-width:1000px){
+  .rg-visual-lab{grid-template-columns:270px 230px minmax(0,1fr);grid-template-rows:max-content max-content max-content max-content minmax(0,1fr);column-gap:18px;row-gap:10px;align-items:start}
+  .rg-visual-lab .rg-tower-summary{display:contents}
+  .rg-visual-lab .rg-tower-map{grid-column:1;grid-row:1/6;align-self:start}
+  .rg-visual-lab .rg-selected-tower{grid-column:2;grid-row:1;margin:0;padding:10px 11px;gap:10px;border:1px solid #657c60;border-radius:3px 12px 3px 3px;background:linear-gradient(150deg,#263d32,#182d28)}
+  .rg-visual-lab .rg-selected-tower-art{width:45px;height:45px}
+  .rg-visual-lab .rg-selected-tower-label h3{font-size:22px}
+  .rg-visual-lab .rg-stat-grid{grid-column:2;grid-row:2;margin:0;padding:11px;gap:10px 12px;border:1px solid #4b604d;background:#1b3029;border-radius:3px}
+  .rg-visual-lab .rg-upgrade-card{grid-column:2;grid-row:3;padding:10px 11px;margin:0;border:1px solid #586d51;background:#1d342b;border-radius:3px}
+  .rg-visual-lab .rg-upgrade-card+.rg-upgrade-card{grid-column:2;grid-row:4;padding:10px 11px;margin:0;border:1px solid #626277;background:linear-gradient(145deg,#2d3440,#1e3030);border-radius:3px}
+  .rg-visual-lab .rg-upgrade-card p{min-height:0;margin:6px 0 10px}
+  .rg-visual-lab .rg-upgrade-card button{padding:10px;min-height:44px}
+  .rg-visual-lab .rg-tower-summary>.rg-warning{grid-column:2;grid-row:5;margin:0!important;align-self:start}
+  .rg-visual-lab>.rg-stack-editor{grid-column:3;grid-row:1/6;min-width:0;align-self:start}
+}

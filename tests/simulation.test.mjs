@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Game,TOWERS,DIFFICULTIES,makePuzzle,countSolutions,sudokuLegal,buildRoute} from '../dist/game/simulation.js';
-import {RARITIES,generateItem} from '../dist/game/items.js';
+import {RARITIES,SLOT_COST,SLOT_PAYTABLE,generateItem} from '../dist/game/items.js';
 
 const blank=game=>game.board.findIndex(n=>!n);
 const solve=(g,limit=81)=>{let count=0;for(let cell=0;cell<81&&count<limit;cell++)if(!g.board[cell]){assert.ok(g.place(cell,g.solution[cell]).ok);count++;}return count;};
@@ -117,8 +117,54 @@ test('shops and slots are gated, debit correctly and cannot use insufficient cre
   let balance=g.credits;assert.ok(g.buyChest('common').ok);assert.equal(g.credits,balance-g.chestPrice('common'));
   balance=g.credits;const cost=g.passiveCost('power');assert.ok(g.buyPassive('power').ok);assert.equal(g.passives.power,1);assert.equal(g.credits,balance-cost);assert.ok(g.passiveCost('power')>cost);
   const max=g.maxHealth;assert.ok(g.buyPassive('vitality').ok);assert.equal(g.maxHealth,max+4);
-  balance=g.credits;const spin=g.spinSlots();assert.ok(spin.ok);assert.equal(spin.reels.length,3);assert.equal(g.credits,balance-20+spin.reward.credits);
+  balance=g.credits;const spin=g.spinSlots();assert.ok(spin.ok);assert.equal(spin.reels.length,3);assert.equal(g.credits,balance-SLOT_COST+spin.reward.credits);
   g.credits=0;assert.equal(g.spinSlots().ok,false);assert.equal(g.buyChest('legendary').ok,false);assert.equal(g.buyPassive('power').ok,false);assert.equal(g.credits,0);
+});
+
+test('every slot outcome spends once and immediately deposits its exact equipment or chest reward',()=>{
+  for(const wave of [1,50]){
+    let boundary=0;
+    for(const prize of SLOT_PAYTABLE){
+      const g=new Game(`slot-${wave}-${prize.id}`);enterBattle(g);settle(g);g.wave=wave;g.credits=SLOT_COST;g.drainEvents();
+      const draw=boundary+prize.probability/2;let calls=0;g.rng=()=>calls++===0?draw:.5;
+      const beforeItems=g.items.length,beforeChests=g.chests.length,beforeFragments=g.fragments;
+      const result=g.spinSlots();assert.ok(result.ok);assert.equal(result.outcomeId,prize.id);
+      assert.equal(result.cost,SLOT_COST);assert.equal(result.netCredits,prize.credits-SLOT_COST);assert.equal(g.credits,prize.credits);
+      assert.equal(g.items.length,beforeItems+(prize.gearRarity?1:0));assert.equal(g.chests.length,beforeChests+(prize.chestRarity?1:0));
+      assert.equal(g.fragments,beforeFragments);
+      if(prize.gearRarity){
+        assert.equal(result.reward.item,g.items.at(-1));assert.equal(result.reward.item.type,'attachment');assert.equal(result.reward.item.rarity,'common');
+        assert.equal(result.reward.item.power,wave===1?1:1.29);assert.equal(calls,5);
+        const cell=blank(g);g.towers.push({cell,number:1,attachments:[],level:1});assert.ok(g.equipItem(cell,result.reward.item.id).ok);
+        assert.equal(g.items.length,beforeItems);assert.equal(g.towers.at(-1).attachments.length,1);
+      }else{assert.equal(result.reward.item,null);assert.equal(calls,1);}
+      if(prize.chestRarity){assert.equal(result.reward.chest,g.chests.at(-1));assert.equal(result.reward.chest.rarity,prize.chestRarity);}
+      else assert.equal(result.reward.chest,null);
+      assert.equal(g.drainEvents().filter(e=>e.type==='slots').length,1);
+      if(g.credits<SLOT_COST){const count=g.items.length,id=g._nextId;assert.equal(g.spinSlots().ok,false);assert.equal(g.items.length,count);assert.equal(g._nextId,id);assert.equal(calls,5);}
+      boundary+=prize.probability;
+    }
+  }
+});
+
+test('blocked slots do not advance the seeded RNG or change reward ownership',()=>{
+  const g=new Game('slot-gates');g.credits=100;
+  for(const phase of ['solve','prep','battle','won','lost']){
+    g.phase=phase;const before=g.exportSave();assert.equal(g.spinSlots().ok,false);assert.deepEqual(g.exportSave(),before);
+  }
+  g.phase='loot';g.credits=SLOT_COST-1;const before=g.exportSave();assert.equal(g.spinSlots().ok,false);assert.deepEqual(g.exportSave(),before);
+});
+
+test('slot equipment survives saving and resumes the exact future reward stream',()=>{
+  const g=new Game('slot-equipment-save');enterBattle(g);settle(g);g.credits=10000;
+  const copy=Game.fromSave(g.exportSave());let equipment=0;
+  for(let spin=0;spin<30;spin++){
+    const result=g.spinSlots();assert.deepEqual(result,copy.spinSlots());if(result.reward.item)equipment++;
+    assert.deepEqual(g.exportSave(),copy.exportSave());
+  }
+  assert.ok(equipment>0);const restored=Game.fromSave(g.exportSave());
+  assert.deepEqual(restored.items,g.items);assert.deepEqual(restored.spinSlots(),g.spinSlots());
+  assert.equal(new Set(restored.items.map(item=>item.id)).size,restored.items.length);
 });
 
 test('settlement cannot mint repeat clear rewards and freeplay ends after one round',()=>{

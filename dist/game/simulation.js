@@ -2,7 +2,7 @@
  * Coordinates are board cells; routes use half-cell gutters and cannot be
  * blocked by towers. Gameplay state and the RNG are serializable mid-battle.
  */
-import {RARITIES,generateItem,rollRarity,rollChest,rollSlot} from './items.js';
+import {RARITIES,SLOT_COST,generateItem,generateAttachment,rollRarity,rollChest,rollSlot} from './items.js';
 export const DIFFICULTIES={
   easy:{clues:48,solveDuration:120,hp:.75,speed:.9,count:.85,reward:.9},
   medium:{clues:36,solveDuration:100,hp:1,speed:1,count:1,reward:1},
@@ -315,11 +315,13 @@ export class Game {
   }
   spinSlots(){
     if(this.phase!=='loot')return this._invalid('The slot machine opens between rounds.');
-    if(this.credits<20)return this._invalid('A spin costs 20 credits.');
-    this.credits-=20;const result=rollSlot(this.rng);this.credits+=result.credits||0;
+    if(this.credits<SLOT_COST)return this._invalid(`A spin costs ${SLOT_COST} credits.`);
+    this.credits-=SLOT_COST;const result=rollSlot(this.rng);this.credits+=result.credits;
+    let item=null;
+    if(result.gearRarity){item=generateAttachment(this.rng,result.gearRarity,this.wave,this._nextId++);this.items.push(item);}
     let chest=null;if(result.chestRarity)chest=this._addChest(result.chestRarity);
-    const reward={credits:result.credits||0,chestRarity:result.chestRarity||null,chest};
-    this._emit('slots',{reels:result.reels,reward,color:'#ffe188',text:result.message});return {ok:true,...result,reward};
+    const reward={credits:result.credits,chestRarity:result.chestRarity,chest,item};
+    this._emit('slots',{reels:result.reels,reward,color:'#ffe188',text:result.message});return {ok:true,...result,cost:SLOT_COST,netCredits:result.credits-SLOT_COST,reward};
   }
   _cacheRoute(){this._routeDistances=[0];for(let i=1;i<this.route.length;i++)this._routeDistances.push(this._routeDistances[i-1]+distance(this.route[i-1],this.route[i]));this.routeLength=this._routeDistances.at(-1)||1;}
   _position(enemy){const p=clamp(enemy.progress,0,this.routeLength);let i=1;while(i<this._routeDistances.length-1&&this._routeDistances[i]<p)i++;const a=this.route[i-1],b=this.route[i],span=this._routeDistances[i]-this._routeDistances[i-1],t=span?(p-this._routeDistances[i-1])/span:0;enemy.x=a.x+(b.x-a.x)*t;enemy.y=a.y+(b.y-a.y)*t;}

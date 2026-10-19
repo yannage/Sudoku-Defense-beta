@@ -4,7 +4,7 @@ A Sudoku tower-defense roguelite alpha by Yak Studios. Solve a traditional grid,
 
 [Play Gridfall](https://gridfall.yakstudios.chatgpt.site) · [Player guide](docs/ROGUELITE-GUIDE.md)
 
-Version **0.2.5** gives Gridfall a field-console interface: illuminated phase controls, numbered seed keys, equipment cartridges, and illustrated expedition and loot menus. Ivory tiles, brass clamps, and mint inlays bring the board into the same visual style. The compact quick bar, direct equipment controls, and readable item effects keep play close to the board.
+Version **0.2.6** makes the loot camp more rewarding and easier to navigate. Voxel slot reels have clearer outcomes, lower-cost spins, and equipment to keep on a losing spin. The workshop now uses a miniature board to select towers, showing their positions and fitted equipment before you upgrade or attach gear.
 
 The compact play layout fits the viewport and shows all nine number buttons. Bag opens the equipment tray in place of the number rail while keeping the board visible. Secondary controls live in the collapsible quick bar; open trays and menus pause the game clock. The full inventory remains available through Details.
 
@@ -52,7 +52,7 @@ npm run desktop
 npm run package:linux
 ```
 
-Packaging produces `release/Gridfall-0.2.5-x64.AppImage` and `release/linux-unpacked/`. Run `release/linux-unpacked/gridfall` directly or add it as a non-Steam game. Make the AppImage executable with `chmod +x release/*.AppImage`. The GitHub Actions artifact also contains a depot tarball that preserves executable permissions.
+Packaging produces `release/Gridfall-0.2.6-x64.AppImage` and `release/linux-unpacked/`. Run `release/linux-unpacked/gridfall` directly or add it as a non-Steam game. Make the AppImage executable with `chmod +x release/*.AppImage`. The GitHub Actions artifact also contains a depot tarball that preserves executable permissions.
 
 The Linux application embeds Electron and plays the web game offline. It uses the browser Gamepad API; start Deck testing with Steam Input's standard Gamepad layout. **F11** toggles desktop fullscreen. The shell serves local assets only on `127.0.0.1`, isolates web content from Node, blocks external navigation, and retains local data under Electron's user-data directory. It does not upload player data.
 

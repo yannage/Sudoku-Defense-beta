@@ -11,11 +11,12 @@
  * it does not multiply previous attachments. Common/uncommon loot has a
  * 20%/15% consumable chance; rare or better loot is always an attachment.
  *
- * Slots cost 20 credits in the simulation. The paytable below describes the
- * actual outcome draw: 10% chest, 50% credit payout, 40% no payout. Expected
- * direct credit return is 12 credits/spin, plus a chest on 10% of spins.
- * Winning displays match the drawn prize; losing displays use three distinct
- * symbols. There is no fabricated near-miss or adaptive odds system.
+ * Slots cost 10 credits. Direct credit return averages 9.5 credits/spin:
+ * 55% return the full stake or more, 25% make a credit profit, 45% award a
+ * reusable common attachment, and 5% add a chest to a full stake refund.
+ * Every return below the stake includes equipment deposited directly in the
+ * bag, with no fragment cost. Reels display the actual prize category; there
+ * are no empty outcomes, fabricated near-misses, or adaptive odds.
  */
 
 export const RARITIES = Object.freeze([
@@ -45,18 +46,18 @@ export const CONSUMABLES = Object.freeze([
   {id:'repair',name:'Coremend Nectar',color:'#91e8a6',duration:0,description:'Restores 10 core health, up to maximum health. Use during any active run phase.'},
 ].map(Object.freeze));
 
-export const SLOT_COST = 20;
+export const SLOT_COST = 10;
 export const SLOT_PAYTABLE = Object.freeze([
-  {probability:.07,credits:0,chestRarity:'common',symbol:'▦',label:'Common chest'},
-  {probability:.02,credits:0,chestRarity:'uncommon',symbol:'❀',label:'Uncommon chest'},
-  {probability:.007,credits:0,chestRarity:'rare',symbol:'ϟ',label:'Rare chest'},
-  {probability:.0025,credits:0,chestRarity:'epic',symbol:'✧',label:'Epic chest'},
-  {probability:.0005,credits:0,chestRarity:'legendary',symbol:'✺',label:'Legendary chest'},
-  {probability:.05,credits:50,chestRarity:null,symbol:'◆',label:'50 credits'},
-  {probability:.15,credits:30,chestRarity:null,symbol:'⌘',label:'30 credits'},
-  {probability:.20,credits:20,chestRarity:null,symbol:'✿',label:'20 credits'},
-  {probability:.10,credits:10,chestRarity:null,symbol:'◈',label:'10 credits'},
-  {probability:.40,credits:0,chestRarity:null,symbol:null,label:'No prize'},
+  {id:'salvage',probability:.25,credits:0,gearRarity:'common',chestRarity:null,symbol:'gear',label:'Common module'},
+  {id:'recovery',probability:.20,credits:5,gearRarity:'common',chestRarity:null,symbol:'gear',label:'5 credits + common module'},
+  {id:'refund',probability:.25,credits:10,gearRarity:null,chestRarity:null,symbol:'credit',label:'10 credits'},
+  {id:'double',probability:.20,credits:20,gearRarity:null,chestRarity:null,symbol:'credit',label:'20 credits'},
+  {id:'triple',probability:.05,credits:30,gearRarity:null,chestRarity:null,symbol:'credit',label:'30 credits'},
+  {id:'chest-common',probability:.02,credits:10,gearRarity:null,chestRarity:'common',symbol:'chest-common',label:'10 credits + common chest'},
+  {id:'chest-uncommon',probability:.015,credits:10,gearRarity:null,chestRarity:'uncommon',symbol:'chest-uncommon',label:'10 credits + uncommon chest'},
+  {id:'chest-rare',probability:.01,credits:10,gearRarity:null,chestRarity:'rare',symbol:'chest-rare',label:'10 credits + rare chest'},
+  {id:'chest-epic',probability:.004,credits:10,gearRarity:null,chestRarity:'epic',symbol:'chest-epic',label:'10 credits + epic chest'},
+  {id:'chest-legendary',probability:.001,credits:10,gearRarity:null,chestRarity:'legendary',symbol:'chest-legendary',label:'10 credits + legendary chest'},
 ].map(Object.freeze));
 
 const BASE_ODDS = [.58,.27,.10,.04,.01];
@@ -113,6 +114,16 @@ export function generateItem(rng,rarity='common',round=1,id='item') {
   const consumableChance=quality.id==='common'?.20:quality.id==='uncommon'?.15:0;
   const isConsumable=random(rng)<consumableChance;
   const definition=choose(rng,isConsumable?CONSUMABLES:ATTACHMENTS);
+  return makeItem(rng,quality,definition,isConsumable,round,id);
+}
+
+/** Guaranteed reusable equipment, without rerolling or consuming variable RNG. */
+export function generateAttachment(rng,rarity='common',round=1,id='item') {
+  const quality=getRarity(rarity),definition=choose(rng,ATTACHMENTS);
+  return makeItem(rng,quality,definition,false,round,id);
+}
+
+function makeItem(rng,quality,definition,isConsumable,round,id) {
   const stage=clamp(Math.floor(Number(round)||1),1,50);
   const power=isConsumable?1:roundTo(quality.multiplier*(.9+random(rng)*.2)*(1+.006*(stage-1)));
   const name=isConsumable?definition.name:`${choose(rng,PREFIXES[quality.id])} ${definition.name} ${choose(rng,SUFFIXES)}`;
@@ -147,19 +158,14 @@ export function itemDescription(item) {
 
 /** Draws the advertised prize; Game owns charging, depositing, and chest IDs. */
 export function rollSlot(rng) {
-  const draw=random(rng);let cumulative=0,prize=SLOT_PAYTABLE.at(-1);
+  // Integer probability units keep advertised boundaries exact (including
+  // the 0.1% legendary row) rather than accumulating floating-point drift.
+  const draw=random(rng)*1000;let cumulative=0,prize=SLOT_PAYTABLE.at(-1);
   for(const outcome of SLOT_PAYTABLE) {
-    cumulative+=outcome.probability;
+    cumulative+=Math.round(outcome.probability*1000);
     if(draw<cumulative){prize=outcome;break;}
   }
-  let reels;
-  if(prize.symbol)reels=[prize.symbol,prize.symbol,prize.symbol];
-  else {
-    // Sampling without replacement displays an honest nonmatching loss rather
-    // than building an almost-jackpot after the outcome has already been drawn.
-    const symbols=SLOT_PAYTABLE.filter(outcome=>outcome.symbol).map(outcome=>outcome.symbol);
-    reels=Array.from({length:3},()=>symbols.splice(Math.floor(random(rng)*symbols.length),1)[0]);
-  }
-  const message=prize.chestRarity?`${prize.label}! Defeat enemies for the fragments to unlock it.`:prize.credits?`${prize.credits} credits returned.`:'No prize this spin.';
-  return {reels,credits:prize.credits,chestRarity:prize.chestRarity,message};
+  const reels=[prize.symbol,prize.symbol,prize.symbol];
+  const message=prize.chestRarity?`${prize.label}! Stake returned; fragments unlock the bonus chest.`:prize.gearRarity?`${prize.credits?`${prize.credits} credits returned + a`:'A'} common module added to your bag. Ready to equip.`:`${prize.credits} credits returned${prize.credits>SLOT_COST?` · +${prize.credits-SLOT_COST} profit`: ' · stake recovered'}.`;
+  return {outcomeId:prize.id,reels,credits:prize.credits,chestRarity:prize.chestRarity,gearRarity:prize.gearRarity,message};
 }

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {RARITIES,ATTACHMENTS,CONSUMABLES,SLOT_COST,SLOT_PAYTABLE,generateItem,itemDescription,rollRarity,rollChest,rollSlot} from '../dist/game/items.js';
+import {RARITIES,ATTACHMENTS,CONSUMABLES,SLOT_COST,SLOT_PAYTABLE,generateItem,generateAttachment,itemDescription,rollRarity,rollChest,rollSlot} from '../dist/game/items.js';
 
 function seeded(seed=1337) {
   let state=seed>>>0;
@@ -82,33 +82,66 @@ test('chests preserve identity and charge the exact rarity fragment cost',()=>{
   }
 });
 
-test('slot paytable totals 100%, pays 12 credits on average, and awards 10% chests',()=>{
-  assert.equal(SLOT_COST,20);
+test('slots have a 95% credit return, 55% stake recovery, and equipment for every shortfall',()=>{
+  assert.equal(SLOT_COST,10);
   assert.ok(Math.abs(SLOT_PAYTABLE.reduce((sum,outcome)=>sum+outcome.probability,0)-1)<1e-9);
-  assert.ok(Math.abs(SLOT_PAYTABLE.reduce((sum,outcome)=>sum+outcome.credits*outcome.probability,0)-12)<1e-9);
-  assert.ok(Math.abs(SLOT_PAYTABLE.filter(p=>p.chestRarity).reduce((sum,p)=>sum+p.probability,0)-.1)<1e-9);
-  let cumulative=0;
+  assert.ok(Math.abs(SLOT_PAYTABLE.reduce((sum,outcome)=>sum+outcome.credits*outcome.probability,0)-9.5)<1e-9);
+  const probability=predicate=>SLOT_PAYTABLE.filter(predicate).reduce((sum,p)=>sum+p.probability,0);
+  assert.ok(Math.abs(probability(p=>p.credits>=SLOT_COST)-.55)<1e-9);
+  assert.ok(Math.abs(probability(p=>p.credits>SLOT_COST)-.25)<1e-9);
+  assert.ok(Math.abs(probability(p=>p.gearRarity)-.45)<1e-9);
+  assert.ok(Math.abs(probability(p=>p.chestRarity)-.05)<1e-9);
   for(const prize of SLOT_PAYTABLE){
-    const result=rollSlot(sequence(cumulative+prize.probability/2,.2,.4,.6));
-    assert.equal(result.credits,prize.credits);assert.equal(result.chestRarity,prize.chestRarity);
-    assert.equal(result.reels.length,3);
-    assert.equal(new Set(result.reels).size,prize.symbol?1:3);
-    cumulative+=prize.probability;
+    assert.ok(prize.credits>=SLOT_COST||prize.gearRarity==='common');
+    if(prize.chestRarity)assert.equal(prize.credits,SLOT_COST);
   }
 });
 
-test('seeded slot outcomes follow advertised payout and chest frequency',()=>{
+test('every slot probability boundary and reel category matches the advertised prize',()=>{
+  let cumulative=0;
+  for(const prize of SLOT_PAYTABLE){
+    const upper=cumulative+Math.round(prize.probability*1000);
+    for(const draw of [cumulative/1000,(cumulative+upper)/2000,(upper-.00001)/1000]){
+      let calls=0;const result=rollSlot(()=>{calls++;return draw;});
+      assert.equal(result.outcomeId,prize.id);assert.equal(result.credits,prize.credits);
+      assert.equal(result.chestRarity,prize.chestRarity);assert.equal(result.gearRarity,prize.gearRarity);
+      assert.deepEqual(result.reels,[prize.symbol,prize.symbol,prize.symbol]);
+      assert.equal(calls,1);assert.doesNotMatch(result.message,/no prize/i);
+    }
+    cumulative=upper;
+  }
+  assert.equal(cumulative,1000);
+});
+
+test('seeded slot outcomes follow advertised credit, equipment, and chest frequencies',()=>{
   const a=seeded(770),b=seeded(770),samples=100000;
-  let credits=0,chests=0,losses=0;
+  let credits=0,chests=0,gear=0,stakeBack=0,profits=0;
   for(let i=0;i<samples;i++){
     const result=rollSlot(a);
     if(i<100)assert.deepEqual(result,rollSlot(b));
     credits+=result.credits;if(result.chestRarity)chests++;
-    if(!result.credits&&!result.chestRarity)losses++;
+    if(result.gearRarity)gear++;
+    if(result.credits>=SLOT_COST)stakeBack++;
+    if(result.credits>SLOT_COST)profits++;
+    assert.ok(result.credits||result.gearRarity||result.chestRarity);
   }
-  assert.ok(Math.abs(credits/samples-12)<.2);
-  assert.ok(Math.abs(chests/samples-.1)<.005);
-  assert.ok(Math.abs(losses/samples-.4)<.007);
+  assert.ok(Math.abs(credits/samples-9.5)<.15);
+  for(const [count,expected] of [[chests,.05],[gear,.45],[stakeBack,.55],[profits,.25]])assert.ok(Math.abs(count/samples-expected)<.007);
+});
+
+test('consolation generation always produces reusable common gear with bounded round power',()=>{
+  const a=seeded(65),b=seeded(65);
+  for(const round of [1,50])for(let n=0;n<9;n++){
+    let calls=0;const rng=sequence((n+.5)/9,.999999,.2,.7);
+    const item=generateAttachment(()=>{calls++;return rng();},'common',round,`gear-${round}-${n}`);
+    assert.equal(calls,4);assert.equal(item.type,'attachment');assert.equal(item.kind,ATTACHMENTS[n].id);
+    assert.equal(item.rarity,'common');assert.equal(item.description,itemDescription(item));
+    assert.ok(item.power>=.9&&item.power<=1.43);
+    assert.equal(item.power,round===1?1.1:1.42);
+    assert.deepEqual(generateAttachment(a,'common',round),generateAttachment(b,'common',round));
+  }
+  assert.equal(generateAttachment(()=>0).type,'attachment');
+  assert.equal(generateAttachment(()=>.999999,'common',999).power,generateAttachment(()=>.999999,'common',50).power);
 });
 
 test('loot rejects invalid RNGs and unknown rarity instead of creating corrupt items',()=>{

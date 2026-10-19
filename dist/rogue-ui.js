@@ -1,5 +1,6 @@
 import {voxelArt} from './voxel-art.js';
-import {RARITIES, SLOT_COST, SLOT_PAYTABLE} from './game/items.js';
+import {RARITIES} from './game/items.js';
+import {renderSlotMachine} from './slot-machine.js';
 import {itemGuide, chestGuide, towerBuild} from './game/item-guide.js';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
@@ -23,6 +24,7 @@ export class RogueUI {
   constructor({game, getSelectedCell = () => -1, onChange = () => {}, onNewRun = () => {}, onInspect = () => {}, onBoardEquip = () => {}, onSound = () => {}, isReducedMotion = () => false} = {}) {
     this.game=game; this.getSelectedCell=getSelectedCell; this.onChange=onChange; this.onNewRun=onNewRun;
     this.onInspect=onInspect; this.onBoardEquip=onBoardEquip; this.onSound=onSound; this.isReducedMotion=isReducedMotion;
+    this.towerMapOpen=false;
     this.tab='inventory'; this.filter='all'; this.selectedItem=null; this.page=0; this.notice=''; this.lastKey=''; this.reveal=null; this.spin=null;
     this.options={mode:'campaign',sudokuDifficulty:'easy',combatDifficulty:'easy'};
     this.nextOptions={sudokuDifficulty:game.sudokuDifficulty||'easy',combatDifficulty:game.combatDifficulty||'easy'};
@@ -92,6 +94,8 @@ export class RogueUI {
   _render(){
     const active=document.activeElement;
     const focusId=this.dialog.contains(active)?active.dataset.focus||active.id:null;
+    const towerPicker=this.dialog.querySelector('.rg-tower-map-picker');
+    if(towerPicker)this.towerMapOpen=towerPicker.open;
     const scroll=this.dialog.querySelector('.rg-body')?.scrollTop||0;
     const rewardScroll=this.dialog.querySelector('.rg-reward-grid')?.scrollLeft||0;
     const view=this.reveal?this._chestView():this.tab==='setup'?this._setupView():this._mainView();
@@ -115,7 +119,7 @@ export class RogueUI {
     return `${this._header('GRIDFALL / EXPEDITION CONTROL','Start a run','Choose a mode and your puzzle and combat difficulties.')}<div class="rg-body rg-setup-body"><section class="rg-expedition-hero"><div class="rg-hero-copy"><span class="rg-hero-stamp">THE GRID IS ALIVE</span><h3>A little logic.<br><em>A living defense.</em></h3><p>Plant your answers. Stack strange machinery. Make something worth defending.</p><span class="rg-hero-caption">SUDOKU × TOWER DEFENSE</span></div>${this._fieldScene()}</section><div class="rg-section-line rg-mode-heading"><h3>Choose your expedition</h3><span>01 / RUN TYPE</span></div><div class="rg-mode-grid">${[['campaign','01 → 50','Campaign'],['freeplay','ONE MAP','Free play'],['locked','01 → 50 · FIXED','Locked in']].map(([id,small,label])=>`<button type="button" class="rg-mode ${o.mode===id?'chosen':''}" data-action="mode" data-mode="${id}" data-focus="mode-${id}" aria-pressed="${o.mode===id}" ${id===o.mode?'data-initial-focus':''}><span class="rg-mode-icon" aria-hidden="true">${voxelArt(id==='campaign'?'tower':id==='freeplay'?'seed':'notes')}</span><small>${small}</small><strong>${label}</strong><p>${descriptions[id]}</p><span class="rg-select-dot" aria-hidden="true"></span></button>`).join('')}</div><div class="rg-setup-difficulties">${this._difficulty('sudoku',o.sudokuDifficulty)}${this._difficulty('combat',o.combatDifficulty)}</div><div class="rg-run-loop"><span><i>01</i> Solve &amp; grow</span><b>→</b><span><i>02</i> Equip your stack</span><b>→</b><span><i>03</i> Hold the line</span><b>→</b><span><i>04</i> Claim the loot</span></div><p class="rg-fineprint">Every tower starts as a seed and fires a basic bolt. Stack up to five attachments to build its identity. Your bag, number-family levels and passive upgrades carry between maps.</p></div><footer class="rg-footer"><span>${o.mode==='locked'?'Both difficulty choices stay fixed for all 50 maps.':o.mode==='freeplay'?'A complete expedition in one battlefield.':'Change either difficulty at the end of each map.'}</span><button class="rg-primary" type="button" data-action="start" data-focus="start">${o.mode==='freeplay'?'Start free play':'Begin expedition'} <b>→</b></button></footer>`;
   }
   _mainView(){
-    const labels={inventory:['FIELD KIT','Inventory','Equipment stays with you. Boosts are used once.'],tower:['TOWER LAB','Tower workshop','Upgrade one tower, its entire number family, or its five attachments.'],loot:['BETWEEN BATTLES','Loot camp','Open chests, buy upgrades, and choose your next map.'],casino:['LUCKY CIRCUIT','Lucky circuit','Spend earned credits for a chance at credits or sealed chests.']};
+    const labels={inventory:['FIELD KIT','Inventory','Equipment stays with you. Boosts are used once.'],tower:['TOWER LAB','Tower workshop','Upgrade one tower, its entire number family, or its five attachments.'],loot:['BETWEEN BATTLES','Loot camp','Open chests, buy upgrades, and choose your next map.'],casino:['LUCKY CIRCUIT','Lucky circuit','Spin for credits, equipment, and bonus chests. Every spin has a reward.']};
     const [eyebrow,title,description]=labels[this.tab]||labels.inventory;
     return `${this._header(`${eyebrow} · MAP ${this.game.wave||1} / ${this.game.maxWaves||50}`,title,description)}${this._tabs()}<div class="rg-body">${this.notice?`<div class="rg-notice ${this.noticeError?'error':''}" role="status">${esc(this.notice)}</div>`:''}${this.tab==='tower'?this._towerView():this.tab==='loot'?this._lootView():this.tab==='casino'?this._casinoView():this._inventoryView()}</div><footer class="rg-footer"><span><b>${phaseName(this.game.phase)}</b><span class="rg-controller-hint"> · D-pad to navigate · A to choose · B to return</span></span><button class="rg-secondary" type="button" data-action="close" data-focus="return">Back to the grid <b>↗</b></button></footer>`;
   }
@@ -165,23 +169,56 @@ export class RogueUI {
     const format=value=>Number(Number(value).toFixed(2)).toString();
     return `<div class="rg-stat-preview">${changed.map(([label,a,b])=>`<span>${label}<b>${format(a)} <i>→</i> <strong>${format(b)}</strong></b></span>`).join('')}</div>`;
   }
-  _towerSelect(){
-    const towers=this.game.towers||[];
-    return `<label class="rg-select-label" for="rgTowerSelect">Selected tower</label><select id="rgTowerSelect" data-action="select-tower" data-focus="tower-select"><option value="-1" ${!this._tower()?'selected':''}>${towers.length?'Choose a tower…':'Solve a square to grow a tower'}</option>${towers.map(tower=>`<option value="${tower.cell}" ${tower.cell===Number(this.getSelectedCell())?'selected':''}>${tower.number} · R${Math.floor(tower.cell/9)+1} C${tower.cell%9+1} · Lv ${this._stats(tower).level||tower.level||1} · ${tower.attachments?.length||0}/5 slots</option>`).join('')}</select>`;
+  _towerSelect({compact=false}={}){
+    const towers=this.game.towers||[],byCell=new Map(towers.map(tower=>[tower.cell,tower]));
+    const selected=this._tower(),activeCell=selected?.cell??towers[0]?.cell;
+    const label=selected?`Tower ${selected.number} · R${Math.floor(selected.cell/9)+1} C${selected.cell%9+1}`:'Choose a tower';
+    const board=`<div class="rg-tower-map"><div class="rg-map-heading"><span>YOUR BATTLEFIELD</span><b>${towers.length} ${towers.length===1?'tower':'towers'}</b></div><div class="rg-map-columns" aria-hidden="true">${Array.from({length:9},(_,col)=>`<span>${col+1}</span>`).join('')}</div><div class="rg-mini-board" role="grid" aria-label="Tower map. Mint squares are your towers. Use arrow keys to select a tower, or Tab to leave the map.">${Array.from({length:9},(_,row)=>`<div role="row">${Array.from({length:9},(_,col)=>{
+      const cell=row*9+col,tower=byCell.get(cell),value=this.game.board?.[cell]||0,chosen=selected?.cell===cell;
+      const classes=['rg-map-cell',col===2||col===5?'block-right':'',row===2||row===5?'block-bottom':'',tower?'is-tower':value?'is-clue':'is-empty',chosen?'is-selected':'',tower?.illegal?'is-emergency':''].filter(Boolean).join(' ');
+      if(!tower)return `<div role="gridcell" class="${classes}" aria-label="Row ${row+1}, column ${col+1}: ${value?`printed clue ${value}, not a tower`:'empty square'}"><span aria-hidden="true">${value||'·'}</span></div>`;
+      const level=this._stats(tower).level||tower.level||1,slots=tower.attachments?.length||0;
+      return `<div role="gridcell" class="${classes}" aria-selected="${chosen}"><button type="button" data-action="map-tower" data-cell="${cell}" data-focus="map-tower-${cell}" tabindex="${cell===activeCell?'0':'-1'}" aria-label="Tower ${tower.number}, row ${row+1}, column ${col+1}, level ${level}, ${slots} of 5 attachment slots filled${tower.illegal?', emergency tower':''}"><span class="rg-map-digit" aria-hidden="true">${tower.number}</span><small class="rg-map-level" aria-hidden="true">${level}</small><span class="rg-map-sockets" aria-hidden="true">${Array.from({length:5},(_,i)=>`<i class="${i<slots?'filled':''}"></i>`).join('')}</span></button></div>`;
+    }).join('')}</div>`).join('')}</div><div class="rg-map-legend"><span><i class="tower"></i>Your towers</span><span><i class="clue"></i>Printed clue</span><span><b>•••••</b>Filled slots</span></div><p class="rg-map-help">${towers.length?'Tap a mint square to inspect it. The corner number is its level.':'Solve a Sudoku square to grow your first tower.'}</p></div>`;
+    return compact?`<details class="rg-tower-map-picker" ${this.towerMapOpen?'open':''}><summary data-focus="tower-map-toggle"><span><small>EQUIP TARGET</small><strong>${label}</strong></span><b>Change <i aria-hidden="true">⌄</i></b></summary>${board}</details>`:board;
+  }
+  _selectMapTower(cell,{revealDetails=false}={}){
+    if(!this.game.towers?.some(tower=>tower.cell===cell))return false;
+    this.onInspect(cell);this.refresh();
+    if(revealDetails&&this.tab==='tower'&&globalThis.matchMedia?.('(max-width:700px)').matches){
+      const details=this.dialog.querySelector('[data-action="return-map"]');
+      if(details){details.focus({preventScroll:true});details.scrollIntoView({block:'start',inline:'nearest'});return true;}
+    }
+    const button=this.dialog.querySelector(`[data-action="map-tower"][data-cell="${cell}"]`);
+    button?.focus({preventScroll:true});button?.scrollIntoView({block:'nearest',inline:'nearest'});
+    return true;
+  }
+  _moveMapTower(node,dx,dy){
+    if(node?.dataset.action!=='map-tower')return false;
+    const cell=Number(node.dataset.cell),row=Math.floor(cell/9),col=cell%9;
+    const candidates=(this.game.towers||[]).map(tower=>({cell:tower.cell,x:tower.cell%9-col,y:Math.floor(tower.cell/9)-row})).filter(tower=>dx?tower.x*dx>0:tower.y*dy>0);
+    if(!candidates.length)return false;
+    candidates.sort((a,b)=>{
+      const primaryA=dx?Math.abs(a.x):Math.abs(a.y),primaryB=dx?Math.abs(b.x):Math.abs(b.y);
+      const crossA=dx?Math.abs(a.y):Math.abs(a.x),crossB=dx?Math.abs(b.y):Math.abs(b.x);
+      // A tower in the same row or column is the most predictable next stop.
+      return Number(crossA!==0)-Number(crossB!==0)||(primaryA+crossA*2)-(primaryB+crossB*2)||a.cell-b.cell;
+    });
+    return this._selectMapTower(candidates[0].cell);
   }
   _stats(tower){try{return this.game.towerStats?.(tower)||{};}catch{return {};}}
   _compactTower(){
     const tower=this._tower();
-    return `<section class="rg-detail-card rg-mini-tower">${this._towerSelect()}${tower?`<div class="rg-mini-slots">${Array.from({length:5},(_,i)=>`<span class="${tower.attachments?.[i]?'filled':''}" style="--loot:${rarity(tower.attachments?.[i]?.rarity).color}" title="${esc(tower.attachments?.[i]?.name||'Empty slot')}">${tower.attachments?.[i]?icon(tower.attachments[i].kind,tower.attachments[i].rarity):'+'}</span>`).join('')}</div><button class="rg-text-button" type="button" data-action="tab" data-tab="tower">Inspect and upgrade tower →</button>`:'<p class="rg-fineprint">Only player-grown towers can be equipped. Printed Sudoku clues are foundations.</p>'}</section>`;
+    return `<section class="rg-detail-card rg-mini-tower">${this._towerSelect({compact:true})}${tower?`<div class="rg-mini-slots">${Array.from({length:5},(_,i)=>`<span class="${tower.attachments?.[i]?'filled':''}" style="--loot:${rarity(tower.attachments?.[i]?.rarity).color}" title="${esc(tower.attachments?.[i]?.name||'Empty slot')}">${tower.attachments?.[i]?icon(tower.attachments[i].kind,tower.attachments[i].rarity):'+'}</span>`).join('')}</div><button class="rg-text-button" type="button" data-action="tab" data-tab="tower">Inspect and upgrade tower →</button>`:'<p class="rg-fineprint">Only player-grown towers can be equipped. Printed Sudoku clues are foundations.</p>'}</section>`;
   }
   _towerView(){
     const tower=this._tower();
-    if(!tower)return `<div class="rg-empty rg-empty-tower"><div class="rg-seed-art" aria-hidden="true">${voxelArt('seed')}</div><h3>First a seed. Then a stronghold.</h3><p>Each correct Sudoku answer grows a tower. Click an existing tower on the grid to inspect it, or select one below.</p>${this._towerSelect()}<button type="button" class="rg-secondary" data-action="close">Return to the grid →</button></div>`;
+    if(!tower)return `<div class="rg-workshop-pick">${this._towerSelect()}<div class="rg-empty rg-empty-tower"><div class="rg-seed-art" aria-hidden="true">${voxelArt('seed')}</div><h3>${this.game.towers?.length?'Pick your next project.':'First a seed. Then a stronghold.'}</h3><p>${this.game.towers?.length?'Choose a mint tower on the mini board to see its damage, upgrades, and five equipment slots.':'Each correct Sudoku answer grows a tower. Printed clues stay as foundations.'}</p><button type="button" class="rg-secondary" data-action="close">Return to the grid →</button></div></div>`;
     const stats=this._stats(tower),family=this.game.familyLevels?.[tower.number]||1,canEdit=['prep','loot','won'].includes(this.game.phase);
     const cost=this.game.upgradeCost?.(tower.cell)??0,familyCost=this.game.familyUpgradeCost?.(tower.number)??0;
     const attachments=tower.attachments||[];
     const picked=this.game.items?.find(item=>String(item.id)===String(this.selectedItem)&&item.type==='attachment');
-    return `<div class="rg-lab-layout"><section class="rg-tower-summary"><div class="rg-tower-number">${tower.number}<span>LV ${stats.level||tower.level||1}</span></div>${this._towerSelect()}<div class="rg-stat-grid"><div><strong>${(Number(stats.damage)||0).toFixed(1)}</strong><span>BOLT DAMAGE</span></div><div><strong>${stats.cooldown?(1/stats.cooldown).toFixed(2):'—'}</strong><span>SHOTS / SEC</span></div><div><strong>${(Number(stats.range)||0).toFixed(1)}</strong><span>RANGE</span></div><div><strong>${attachments.length}<small> / 5</small></strong><span>LAYERS</span></div></div><div class="rg-upgrade-card"><h4>Grow this tower</h4><p>Raise this tower's individual level for the current map.</p><button type="button" class="rg-primary" data-action="upgrade" data-focus="upgrade" ${this.game.credits>=cost?'':'disabled'}>Upgrade tower <b>ϟ ${number(cost)}</b></button></div><div class="rg-upgrade-card family"><h4>Grow every ${tower.number}</h4><p>Family level ${family} → ${family+1}. Every ${tower.number} gains a level, including future towers. Lasts the run.</p><button type="button" class="rg-secondary" data-action="upgrade-family" data-focus="upgrade-family" ${this.game.credits>=familyCost?'':'disabled'}>Upgrade all ${tower.number}s <b>ϟ ${number(familyCost)}</b></button></div>${tower.illegal?'<p class="rg-warning">Emergency tower: temporary for this map. Its attachments return to your bag after combat.</p>':''}</section><section class="rg-stack-editor"><div class="rg-section-line"><h3>${esc(towerBuild(tower).name)}</h3><span>${canEdit?'Click a filled slot to return its gear':'Editable in war prep / loot camp'}</span></div><div class="rg-equipment-slots">${Array.from({length:5},(_,i)=>{const item=attachments[i],r=rarity(item?.rarity);return `<button type="button" class="rg-equipment-slot ${item?'filled':''}" style="--loot:${r.color}" data-action="${item?'unequip':'browse-attachments'}" data-slot="${i}" data-focus="slot-${i}" ${item&&!canEdit?'disabled':''}><span class="rg-slot-index">0${i+1}</span><span class="rg-slot-glyph">${item?icon(item.kind,item.rarity):'+'}</span><span>${item?`<small class="rg-rarity">${r.name}</small><strong>${esc(itemGuide(item).name)}</strong><small>${esc(itemGuide(item).effect)}</small>`:'<strong>Open attachment slot</strong><small>Choose gear from your field kit</small>'}</span><b>${item?'↩':'→'}</b></button>`;}).join('')}</div><p class="rg-build-summary">${esc(towerBuild(tower).summary)}</p><p class="rg-fineprint">Each item fills one slot. Repeating an effect adds its power; mixing effects changes what the tower can do.</p>${picked?this._itemDetail(picked):`<button type="button" class="rg-primary" data-action="browse-attachments" data-focus="choose-attachments">Choose an attachment <b>+</b></button>`}<div class="rg-effect-list">${this._activeEffects()}</div></section></div>`;
+    return `<div class="rg-lab-layout rg-visual-lab"><section class="rg-tower-summary">${this._towerSelect()}<div class="rg-selected-tower"><button type="button" class="rg-map-return" data-action="return-map" data-focus="return-map">← Choose another tower <span aria-hidden="true">▦</span></button><span class="rg-selected-tower-art" aria-hidden="true">${voxelArt('tower')}</span><div class="rg-selected-tower-label"><small>R${Math.floor(tower.cell/9)+1} · C${tower.cell%9+1}</small><h3>Tower ${tower.number}</h3><span>Level ${stats.level||tower.level||1} · ${attachments.length}/5 equipped</span></div></div><div class="rg-stat-grid"><div><strong>${(Number(stats.damage)||0).toFixed(1)}</strong><span>BOLT DAMAGE</span></div><div><strong>${stats.cooldown?(1/stats.cooldown).toFixed(2):'—'}</strong><span>SHOTS / SEC</span></div><div><strong>${(Number(stats.range)||0).toFixed(1)}</strong><span>RANGE</span></div><div><strong>${attachments.length}<small> / 5</small></strong><span>LAYERS</span></div></div><div class="rg-upgrade-card"><h4>Grow this tower</h4><p>Raise this tower's individual level for the current map.</p><button type="button" class="rg-primary" data-action="upgrade" data-focus="upgrade" ${this.game.credits>=cost?'':'disabled'}>Upgrade tower <b>ϟ ${number(cost)}</b></button></div><div class="rg-upgrade-card family"><h4>Grow every ${tower.number}</h4><p>Family level ${family} → ${family+1}. Every ${tower.number} gains a level, including future towers. Lasts the run.</p><button type="button" class="rg-secondary" data-action="upgrade-family" data-focus="upgrade-family" ${this.game.credits>=familyCost?'':'disabled'}>Upgrade all ${tower.number}s <b>ϟ ${number(familyCost)}</b></button></div>${tower.illegal?'<p class="rg-warning">Emergency tower: temporary for this map. Its attachments return to your bag after combat.</p>':''}</section><section class="rg-stack-editor"><div class="rg-section-line"><h3>${esc(towerBuild(tower).name)}</h3><span>${canEdit?'Click a filled slot to return its gear':'Editable in war prep / loot camp'}</span></div><div class="rg-equipment-slots">${Array.from({length:5},(_,i)=>{const item=attachments[i],r=rarity(item?.rarity);return `<button type="button" class="rg-equipment-slot ${item?'filled':''}" style="--loot:${r.color}" data-action="${item?'unequip':'browse-attachments'}" data-slot="${i}" data-focus="slot-${i}" ${item&&!canEdit?'disabled':''}><span class="rg-slot-index">0${i+1}</span><span class="rg-slot-glyph">${item?icon(item.kind,item.rarity):'+'}</span><span>${item?`<small class="rg-rarity">${r.name}</small><strong>${esc(itemGuide(item).name)}</strong><small>${esc(itemGuide(item).effect)}</small>`:'<strong>Open attachment slot</strong><small>Choose gear from your field kit</small>'}</span><b>${item?'↩':'→'}</b></button>`;}).join('')}</div><p class="rg-build-summary">${esc(towerBuild(tower).summary)}</p><p class="rg-fineprint">Each item fills one slot. Repeating an effect adds its power; mixing effects changes what the tower can do.</p>${picked?this._itemDetail(picked):`<button type="button" class="rg-primary" data-action="browse-attachments" data-focus="choose-attachments">Choose an attachment <b>+</b></button>`}<div class="rg-effect-list">${this._activeEffects()}</div></section></div>`;
   }
   _activeEffects(){return (this.game.activeEffects||[]).map(effect=>`<span class="rg-effect-pill">✦ ${esc(effect.name||cap(effect.kind))} <b>${Math.ceil(effect.remaining)}s</b></span>`).join('');}
   _chests(){
@@ -195,11 +232,7 @@ export class RogueUI {
     return `${!inCamp?`<div class="rg-phase-notice"><b>${g.phase==='prep'?'War prep is open.':'The camp opens after a battle.'}</b><span>${g.phase==='prep'?'Open chests and equip your towers now. The shop and next-map choices arrive after you defend.':'You can inspect your supplies here. Defend the current map to shop and continue.'}</span></div>`:''}${inCamp?`<section class="rg-camp-banner"><div><span class="rg-eyebrow">DEFENSE COMPLETE · REFIT STATION</span><h3>Good soil. Better spoils.</h3><p>Unpack your finds. Tune your towers. Choose what comes next.</p></div><span aria-hidden="true">${voxelArt('chest',{rarity:'epic'})}${voxelArt('bag')}</span></section>`:''}<section class="rg-camp-section"><div class="rg-section-line"><h3>Your spoils</h3><span>Fragments come from defeated enemies</span></div>${this._chests()}</section><section class="rg-camp-section"><div class="rg-section-line"><h3>Sealed supplies</h3><span>Buy with credits · unlock with fragments</span></div><div class="rg-shop-grid">${RARITIES.map(r=>{const cost=g.chestPrice?.(r.id)??({common:30,uncommon:50,rare:90,epic:160,legendary:280}[r.id]);return `<article class="rg-shop-card" style="--loot:${r.color}"><span class="rg-shop-gem">${voxelArt('chest',{rarity:r.id})}</span><small class="rg-rarity">${r.name}</small><h4>Supply cache</h4><p>${chestGuide(r.id).count} ${chestGuide(r.id).count===1?'item':'items'} · ${r.fragmentCost} fragments to open</p><button type="button" class="rg-secondary" data-action="buy-chest" data-rarity="${r.id}" data-focus="buy-chest-${r.id}" ${inCamp&&g.credits>=cost?'':'disabled'}>Buy <b>ϟ ${cost}</b></button></article>`;}).join('')}</div></section><section class="rg-camp-section"><div class="rg-section-line"><h3>Run upgrades</h3><span>Carry through this entire run</span></div><div class="rg-passives">${[['power','◆','Amplifier','+9% tower damage per level'],['salvage','◈','Scavenger','+5% bonus fragment chance and +1% rarity luck per level'],['vitality','+','Reinforced core','+4 maximum integrity and repair 4 per level']].map(([id,glyph,name,description])=>{const level=g.passives?.[id]||0,cost=g.passiveCost?.(id)??999;return `<article class="rg-passive"><div class="rg-passive-glyph">${voxelArt(id==='salvage'?'fragment':id==='vitality'?'core':'power')}</div><div><small>RUN PASSIVE · LV ${level}</small><h4>${name}</h4><p>${description}</p></div><button type="button" class="rg-secondary" data-action="passive" data-kind="${id}" data-focus="passive-${id}" ${inCamp&&g.credits>=cost?'':'disabled'}>ϟ ${number(cost)} <b>+</b></button></article>`;}).join('')}</div></section><section class="rg-next-map"><div><span class="rg-eyebrow">${isLocked?'LOCKED IN · DIFFICULTIES FIXED':'YOUR NEXT BATTLEFIELD'}</span><h3>Map ${Math.min((g.wave||1)+1,g.maxWaves||50)} awaits.</h3><p>Your attachments return to your bag for the new grid. Your credits, gear, family levels and passives stay with you.</p></div>${isLocked?`<div class="rg-locked-info"><span>◈ ${cap(g.sudokuDifficulty)} Sudoku</span><span>ϟ ${cap(g.combatDifficulty)} combat</span><p>Chosen at the start. Fixed for the run.</p></div>`:`<div class="rg-next-difficulties">${this._difficulty('sudoku',this.nextOptions.sudokuDifficulty,'next',true)}${this._difficulty('combat',this.nextOptions.combatDifficulty,'next',true)}</div>`}<button type="button" class="rg-primary" data-action="next-wave" data-focus="next-wave" ${inCamp&&g.wave<g.maxWaves?'':'disabled'}>Enter the next map <b>→</b></button><p class="rg-fineprint">${inCamp?'Spend or save. You can leave with unopened chests.':g.mode==='freeplay'?'Free play ends after this one battlefield.':'Complete this battle before continuing.'}</p></section>`;
   }
   _casinoView(){
-    const ready=this.game.phase==='loot';
-    const spinning=Boolean(this.spin&&!this.spin.done);
-    const result=this.spin?.done?this.spin.result:null;
-    const symbols=result?.reels||['◇','ϟ','▣'];
-    return `<section class="rg-casino"><div class="rg-casino-intro"><span class="rg-eyebrow">LUCKY CIRCUIT / THREE-REEL TERMINAL</span><h3>Fortune favors the curious.</h3><p>Stake earned credits for a chance at more credits or a sealed chest. Every chest still needs fragments to open.</p></div><div class="rg-slot-machine ${spinning?'spinning':''} ${result?.ok?'has-result':''}"><div class="rg-machine-top"><span>GRIDFALL</span><i>★</i><span>SUPPLY DIVISION</span></div><div class="rg-reels" aria-label="${spinning?'Reels spinning':result?`Result: ${result.reels.join(', ')}`:'Three slot machine reels'}">${symbols.map((symbol,i)=>`<div class="rg-reel" style="--reel:${i}">${spinning?'<span class="rg-spinning-symbols" aria-hidden="true">◇<br>ϟ<br>▣<br>✦<br>◇</span>':`<span>${esc(symbol)}</span>`}</div>`).join('')}</div><div class="rg-machine-label"><span>ONE SPIN</span><strong>ϟ ${SLOT_COST}</strong><span>THREE REELS</span></div></div><div class="rg-slot-result" role="status" aria-live="polite">${spinning?'Circuit engaged…':result?esc(result.message||'Spin complete.'):ready?'Your next upgrade could be one spin away.':'Available at loot camp after you survive a battle.'}</div><button type="button" class="rg-primary rg-spin-button" data-action="spin" data-focus="spin" ${ready&&this.game.credits>=SLOT_COST&&!spinning?'':'disabled'}>${spinning?'Spinning…':'Spin the circuit'} <b>ϟ ${SLOT_COST}</b></button><p class="rg-fineprint">Optional. Credits are earned in this run. No real money or cash out.</p><details class="rg-odds"><summary data-focus="odds">Know your odds · show exact payouts</summary><p>Each spin independently chooses one outcome. Three matching symbols identify a payout; losses show three distinct symbols.</p><div class="rg-odds-table"><div><b>Outcome</b><b>Chance</b></div>${SLOT_PAYTABLE.map(outcome=>`<div><span>${esc(outcome.label|| (outcome.chestRarity?`${cap(outcome.chestRarity)} sealed chest`:outcome.credits?`${outcome.credits} credits`:'No payout'))}</span><span>${Number((outcome.probability*100).toFixed(3))}%</span></div>`).join('')}</div><p>Credit payouts are the total returned, before your ${SLOT_COST}-credit stake. Chests are sealed and cost fragments to unlock.</p></details></section>`;
+    return renderSlotMachine({game:this.game,spin:this.spin});
   }
   showChest(result){
     if(!result?.ok){this._result(result);return;}
@@ -277,6 +310,11 @@ export class RogueUI {
       const body=this.dialog.querySelector('.rg-body');if(body)body.scrollTop=0;
       return;
     }
+    if(a==='map-tower'){this._selectMapTower(Number(button.dataset.cell),{revealDetails:event.detail>0});return;}
+    if(a==='return-map'){
+      this.dialog.querySelector(`[data-action="map-tower"][data-cell="${Number(this.getSelectedCell())}"]`)?.focus({preventScroll:true});
+      this.dialog.querySelector('.rg-tower-map')?.scrollIntoView({block:'start',inline:'nearest'});return;
+    }
     if(a==='browse-attachments'){this.filter='attachment';this.open('inventory');return;}
     if(a==='board-equip'){const id=button.dataset.item;this.close();this.onBoardEquip(id);return;}
     if(a==='equip'){this._result(this._call('equipItem',Number(this.getSelectedCell()),button.dataset.item));return;}
@@ -294,7 +332,7 @@ export class RogueUI {
       if(!result.ok){this._result(result);return;}
       this.spin={result,done:Boolean(this.isReducedMotion()),elapsed:0};this.onSound('slotSpin');this.notice='';this.onChange(result);this._render();
       clearTimeout(this.spinTimer);
-      this.spinTimer=setTimeout(()=>{if(!this.spin)return;this.spin.done=true;this.onSound(result.reward?.credits||result.reward?.chestRarity?'slotWin':'slotLose');this._render();this.dialog.querySelector('[data-action="spin"]')?.focus({preventScroll:true});},this.isReducedMotion()?0:1700);
+      this.spinTimer=setTimeout(()=>{if(!this.spin)return;this.spin.done=true;this.onSound(result.reward?.credits||result.reward?.chestRarity||result.reward?.item?'slotWin':'slotLose');this._render();this.dialog.querySelector('[data-action="spin"]')?.focus({preventScroll:true});},this.isReducedMotion()?0:1700);
     }
   }
   _change(event){
@@ -302,7 +340,7 @@ export class RogueUI {
       const cell=Number(event.target.value);if(cell>=0){this.onInspect(cell);this.refresh();}
     }
   }
-  _focusable(){return Array.from(this.dialog.querySelectorAll('button:not(:disabled),select:not(:disabled),summary,a[href],input:not(:disabled)')).filter(node=>node.getClientRects().length&&!node.closest('[aria-hidden="true"]'));}
+  _focusable(){return Array.from(this.dialog.querySelectorAll('button:not(:disabled),select:not(:disabled),summary,a[href],input:not(:disabled)')).filter(node=>node.tabIndex!==-1&&node.getClientRects().length&&!node.closest('[aria-hidden="true"]'));}
   _moveFocus(delta){const nodes=this._focusable();if(!nodes.length)return;const index=nodes.indexOf(document.activeElement);const node=nodes[(index+delta+nodes.length)%nodes.length];node.focus({preventScroll:true});node.scrollIntoView({block:'nearest',inline:'nearest'});}
   handleController(action,dx=0,dy=0){
     if(!this.isOpen())return false;
@@ -313,7 +351,8 @@ export class RogueUI {
     }
     if(action==='move'){
       const node=document.activeElement;
-      if(node?.tagName==='SELECT'&&dx){const next=Math.min(node.options.length-1,Math.max(0,node.selectedIndex+Math.sign(dx)));node.selectedIndex=next;node.dispatchEvent(new Event('change',{bubbles:true}));}
+      if(node?.dataset.action==='map-tower'){if(!this._moveMapTower(node,Math.sign(dx),Math.sign(dy)))this._moveFocus(Math.sign(dy||dx)||1);}
+      else if(node?.tagName==='SELECT'&&dx){const next=Math.min(node.options.length-1,Math.max(0,node.selectedIndex+Math.sign(dx)));node.selectedIndex=next;node.dispatchEvent(new Event('change',{bubbles:true}));}
       else this._moveFocus(Math.sign(dy||dx)||1);
       return true;
     }
@@ -331,6 +370,11 @@ export class RogueUI {
     event.stopImmediatePropagation();
     if(event.key==='Escape'){event.preventDefault();this.close();return;}
     if(event.key==='Tab')return;
+    if(event.target?.dataset.action==='map-tower'){
+      const arrows={ArrowUp:[0,-1],ArrowDown:[0,1],ArrowLeft:[-1,0],ArrowRight:[1,0]};
+      if(arrows[event.key]){event.preventDefault();this._moveMapTower(event.target,...arrows[event.key]);return;}
+      if(event.key==='Home'||event.key==='End'){event.preventDefault();const cells=(this.game.towers||[]).map(tower=>tower.cell).sort((a,b)=>a-b);this._selectMapTower(event.key==='Home'?cells[0]:cells.at(-1));return;}
+    }
     const directions={ArrowUp:-1,ArrowDown:1,ArrowLeft:-1,ArrowRight:1};
     if(directions[event.key]&&event.target.tagName!=='SELECT'){event.preventDefault();this._moveFocus(directions[event.key]);}
   }
