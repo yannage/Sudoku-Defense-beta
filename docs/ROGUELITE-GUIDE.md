@@ -1,4 +1,4 @@
-# Gridfall 0.2.4 player guide
+# Gridfall 0.2.5 player guide
 
 Gridfall mixes timed Sudoku with tower defense and a run-long collection of equipment. Your numbers create the towers; your loot determines how they fight.
 
@@ -18,7 +18,7 @@ Only **one quick panel or equipment tray** opens at a time. Quick panels collaps
 
 For the full inventory, open Bag → **Details**. On smaller screens it uses a compact item list. Select an item to inspect its role, exact effect, stacking rules, and suggested pairing; **Back to items** returns to the list. Clear labels such as **Rapid Fire** appear first; the generated loot name remains flavor text.
 
-Chests, equipment, and quick-bar controls use matching voxel artwork. Item names, rarity labels, costs, and descriptions remain available alongside the art.
+The field-console interface uses an illuminated phase trail to show where you are in the round, numbered seed keys for planting, and equipment cartridges for your loot. Chests, equipment, and quick-bar controls use matching voxel artwork. Item names, rarity labels, costs, and descriptions remain available alongside the art.
 
 ## Choose a run
 

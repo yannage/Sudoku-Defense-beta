@@ -4,7 +4,7 @@ A Sudoku tower-defense roguelite alpha by Yak Studios. Solve a traditional grid,
 
 [Play Gridfall](https://gridfall.yakstudios.chatgpt.site) · [Player guide](docs/ROGUELITE-GUIDE.md)
 
-Version **0.2.4** makes equipment easier to understand and move around the board. Attachments show their combat role, a plain-language effect, and guidance for combining them. Drag from the bag onto a tower, move fitted gear between towers, or drop it back into the bag. Chest rewards give each find its own reveal and a clear explanation of what it can do.
+Version **0.2.5** gives Gridfall a field-console interface: illuminated phase controls, numbered seed keys, equipment cartridges, and illustrated expedition and loot menus. Ivory tiles, brass clamps, and mint inlays bring the board into the same visual style. The compact quick bar, direct equipment controls, and readable item effects keep play close to the board.
 
 The compact play layout fits the viewport and shows all nine number buttons. Bag opens the equipment tray in place of the number rail while keeping the board visible. Secondary controls live in the collapsible quick bar; open trays and menus pause the game clock. The full inventory remains available through Details.
 
@@ -37,7 +37,7 @@ npm run build
 
 Open `http://127.0.0.1:4173`. `dist/` contains the deployable web game and readable source; no bundler is required. The build command checks the static files, and tests exercise the simulation, items, input, and desktop boundaries.
 
-`dist/engine/` contains rendering, visual effects, procedural audio, and gamepad systems. `dist/game/simulation.js` owns Sudoku, economy, progression, and combat; `dist/game/items.js` defines equipment, rarity, and slot outcomes. `dist/app.js` connects the game to the board UI. `dist/quick-ui.js` owns the collapsible quick bar, `dist/loadout-ui.js` and `dist/loadout-ui.css` provide the board equipment tray, and `dist/cockpit.css` defines the compact game layout. `dist/rogue-ui.js` owns the full inventory, loot, and run setup panels. `dist/voxel-art.js` and `dist/voxel-art.css` provide shared voxel illustrations for those interfaces. Another game can reuse the engine modules, art helpers, deployment, and desktop shell with its own simulation and UI.
+`dist/engine/` contains rendering, visual effects, procedural audio, and gamepad systems. `dist/game/simulation.js` owns Sudoku, economy, progression, and combat; `dist/game/items.js` defines equipment, rarity, and slot outcomes. `dist/app.js` connects the game to the board UI. `dist/quick-ui.js` owns the collapsible quick bar, `dist/loadout-ui.js` and `dist/loadout-ui.css` provide the board equipment tray, and `dist/cockpit.css` defines the compact game layout. `dist/command-ui.css` adds the field-console presentation. `dist/rogue-ui.js` owns the full inventory, loot, and run setup panels. `dist/voxel-art.js` and `dist/voxel-art.css` provide shared voxel illustrations for those interfaces. Another game can reuse the engine modules, art helpers, deployment, and desktop shell with its own simulation and UI.
 
 ## Web deployment
 
@@ -52,7 +52,7 @@ npm run desktop
 npm run package:linux
 ```
 
-Packaging produces `release/Gridfall-0.2.4-x64.AppImage` and `release/linux-unpacked/`. Run `release/linux-unpacked/gridfall` directly or add it as a non-Steam game. Make the AppImage executable with `chmod +x release/*.AppImage`. The GitHub Actions artifact also contains a depot tarball that preserves executable permissions.
+Packaging produces `release/Gridfall-0.2.5-x64.AppImage` and `release/linux-unpacked/`. Run `release/linux-unpacked/gridfall` directly or add it as a non-Steam game. Make the AppImage executable with `chmod +x release/*.AppImage`. The GitHub Actions artifact also contains a depot tarball that preserves executable permissions.
 
 The Linux application embeds Electron and plays the web game offline. It uses the browser Gamepad API; start Deck testing with Steam Input's standard Gamepad layout. **F11** toggles desktop fullscreen. The shell serves local assets only on `127.0.0.1`, isolates web content from Node, blocks external navigation, and retains local data under Electron's user-data directory. It does not upload player data.
 

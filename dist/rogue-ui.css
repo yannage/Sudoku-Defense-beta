@@ -286,3 +286,250 @@
 .stage-1 .rg-reveal-rays,.stage-2 .rg-reveal-rays{animation:none;opacity:.4}
 .is-mystery .vx-chest-lid{transform:none!important;animation:none!important}
 .is-mystery .vx-chest-glow,.is-mystery .vx-chest-particles{opacity:0!important;animation:none!important}
+
+/* Field instruments — a warm, physical interface for living machinery. */
+.rogue-dialog{--rg-border:#405851;--rg-muted:#a2b8ae;--rg-mint:#9fe7c0;--rg-paper:#eeeada;--rg-apricot:#f6b675;color:var(--rg-paper);background:radial-gradient(ellipse at 100% 0,#47685319,transparent 58%),#101e24;border:1px solid #677d70;border-radius:6px 24px 6px 6px;box-shadow:0 0 0 5px #0b1518,0 0 0 6px #3c524955,0 30px 100px #000b;max-height:min(860px,calc(100dvh - 36px))}
+.rogue-dialog::backdrop{background:#040e10d6;backdrop-filter:blur(8px)}
+.rogue-dialog button:focus-visible,.rogue-dialog select:focus-visible,.rogue-dialog summary:focus-visible{outline-color:var(--rg-apricot);box-shadow:0 0 0 5px #122e24}
+.rogue-dialog h2,.rogue-dialog h3,.rogue-dialog h4{color:var(--rg-paper)}
+.rg-header{position:relative;padding:18px 25px;border-bottom:1px solid #445a50;background:linear-gradient(105deg,#1e3430,#16292b 70%);align-items:center}
+.rg-header:before{content:'';position:absolute;inset:0 auto 0 0;width:4px;background:linear-gradient(var(--rg-mint) 0 45%,#f6b675 45% 70%,#a9ace0 70%)}
+.rg-header-identity{display:flex;align-items:center;gap:17px;min-width:0}
+.rg-header-identity>div{min-width:0}
+.rg-header-seal{display:block;flex:none;width:62px;height:58px;border:1px solid #6f92784f;box-shadow:inset 0 0 0 4px #1b302a;background:repeating-linear-gradient(0deg,#8cd5ad08 0 1px,transparent 1px 5px),#263e33;transform:rotate(-4deg);border-radius:3px}
+.rg-header-seal .vx-art{transform:scale(1.25);transform-origin:50% 70%}
+.rg-header h2{font-size:30px;letter-spacing:-1.2px;font-weight:800;margin:4px 0 5px}
+.rg-header p{color:#aebeb2;font-size:12px}
+.rg-eyebrow{color:var(--rg-mint);font-size:9px;letter-spacing:1.6px}
+.rg-close{width:44px;height:44px;border:1px solid #607567;background:#21392f;border-radius:50%;color:#d6ddce;font-size:24px!important;box-shadow:0 3px 0 #0b1714}
+.rg-close:hover{background:#304c3f;border-color:var(--rg-apricot)}
+.rg-body{padding:24px;scrollbar-color:#5c7668 #101e24;background-image:radial-gradient(#8aba9d10 .75px,transparent .75px);background-size:9px 9px}
+.rg-footer{padding:14px 24px;background:#182c28;border-top:1px solid #405a4b;box-shadow:0 -6px 20px #09141133;color:#a1b5a7}
+.rg-footer>span b{color:#d6e3d2}
+.rg-primary{background:var(--rg-apricot);border:1px solid #ffdda5;color:#27362c;border-radius:4px 12px 4px 4px;box-shadow:0 4px 0 #a36d47,inset 0 1px 0 #ffecd166;min-height:44px;font-weight:800}
+.rg-primary:not(:disabled):hover{background:#ffd09b;border-color:#ffe9c3;box-shadow:0 4px 0 #a36d47,0 0 24px #f6b6751a}
+.rg-secondary{background:#233a32;border-color:#536e5f;color:#d2e5d7;border-radius:4px;box-shadow:0 2px 0 #0b1714;min-height:44px}
+.rg-secondary:not(:disabled):hover{background:#304d3e;border-color:#9fe7c0}
+.rg-text-button{color:#acdaba}
+.rg-fineprint{color:#94aa9d!important}
+.rg-toolbar{padding:0 24px;background:#0e1c20;border-color:#354d42;gap:16px}
+.rg-tabs{gap:7px;align-self:stretch;align-items:end;padding-top:7px}
+.rg-tabs>button{padding:11px 15px 12px;border:1px solid transparent;border-bottom:0;border-radius:5px 10px 0 0;font-size:12px;font-weight:700;color:#a1b7ac;min-height:44px}
+.rg-tabs>button.active{background:#30473b;border-color:#6f8b71;color:#ecf1dc;box-shadow:inset 0 3px 0 #a4e2b8}
+.rg-tabs>button>span{background:#142a24;color:#aed7b5;border-radius:2px}
+.rg-wallet{gap:12px;font-size:14px;font-variant-numeric:tabular-nums}
+.rg-wallet small{color:#9ab2a3}
+.rg-section-line h3{font-size:18px;font-weight:750;letter-spacing:-.5px}
+.rg-section-line>span{color:#9aafa2;font-size:10px}
+.rg-section-line{padding-bottom:10px;border-bottom:1px solid #3a51453d}
+.rg-notice{background:#263e30;border-color:#709778;border-radius:3px;color:#c8e8cd}
+
+/* The expedition is introduced as a small, collectible world. */
+.rg-expedition-hero{position:relative;display:grid;grid-template-columns:1.15fr 1fr;align-items:center;min-height:224px;padding:25px 30px;margin:0 0 22px;border:1px solid #65745d;border-radius:3px 16px 3px 3px;background:radial-gradient(ellipse at 80% 15%,#6f866024,transparent 65%),linear-gradient(110deg,#283c30,#182f2a);overflow:hidden;box-shadow:inset 0 0 0 5px #8ba07c08,0 7px 0 #08151455}
+.rg-expedition-hero:before{content:'';position:absolute;width:105px;height:105px;border:1px solid #a1b59022;left:-67px;top:-54px;transform:rotate(45deg)}
+.rg-hero-copy{position:relative;z-index:2;min-width:0}
+.rg-hero-stamp{display:inline-block;color:#172d24;background:#b4d5a8;font-size:8px;font-weight:800;letter-spacing:1.5px;padding:5px 7px;transform:rotate(-2deg);margin-bottom:13px}
+.rogue-dialog .rg-hero-copy h3{font-size:clamp(27px,3.3vw,39px);font-weight:800;letter-spacing:-1.7px;line-height:1.05;color:#f4eedb;margin:0 0 13px}
+.rg-hero-copy h3 em{font-style:normal;color:#b7d8ac}
+.rg-hero-copy p{font-size:12px;max-width:330px;line-height:1.6;color:#c4cebc}
+.rg-hero-caption{display:block;margin-top:16px;font-size:8px;color:#99b8a0;font-weight:700;letter-spacing:2px}
+.rg-field-scene{height:206px;position:relative;min-width:0;isolation:isolate}
+.rg-scene-grid{position:absolute;left:50%;top:33px;width:202px;height:202px;display:grid;grid-template-columns:repeat(5,1fr);gap:3px;transform:translateX(-50%) rotateX(55deg) rotateZ(-40deg);transform-style:preserve-3d;filter:drop-shadow(-11px 18px 0 #09181380)}
+.rg-scene-grid i{background:#718b65;border:1px solid #8ea782;box-shadow:0 3px 0 #354b38;position:relative}
+.rg-scene-grid i:nth-child(3n){background:#536f55;border-color:#688362}
+.rg-scene-grid i.route{background:#d6b583;border-color:#e5c69a;box-shadow:0 3px 0 #8c7457}
+.rg-scene-object{position:absolute;width:118px;height:104px;filter:drop-shadow(0 9px 4px #07141255)}
+.rg-scene-seed{left:calc(50% - 126px);top:61px;width:90px;height:78px;transform:rotate(-3deg)}
+.rg-scene-tower{left:calc(50% - 57px);top:-10px;width:145px;height:130px;z-index:2}
+.rg-scene-coil{left:calc(50% + 26px);top:70px;width:104px;height:92px;z-index:3}
+.rg-scene-cache{left:calc(50% - 107px);top:102px;width:104px;height:92px;z-index:4}
+.rg-scene-orbit{position:absolute;width:267px;height:146px;border:1px dashed #a8c19b30;border-radius:50%;left:50%;top:41px;transform:translateX(-50%) rotate(-22deg)}
+.rg-scene-marker{position:absolute;bottom:0;right:5px;font-size:8px;font-weight:700;letter-spacing:1.7px;color:#a3b998}
+.rg-scene-cross{position:absolute;color:#aac49788;font-size:21px;font-weight:300}.rg-scene-cross-a{top:12px;left:16px}.rg-scene-cross-b{bottom:12px;right:5px}
+.rg-mode-heading{margin-bottom:11px}
+.rg-mode-heading>span{font-size:9px;letter-spacing:1.4px;white-space:nowrap}
+.rg-mode-grid{gap:12px}
+.rg-mode{min-height:180px;border-radius:3px;border:1px solid #536653;background:linear-gradient(115deg,#20332d,#192b29);padding:18px 18px 28px;overflow:hidden;box-shadow:0 4px 0 #07171377;color:#eeeada}
+.rg-mode:before{content:'';position:absolute;left:0;top:0;bottom:0;width:5px;background:repeating-linear-gradient(0deg,#93a58822 0 5px,transparent 5px 10px)}
+.rg-mode.chosen{border-color:#d2c9a6;background:#e5dfc7;box-shadow:0 4px 0 #6e755d,inset 0 0 0 4px #fffdf433;color:#213d30}
+.rg-mode.chosen:before{background:repeating-linear-gradient(0deg,#35584488 0 5px,transparent 5px 10px)}
+.rg-mode-icon{position:absolute;right:-10px;top:-11px;width:81px;height:72px;opacity:.5;transform:rotate(7deg);pointer-events:none}
+.rg-mode.chosen .rg-mode-icon{opacity:.9}
+.rg-mode small{font-size:9px;color:#a3b5a3;letter-spacing:1.1px;position:relative;z-index:1;padding-right:27px}
+.rg-mode strong{font-size:25px;letter-spacing:-.8px;margin:11px 0 9px;position:relative}
+.rg-mode p{color:#aebdaf;font-size:11px;line-height:1.5}
+.rg-mode.chosen small{color:#4a6b53}.rg-mode.chosen p{color:#3a5946}
+.rg-mode.chosen .rg-select-dot{border-color:#284934;background:#355d40;box-shadow:inset 0 0 0 3px #e0dfbe}
+.rg-mode:hover{border-color:#b4ca9d}
+.rg-setup-difficulties{gap:20px;margin-top:23px}
+.rg-difficulty legend{color:#d8ddca;font-size:12px;letter-spacing:.2px}
+.rg-choice{background:#1b302b;border:1px solid #46604d;border-radius:3px;min-height:52px;color:#c3d0bd}
+.rg-choice span{color:#9bb1a0;font-size:10px}
+.rg-choice.chosen{background:#3e563d;border-color:#b4cc93;color:#f0f3d9;box-shadow:inset 3px 0 0 #b8d59f}
+.rg-choice.chosen span{color:#c2d7af}
+.rg-difficulty>p{color:#9fb5a5;font-size:11px}
+.rg-run-loop{border-color:#435840;color:#c0d1b9}
+.rg-run-loop i{border-color:#587c58;border-radius:50%;color:#bad99f}
+
+/* Equipment reads as a tray of specimen cards, with a separate inspection label. */
+.rg-filters{gap:6px}
+.rg-filters button{background:#1a2d29;border-color:#405b4c;color:#afc5b6;border-radius:3px;min-height:39px;padding:9px 11px}
+.rg-filters button.active{background:#b7c3d9;border-color:#d1d8e5;color:#263641;box-shadow:0 2px 0 #657480}
+.rg-filters button.active b{color:#3a5266}
+.rg-item-grid{gap:13px}
+.rg-item-card{display:grid;grid-template-columns:68px minmax(0,1fr);align-items:center;gap:14px;min-height:166px;border:1px solid #56624d;border-top:3px solid var(--loot);border-radius:3px 12px 3px 3px;background:linear-gradient(130deg,color-mix(in srgb,var(--loot),#1c302b 95%),#162826);padding:15px 13px 28px;box-shadow:0 4px 0 #06131180;isolation:isolate}
+.rg-item-card:before{content:'';position:absolute;left:0;right:0;bottom:21px;border-bottom:1px dashed #7b947746;pointer-events:none}
+.rg-item-card:hover,.rg-item-card.selected{background:linear-gradient(130deg,color-mix(in srgb,var(--loot),#263d31 88%),#21352c);border-color:var(--loot);box-shadow:0 4px 0 #06131180,0 0 0 2px color-mix(in srgb,var(--loot),transparent 75%)}
+.rg-item-art{width:68px;height:72px;margin:0;background:radial-gradient(ellipse,color-mix(in srgb,var(--loot),transparent 91%),transparent 72%);border:0;box-shadow:none;position:relative}
+.rg-item-art:before{content:'';position:absolute;inset:8px;border:1px solid color-mix(in srgb,var(--loot),transparent 79%);transform:rotate(45deg);border-radius:3px}
+.rg-item-art .vx-art{transform:scale(1.35);transform-origin:50% 63%}
+.rg-item-copy strong{font-size:16px;letter-spacing:-.4px;line-height:1.15;margin:7px 0;color:#eeeada}
+.rg-item-copy .rg-card-effect{font-size:11px;color:#c1d7c2;line-height:1.45}
+.rg-item-copy .rg-flavor{font-size:9px!important;color:#8da794!important;margin-top:6px}
+.rg-rarity{font-size:8px!important;letter-spacing:1px}
+.rg-item-corner{font-size:7px;letter-spacing:1.3px;bottom:7px;right:12px;color:#a1b49d}
+.rg-detail-card,.rg-mini-tower{background:linear-gradient(155deg,#2a3e33,#1a2f29);border:1px solid #6c7a60;border-radius:3px 12px 3px 3px;box-shadow:0 4px 0 #0a181266}
+.rg-detail-card h3{font-size:22px;letter-spacing:-.65px;color:#f2ecd8}
+.rg-detail-card .rg-detail-effect{color:#c1e3b9;font-size:15px}
+.rg-detail-card .rg-big-glyph{width:91px;height:78px;background:radial-gradient(ellipse,color-mix(in srgb,var(--loot),transparent 87%),transparent 70%);box-shadow:none;border:0}
+.rg-item-facts{border-color:#50654b}
+.rg-item-facts>span{color:#adc3ae}.rg-item-facts b{color:#dedec6}
+.rg-preview-note{border-color:#50654b;color:#9fb39f}
+.rg-stat-preview{background:#11261f;border-color:#4e6c53;border-radius:2px}.rg-stat-preview>span{color:#b8caba}.rg-stat-preview strong{color:#c1eaa7}
+.rg-stack-demo i{border-radius:2px;border-color:#536d54;background:#1d3228}
+.rg-tower-summary{background:linear-gradient(150deg,#263d32,#182d28);border-color:#657c60;border-radius:3px 14px 3px 3px;box-shadow:0 4px 0 #0a181266}
+.rg-tower-number{background:#dedec0;color:#2c5138;border-color:#f2edcf;border-radius:8px 20px 8px 8px;box-shadow:5px 6px 0 #0e2319;transform:rotate(-3deg)}
+.rg-tower-number span{color:#45674c}
+.rg-stat-grid{border-color:#4b604d}.rg-stat-grid strong{color:#e1eacb}.rg-stat-grid span{color:#a1b395}
+.rogue-dialog select{background:#152a23;border-color:#52705a;color:#dde9d5;border-radius:3px}
+.rg-equipment-slot{background:#1a2d28;border:1px dashed #4a6652;border-radius:3px;min-height:76px}
+.rg-equipment-slot.filled{background:linear-gradient(100deg,color-mix(in srgb,var(--loot),#263a2f 90%),#1c3029);border:1px solid color-mix(in srgb,var(--loot),#314b38 65%);box-shadow:inset 3px 0 0 var(--loot),0 3px 0 #08181066}
+.rg-equipment-slot strong{color:#e3e8d3}.rg-equipment-slot small{color:#9fb79e}
+.rg-slot-index{color:#9eb897;border:1px solid #4e6b51;border-radius:50%;width:25px;height:25px;display:grid;place-items:center}
+.rg-slot-glyph{width:50px;height:46px}.rg-build-summary{color:#b2d4ae}
+
+/* Loot camp is a quartermaster's counter, with stamped supplies. */
+.rg-camp-banner{display:flex;align-items:center;justify-content:space-between;gap:16px;position:relative;overflow:hidden;background:#ddd7bd;border:1px solid #f2ebce;border-radius:3px 13px 3px 3px;padding:22px 24px;margin-bottom:25px;box-shadow:0 5px 0 #4a5641}
+.rg-camp-banner .rg-eyebrow{color:#5a7051;font-size:8px}
+.rogue-dialog .rg-camp-banner h3{font-size:29px;color:#29412f;letter-spacing:-1px;line-height:1.1;margin:8px 0}
+.rg-camp-banner p{font-size:12px;color:#496048}
+.rg-camp-banner>span{display:flex;align-items:center;width:164px;height:88px;flex:none}
+.rg-camp-banner>span .vx-art{width:105px;flex:none;transform:rotate(-5deg);margin-left:-10px}
+.rg-camp-banner>span .vx-art+.vx-art{margin-left:-37px;transform:rotate(6deg)}
+.rg-camp-section{margin-bottom:27px}
+.rg-chest-card,.rg-shop-card{border-radius:3px 12px 3px 3px;background:linear-gradient(145deg,color-mix(in srgb,var(--loot),#23372d 93%),#172c26);border-color:color-mix(in srgb,var(--loot),#324b37 70%);box-shadow:0 4px 0 #08191099,inset 0 0 0 4px #c6d6b505}
+.rg-chest-card:before,.rg-chest-card:after{width:5px;height:5px;background:#93a186;border-color:#253e2e;border-radius:1px;box-shadow:0 1px 0 #ffffff1a}
+.rg-chest-card h4{font-size:21px;letter-spacing:-.6px}.rg-chest-card p{color:#adc1a7}.rg-chest-card.is-ready{border-color:color-mix(in srgb,var(--loot),#91a86b 28%)}
+.rg-shop-card h4{color:#dde4ca}.rg-shop-card p{color:#a4b79d}.rg-shop-card .rg-secondary{background:#293f2f}
+.rg-ready{color:#b0d695}
+.rg-passive{background:#20352b;border-color:#4f684e;border-radius:3px 10px 3px 3px;box-shadow:0 3px 0 #0a1a1255}
+.rg-passive h4{color:#e6e8d2}.rg-passive p{color:#aac0a3}.rg-passive small{color:#a8bf96}
+.rg-next-map{position:relative;background:linear-gradient(125deg,#2e4836,#1b322a);border:1px solid #729166;border-radius:3px 18px 3px 3px;padding:24px;box-shadow:inset 5px 0 0 #a2cb86}
+.rg-next-map h3{font-size:31px;letter-spacing:-1px;color:#e4eacb}.rg-next-map>div>p{color:#aec5a5}
+.rg-phase-notice{background:#263b2f;border-color:#50694c;border-radius:3px;color:#d6e4c8}
+.rg-phase-notice span{color:#aec3a6}
+.rg-empty{border-color:#435e4a;background:#182e2555}.rg-empty h4{color:#e1e4c9}
+
+/* Opened treasures and the circuit cabinet use the same handmade hardware. */
+.rg-reward-card{border-radius:4px 15px 4px 4px;background:linear-gradient(135deg,color-mix(in srgb,var(--loot),#2c4133 94%),#1b3028);box-shadow:0 5px 0 #07170f99;border-color:color-mix(in srgb,var(--loot),#3b593d 50%)}
+.rg-reward-card .rg-reward-purpose{color:#b2c5aa}.rg-reward-card .rg-reward-pair{color:#b8d7a5;border-color:#435d43}
+.rg-reward-card .rg-reward-effect{color:#e0edcd}
+.rg-reward-card.is-mystery{background:repeating-linear-gradient(135deg,#b7d6a70a 0 8px,transparent 8px 18px),#20372b}
+.rg-mystery-face strong{color:#eee6cd}.rg-reveal-copy{color:#d6e8c5}.rg-reveal-copy p{color:#9ab094}
+.rg-slot-machine{background:linear-gradient(110deg,#aa7d50,#d2aa70 30%,#aa7d50 100%);border-color:#e9cda0;box-shadow:0 8px 0 #5b5338,0 17px 35px #0005;border-radius:30px 30px 5px 5px}
+.rg-machine-top,.rg-machine-label{color:#332f20}.rg-machine-label strong{color:#233b2b}
+.rg-reels{background:#2b3d2c;border-color:#6e714f;box-shadow:inset 0 4px 7px #0007}
+.rg-reel{background:linear-gradient(#d1ccb3,#f2ebd0 35% 65%,#c2bda3);color:#496447;text-shadow:0 2px 0 #fffa}
+.rg-casino-intro h3{color:#e6e4ca}.rg-casino-intro p{color:#adc0a6}
+.rg-odds{border-color:#526b4c;background:#182d2399}.rg-odds summary{color:#b9d2a4}
+
+@media (hover:hover){
+  .rg-mode:not(:disabled):hover{transform:translateY(-2px);transition:transform .16s,background .16s}
+  .rg-item-card:not(:disabled):hover .rg-item-art{transform:translateY(-3px) rotate(-3deg);transition:transform .2s}
+  .rg-item-card.selected .rg-item-art{transform:rotate(-4deg)}
+}
+@media(max-width:900px){
+  .rogue-dialog{max-height:calc(100dvh - 26px);width:calc(100vw - 26px)}
+  .rg-header h2{font-size:26px}.rg-header-seal{width:54px;height:51px}.rg-header-identity{gap:13px}
+  .rg-expedition-hero{padding:22px;min-height:208px}.rg-field-scene{transform:scale(.9);transform-origin:center}
+  .rg-hero-copy h3{font-size:32px!important}.rg-mode{padding:17px 15px 27px;min-height:181px}.rg-mode strong{font-size:23px}
+  .rg-tabs>button{padding:11px 10px 12px;font-size:11px}.rg-wallet{font-size:12px}
+  .rg-item-card{grid-template-columns:60px minmax(0,1fr);min-height:153px;gap:11px}.rg-item-art{width:60px;height:65px}
+  .rg-camp-banner{padding:18px}.rg-camp-banner>span{width:137px}.rg-camp-banner h3{font-size:26px!important}
+}
+@media(max-width:700px){
+  .rogue-dialog{width:calc(100vw - 16px);max-height:calc(100dvh - 20px - env(safe-area-inset-top) - env(safe-area-inset-bottom));border-radius:5px 18px 5px 5px;box-shadow:0 0 0 3px #0b1518,0 0 0 4px #3c524955,0 20px 60px #000b}
+  .rg-header{padding:12px 13px;gap:10px}.rg-header-identity{gap:10px}.rg-header-seal{width:43px;height:42px;transform:rotate(-3deg)}
+  .rg-header h2{font-size:22px;letter-spacing:-.6px;line-height:1.1;margin:4px 0 1px}.rg-header .rg-eyebrow{font-size:7px;letter-spacing:1px}.rg-header p{font-size:10px;line-height:1.4;margin-top:7px}
+  .rg-close{width:40px;height:40px;min-width:40px}.rg-header-identity>div{min-width:0}
+  .rg-body{padding:15px 13px}.rg-footer{padding:10px 13px;gap:10px}.rg-footer>span{font-size:10px!important;max-width:43%}.rg-footer button{font-size:11px;min-height:44px;padding:10px 12px;gap:8px}
+  .rg-toolbar{padding:0 13px;gap:0}.rg-tabs{gap:2px;min-height:47px;padding-top:5px;justify-content:space-between}
+  .rg-tabs>button{padding:11px 9px 10px;font-size:11px;min-height:42px}.rg-wallet{padding:7px 0;border-color:#425b45;font-size:13px}.rg-wallet small{font-size:9px}
+  .rg-expedition-hero{min-height:184px;padding:18px 17px;grid-template-columns:1fr 105px;margin-bottom:20px;overflow:hidden}
+  .rogue-dialog .rg-hero-copy h3{font-size:27px!important;letter-spacing:-1.05px;line-height:1.04;margin-bottom:10px}
+  .rg-hero-copy p{font-size:10px;max-width:200px;line-height:1.5}.rg-hero-stamp{font-size:6px;letter-spacing:1.1px;margin-bottom:11px;padding:4px 5px}.rg-hero-caption{font-size:6px;letter-spacing:1.2px;margin-top:11px}
+  .rg-field-scene{height:155px;transform:scale(.72);transform-origin:50% 45%;width:180px;left:-35px;opacity:.95}.rg-scene-marker{display:none}.rg-scene-cross-a{left:-4px}.rg-scene-cross-b{right:-15px}
+  .rg-scene-tower{top:-19px}.rg-scene-coil{top:57px}.rg-scene-cache{top:87px}.rg-scene-seed{top:56px}.rg-scene-grid{top:17px}.rg-scene-orbit{top:25px}
+  .rg-mode-heading h3{font-size:15px}.rg-mode-heading>span{font-size:7px;letter-spacing:1px}.rg-mode-heading{margin-bottom:9px;padding-bottom:7px}
+  .rg-mode-grid{grid-template-columns:1fr;gap:9px}.rg-mode{min-height:0;padding:12px 42px 13px 15px;box-shadow:0 3px 0 #06171377;border-radius:3px 10px 3px 3px}
+  .rg-mode small{font-size:8px;letter-spacing:1px}.rg-mode strong{font-size:20px;line-height:1.2;margin:4px 0 5px}.rg-mode p{font-size:11px;line-height:1.45;max-width:250px}
+  .rg-mode-icon{right:-7px;top:3px;width:86px;height:76px;opacity:.18}.rg-mode.chosen .rg-mode-icon{opacity:.22}.rg-select-dot{right:15px}
+  .rg-setup-difficulties{margin-top:21px;gap:18px}.rg-difficulty legend{font-size:12px;margin-bottom:9px}.rg-choice{min-height:54px;padding:10px}.rg-choice span{font-size:9px;line-height:1.4}.rg-difficulty>p{font-size:11px;line-height:1.5}
+  .rg-filters{gap:4px}.rg-filters button{font-size:10px;min-height:40px;padding:8px 6px}.rg-filters b{font-size:9px}
+  .rg-section-line h3{font-size:16px}.rg-section-line>span{font-size:9px;line-height:1.4}
+  .rg-item-grid{gap:10px}.rg-item-card{display:flex;flex-direction:column;align-items:flex-start;gap:0;min-height:217px;padding:10px 10px 28px;box-shadow:0 3px 0 #06131180}
+  .rg-item-art{width:71px;height:62px;align-self:center;margin:0 0 8px}.rg-item-art:before{inset:8px 15px}
+  .rg-item-copy strong{font-size:15px;margin:7px 0 6px;line-height:1.1;letter-spacing:-.3px}.rg-item-copy .rg-card-effect{font-size:10px;line-height:1.45}.rg-rarity{font-size:8px!important;letter-spacing:.65px}.rg-item-copy .rg-flavor{font-size:8px!important;margin-top:6px}
+  .rg-item-corner{font-size:6px;letter-spacing:.65px;right:9px;bottom:8px}.rg-detail-card h3{font-size:22px}.rg-detail-card .rg-big-glyph{width:67px;height:58px;margin:5px 13px 6px 0}.rg-item-facts>span{font-size:11px}
+  .rg-detail-card>.rg-primary{font-size:12px}.rg-tower-summary{padding:14px}.rg-stat-grid strong{font-size:22px}.rg-equipment-slot{min-height:76px;gap:9px}.rg-slot-glyph{width:44px;height:42px}.rg-slot-index{width:22px;height:22px;font-size:8px}
+  .rg-camp-banner{padding:17px 15px;margin-bottom:22px;gap:6px;align-items:center}.rg-camp-banner .rg-eyebrow{font-size:6px;letter-spacing:1px}.rogue-dialog .rg-camp-banner h3{font-size:24px!important;margin:8px 0;line-height:1.05}.rg-camp-banner p{font-size:10px;line-height:1.5}.rg-camp-banner>span{width:88px;height:80px}.rg-camp-banner>span .vx-art{width:88px;margin-left:-10px}.rg-camp-banner>span .vx-art+.vx-art{display:none}
+  .rg-camp-section{margin-bottom:23px}.rg-chest-grid{gap:10px}.rg-chest-card{padding:13px 10px}.rg-chest-card h4{font-size:19px}.rg-chest-card p{font-size:10px}.rg-chest-card>small:last-child{font-size:9px}.rg-mini-chest{width:99px;height:79px}
+  .rg-shop-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.rg-shop-card{padding:14px 10px 10px}.rg-shop-card h4{font-size:13px}.rg-shop-card p{font-size:10px;line-height:1.45;margin-bottom:10px}.rg-shop-gem{width:83px;height:66px}
+  .rg-passive{grid-template-columns:34px 1fr auto;padding:13px 11px;gap:9px}.rg-passive button{font-size:11px;min-width:68px}.rg-passive p{font-size:10px}.rg-passive h4{font-size:13px}
+  .rg-next-map{padding:19px 15px}.rg-next-map h3{font-size:28px}.rg-next-map>div>p{font-size:11px}
+  .rg-reward-card{border-radius:4px 15px 4px 4px}.rg-reveal-body{padding-top:0}.rg-reward-card h4{font-size:22px}
+}
+@media(max-width:350px){
+  .rg-header-seal{display:none}.rg-header h2{font-size:21px}.rg-header .rg-eyebrow{font-size:7px}
+  .rg-tabs>button{font-size:10px;padding-inline:7px}.rg-tabs{gap:0}.rg-wallet{font-size:12px}.rg-footer>span{font-size:9px!important}.rg-footer button{font-size:10px;padding-inline:10px}
+  .rg-expedition-hero{grid-template-columns:1fr 66px;padding:17px 13px;min-height:184px}.rogue-dialog .rg-hero-copy h3{font-size:25px!important}.rg-hero-copy p{max-width:177px;font-size:10px}.rg-field-scene{transform:scale(.6);left:-61px;opacity:.8}
+  .rg-mode-heading h3{font-size:14px}.rg-mode-heading>span{font-size:6px}.rg-item-card{padding:10px 8px 28px;min-height:226px}.rg-item-copy strong{font-size:14px}.rg-item-copy .rg-card-effect{font-size:10px}.rg-rarity{font-size:7px!important}.rg-item-art{width:65px;height:61px}
+  .rg-filters button{font-size:9px;padding-inline:5px}.rg-filters b{font-size:8px}.rg-camp-banner>span{width:64px}.rg-camp-banner>span .vx-art{width:83px;margin-left:-17px}
+  .rg-chest-card h4{font-size:17px}.rg-mini-chest{width:85px;height:72px}.rg-passive{grid-template-columns:28px 1fr auto;gap:7px}.rg-passive button{min-width:56px;padding:9px;font-size:10px}.rg-passive-glyph{width:28px}.rg-passive h4{font-size:12px}
+}
+@media(max-height:540px) and (min-width:701px){
+  .rogue-dialog{max-height:calc(100dvh - 20px)}.rg-header{padding:8px 20px}.rg-header-identity{gap:11px}.rg-header-seal{width:38px;height:37px}.rg-header h2{font-size:21px;margin:3px 0}.rg-header p{display:none}.rg-header .rg-eyebrow{font-size:7px}.rg-close{width:36px;height:36px;min-height:36px}.rg-toolbar{padding-inline:20px}.rg-tabs{padding-top:3px}.rg-tabs>button{padding-block:8px;min-height:37px}.rg-body{padding:15px 20px}.rg-footer{padding:8px 20px}.rg-footer button{min-height:38px;padding-block:8px}.rg-expedition-hero{min-height:186px;padding:17px 24px}.rg-field-scene{height:173px;transform:scale(.8)}.rg-mode{min-height:171px}
+}
+@media(prefers-reduced-motion:reduce){.rogue-dialog *{transition:none!important;animation:none!important}}
+.rg-reduced-motion .rg-item-art,.rg-reduced-motion .rg-mode{transition:none!important}
+
+/* Deck-height expedition setup keeps both difficulty choices in the first view. */
+@media(min-width:701px) and (max-height:850px){
+  .rg-setup-mode .rg-header{padding:12px 24px}
+  .rg-setup-mode .rg-header h2{font-size:25px;margin:3px 0}
+  .rg-setup-mode .rg-header p{font-size:11px;line-height:1.4}
+  .rg-setup-mode .rg-header-seal{width:49px;height:46px}
+  .rg-setup-mode .rg-setup-body{padding:15px 24px}
+  .rg-setup-mode .rg-expedition-hero{height:151px;min-height:151px;padding:14px 24px;margin-bottom:13px}
+  .rg-setup-mode .rg-hero-copy h3{font-size:31px!important;line-height:1.02;margin-bottom:7px}
+  .rg-setup-mode .rg-hero-stamp{font-size:7px;padding:3px 6px;margin-bottom:8px}
+  .rg-setup-mode .rg-hero-copy p{font-size:11px;max-width:385px;line-height:1.4}
+  .rg-setup-mode .rg-hero-caption{font-size:7px;margin-top:8px}
+  .rg-setup-mode .rg-field-scene{height:123px;transform:translateY(-22px) scale(.69);transform-origin:50% 25%}
+  .rg-setup-mode .rg-mode-heading{margin-bottom:8px;padding-bottom:7px}
+  .rg-setup-mode .rg-mode-heading h3{font-size:16px}
+  .rg-setup-mode .rg-mode{min-height:127px;padding:13px 16px 21px}
+  .rg-setup-mode .rg-mode small{font-size:8px}
+  .rg-setup-mode .rg-mode strong{font-size:22px;margin:6px 0}
+  .rg-setup-mode .rg-mode p{font-size:10px;line-height:1.4}
+  .rg-setup-mode .rg-mode-icon{width:70px;height:62px}
+  .rg-setup-mode .rg-select-dot{width:11px;height:11px;bottom:11px;right:13px}
+  .rg-setup-mode .rg-setup-difficulties{margin-top:16px;gap:20px}
+  .rg-setup-mode .rg-difficulty legend{margin-bottom:8px;font-size:11px}
+  .rg-setup-mode .rg-choice{min-height:47px;padding:9px}
+  .rg-setup-mode .rg-choice strong{font-size:12px}
+  .rg-setup-mode .rg-choice span{font-size:9px;margin-top:4px}
+  .rg-setup-mode .rg-difficulty>p{font-size:10px;margin-top:7px;min-height:28px;line-height:1.4}
+  .rg-setup-mode .rg-run-loop{margin:13px 0 11px;padding:12px 0}
+  .rg-setup-mode .rg-footer{padding:11px 24px}
+}

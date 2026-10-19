@@ -280,20 +280,75 @@ export class VoxelRenderer {
   }
 
   _background() {
-    const c = this.ctx, w = this.w, h = this.h;
-    c.fillStyle = '#09111c'; c.fillRect(0, 0, w, h);
-    const glow = c.createRadialGradient(w * .51, h * .47, 20, w * .5, h * .5, Math.max(w, h) * .7);
-    glow.addColorStop(0, '#172b3a'); glow.addColorStop(.5, '#0d1b28'); glow.addColorStop(1, '#08101a');
+    const c = this.ctx, w = this.w, h = this.h, t = this.mix;
+    c.fillStyle = '#091915'; c.fillRect(0, 0, w, h);
+    const glow = c.createRadialGradient(w * .5, h * .43, 20, w * .5, h * .5, Math.max(w, h) * .7);
+    glow.addColorStop(0, '#244139'); glow.addColorStop(.5, '#102b28'); glow.addColorStop(1, '#081713');
     c.fillStyle = glow; c.fillRect(0, 0, w, h);
-    // A quiet coordinate field keeps the board grounded without a costly texture.
-    c.fillStyle = 'rgba(132,173,182,.11)';
-    for (let x = 22; x < w; x += 28) for (let y = 18; y < h; y += 28) c.fillRect(x, y, 1, 1);
-    for (let i = 0; i < 28; i++) {
-      const speed = this.reducedMotion ? 0 : this.time * (1.5 + hash(i + 800) * 3);
+    // An etched work surface around the machine, rather than an unbounded sky.
+    c.fillStyle = 'rgba(149,193,165,.065)';
+    for (let x = 22; x < w; x += 32) for (let y = 18; y < h; y += 32) c.fillRect(x, y, 1, 1);
+    if (t > .05) {
+      c.save();
+      // These are decorative contours outside the playable grid. They share its
+      // projection but cannot alter the board's geometry or pointer hit region.
+      for (let i = 0; i < 3; i++) {
+        const edge = .98 + i * .42;
+        const points = [[-edge, -edge], [8 + edge, -edge], [8 + edge, 8 + edge], [-edge, 8 + edge]].map(([x, y]) => this._project(x, y, -.6));
+        this._poly(points, null, alpha('#8bd5af', (.105 - i * .026) * t), .7);
+      }
+      c.lineWidth = 1;
+      for (let i = 0; i < 6; i++) {
+        const x = .25 + i * 1.48, y = i % 2 ? -1.2 : 9.2, sign = i % 2 ? -1 : 1;
+        const points = [[x, y], [x, y + sign * .45], [x + .35, y + sign * .8], [x + .7, y + sign * .8]].map(([px, py]) => this._project(px, py, -.6));
+        c.strokeStyle = alpha('#9fb88b', .17 * t); c.beginPath();
+        points.forEach((p, n) => n ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y)); c.stroke();
+        const end = points[points.length - 1];
+        c.fillStyle = alpha('#a1d9b7', .34 * t); c.fillRect(end.x - 1, end.y - 1, 2, 2);
+      }
+      c.restore();
+    }
+    // A few drifting seed motes soften the machine without competing with loot.
+    for (let i = 0; i < 16; i++) {
+      const speed = this.reducedMotion ? 0 : this.time * (1 + hash(i + 800) * 2);
       const x = hash(i + 101) * w, y = (hash(i + 200) * h - speed % h + h) % h;
-      const flicker = .1 + .15 * Math.sin(this.time * .5 + i);
-      c.fillStyle = alpha(i % 4 ? '#86b5c9' : '#ffcc83', Math.max(.03, flicker));
+      const opacity = this.reducedMotion ? .12 : .09 + .06 * Math.sin(this.time * .5 + i);
+      c.fillStyle = alpha(i % 4 ? '#a4dcc2' : '#d4ad72', opacity);
       c.fillRect(x, y, i % 5 === 0 ? 2 : 1, i % 5 === 0 ? 2 : 1);
+    }
+  }
+
+  _boardMount() {
+    const c = this.ctx, t = this.mix;
+    const plane = (x1, y1, x2, y2, z = 0) => [this._project(x1, y1, z), this._project(x2, y1, z), this._project(x2, y2, z), this._project(x1, y2, z)];
+    // Three shallow machined layers keep the ceramic grid seated in a physical
+    // object. Their footprint fits the existing margins; projection is unchanged.
+    this._cube(4, 4, -.48, 9.36, 9.36, .17, '#122b26');
+    this._cube(4, 4, -.31, 9.38, 9.38, .075, '#927654');
+    this._cube(4, 4, -.235, 9.32, 9.32, .22, '#365b4e');
+    this._poly(plane(-.61, -.61, 8.61, 8.61), '#19372f', alpha('#b9c9aa', .52), .8);
+    this._poly(plane(-.535, -.535, 8.535, 8.535), '#4b7665', alpha('#a9ddbf', .55), .7);
+    if (t > .01) {
+      c.save(); c.globalAlpha = t;
+      // Recessed mint status inlays and copper separators on the two front faces.
+      for (let i = 0; i < 9; i++) {
+        const color = i % 3 === 1 ? '#a0d8b7' : '#5b8d73';
+        const front = [this._project(i - .3, 8.665, -.12), this._project(i + .3, 8.665, -.12), this._project(i + .3, 8.665, -.19), this._project(i - .3, 8.665, -.19)];
+        const side = [this._project(8.665, i - .3, -.12), this._project(8.665, i + .3, -.12), this._project(8.665, i + .3, -.19), this._project(8.665, i - .3, -.19)];
+        this._poly(front, color); this._poly(side, shade(color, .77));
+      }
+      for (const n of [2.5, 5.5]) {
+        this._cube(n, 8.625, -.285, .11, .065, .2, '#b48b59');
+        this._cube(8.625, n, -.285, .065, .11, .2, '#b48b59');
+      }
+      c.restore();
+    }
+    // L-shaped brass clamps sit outside the Sudoku surface, never over a digit.
+    for (const [x, y, dx, dy] of [[-.68, -.68, 1, 1], [8.68, -.68, -1, 1], [8.68, 8.68, -1, -1], [-.68, 8.68, 1, -1]]) {
+      const points = [[x, y], [x + dx * .72, y], [x + dx * .72, y + dy * .105], [x + dx * .105, y + dy * .105], [x + dx * .105, y + dy * .72], [x, y + dy * .72]].map(([px, py]) => this._project(px, py, .012));
+      this._poly(points, '#b49564', '#d7bd8d', .55);
+      const screw = this._project(x + dx * .048, y + dy * .048, .013), radius = Math.max(.8, this.unit * .026);
+      c.fillStyle = '#354435'; c.beginPath(); c.ellipse(screw.x, screw.y, radius, radius * lerp(1, .6, t), 0, 0, Math.PI * 2); c.fill();
     }
   }
 
@@ -317,27 +372,13 @@ export class VoxelRenderer {
       color: preview.color || MODULES[preview.dragKind]?.color || '#8ef8d4',
       source: Number.isInteger(preview.sourceCell) ? preview.sourceCell : -1
     } : null;
-    const corners = [this._project(-.62, -.62), this._project(8.62, -.62), this._project(8.62, 8.62), this._project(-.62, 8.62)];
-
-    // Ambient shadow, then the sculpted floating-island foundation.
+    // A grounded shadow under the layered botanical machine chassis.
     const groundY = this.cy + this.isoSize * 2.8 * t;
     c.save(); c.translate(this.cx, groundY); c.scale(1, lerp(1, .31, t));
     const shadow = c.createRadialGradient(0, 0, 0, 0, 0, this.flatSize * 5.1);
     shadow.addColorStop(0, 'rgba(0,0,0,.64)'); shadow.addColorStop(1, 'rgba(0,0,0,0)');
     c.fillStyle = shadow; c.fillRect(-this.flatSize * 5.1, -this.flatSize * 5.1, this.flatSize * 10.2, this.flatSize * 10.2); c.restore();
-    this._poly(corners, mix('#59717d', '#284557', t), alpha('#a7d8df', .25), 1);
-    if (t > .01) {
-      c.globalAlpha = t;
-      for (let i = 0; i < 9; i++) {
-        this._cube(i, 8, -.46 - hash(i + 4) * .2, .99, .99, .43 + hash(i + 4) * .2, i % 3 === 0 ? '#345a67' : '#284553');
-        this._cube(8, 8 - i, -.46 - hash(i + 81) * .2, .99, .99, .43 + hash(i + 81) * .2, i % 3 === 1 ? '#345a67' : '#243d50');
-      }
-      for (let i = 0; i < 5; i++) {
-        const p = this._project(i * 1.65 + .3, 8.3, -.55 - .12 * hash(i + 40));
-        this._glow(p.x, p.y, this.isoSize * .44, i % 2 ? '#4acbbd' : '#6b9ad3', .13);
-      }
-      c.globalAlpha = 1;
-    }
+    this._boardMount();
 
     for (let depth = 0; depth <= 16; depth++) {
       for (let y = 0; y < 9; y++) {
@@ -346,21 +387,21 @@ export class VoxelRenderer {
         const block = (Math.floor(x / 3) + Math.floor(y / 3)) % 2;
         const isSelected = cell === selected;
         const allied = selected >= 0 && (x === sx || y === sy || (Math.floor(x / 3) === Math.floor(sx / 3) && Math.floor(y / 3) === Math.floor(sy / 3)));
-        let flatColor = block ? '#e3eae7' : '#f0f1e8';
-        if (allied) flatColor = block ? '#c9e1df' : '#d5e8e2';
-        if (selectedNumber && value === selectedNumber) flatColor = '#b9dedc';
-        if (isSelected) flatColor = '#96d8d5';
-        let combatColor = block ? '#355561' : '#40636a';
-        if (!value) combatColor = block ? '#254451' : '#2c4c55';
-        if (tower) combatColor = tower.illegal ? '#603d52' : '#48666b';
-        if (isSelected) combatColor = '#4a9295';
+        let flatColor = block ? '#e4e8d9' : '#f1efdd';
+        if (allied) flatColor = block ? '#ccdec9' : '#d9e5cd';
+        if (selectedNumber && value === selectedNumber) flatColor = '#badfc7';
+        if (isSelected) flatColor = '#9ed9bd';
+        let combatColor = block ? '#345649' : '#416958';
+        if (!value) combatColor = block ? '#243e35' : '#2c4b3e';
+        if (tower) combatColor = tower.illegal ? '#603d52' : '#4b6f58';
+        if (isSelected) combatColor = '#518c6d';
         const inset = .012 + t * .026;
         const pts = this._tile(x, y, inset);
         this._poly(pts, mix(flatColor, combatColor, t));
         if (t > .3) {
           c.globalAlpha = t * .5;
           c.beginPath(); c.moveTo(pts[3].x, pts[3].y); c.lineTo(pts[0].x, pts[0].y); c.lineTo(pts[1].x, pts[1].y);
-          c.strokeStyle = '#73958c'; c.lineWidth = 1; c.stroke(); c.globalAlpha = 1;
+          c.strokeStyle = '#86a890'; c.lineWidth = 1; c.stroke(); c.globalAlpha = 1;
           if (!value && hash(cell + 91) > .74) {
             const p = this._project(x + .19, y + .13);
             c.fillStyle = alpha('#80a19a', .15 * t); c.fillRect(p.x, p.y, 3, 1.5);
@@ -395,7 +436,7 @@ export class VoxelRenderer {
     for (const n of [-.5, 2.5, 5.5, 8.5]) {
       for (const points of [[this._project(n, -.5), this._project(n, 8.5)], [this._project(-.5, n), this._project(8.5, n)]]) {
         c.beginPath(); c.moveTo(points[0].x, points[0].y); c.lineTo(points[1].x, points[1].y);
-        c.lineWidth = lerp(2.2, 2.7, t); c.strokeStyle = mix('#41656a', '#142b3c', t); c.stroke();
+        c.lineWidth = lerp(2.2, 2.7, t); c.strokeStyle = mix('#4a6956', '#142b23', t); c.stroke();
       }
     }
     this._route(state.route || []);
@@ -789,7 +830,7 @@ export class VoxelRenderer {
     c.font = '600 9px "Space Grotesk", system-ui';
     if (t < .9) {
       c.globalAlpha = (1 - t) * .6;
-      c.fillStyle = '#99b2b9';
+      c.fillStyle = '#afc9b3';
       for (let i = 0; i < 9; i++) {
         const top = this._project(i, -.5), left = this._project(-.5, i);
         c.fillText(String(i + 1).padStart(2, '0'), top.x, top.y - 14);

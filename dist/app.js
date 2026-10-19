@@ -93,7 +93,7 @@ for (const t of TOWERS) {
   button.className = 'tower-card'; button.dataset.number = t.number;
   button.style.setProperty('--tower-color', t.color);
   button.setAttribute('aria-label', `Plant number ${t.number}. Basic bolt seed. Add attachments to customize.`);
-  button.innerHTML = `<span class="tower-num">${t.number}</span><span class="tower-reserve">×1</span><strong>Seed ${t.number}</strong><small>Family level 1</small><span class="shortcut">${t.number}</span>`;
+  button.innerHTML = `<span class="seed-art" aria-hidden="true">${voxelArt('seed', { color: t.color })}</span><span class="tower-num">${t.number}</span><span class="seed-card-copy"><strong>Seed ${t.number}</strong><small>Family level 1</small></span><span class="tower-reserve">×1</span><span class="shortcut">${t.number}</span>`;
   button.addEventListener('click', () => { selectNumber(t.number); place(); });
   deck.append(button);
 }
@@ -242,6 +242,34 @@ function inspectTower() {
   $('costValue').textContent = `ϟ ${TOWERS[selectedNumber - 1].cost}`;
   $('buyBtn').disabled = game.credits < TOWERS[selectedNumber - 1].cost || ['won', 'lost'].includes(game.phase);
 }
+let specimenKey = '';
+function updateResource(id, value) {
+  const el = $(id), previous = Number(el.textContent);
+  el.textContent = value;
+  if (value > previous && !reduced && el.animate) {
+    el.getAnimations?.().forEach(animation => animation.cancel());
+    el.animate([{ transform: 'translateY(2px) scale(1)', color: '#fff5d4' }, { transform: 'translateY(-2px) scale(1.18)', color: '#fff5d4', offset: .3 }, { transform: 'translateY(0) scale(1)' }], { duration: 420, easing: 'ease-out' });
+  }
+}
+function refreshField(phase, tower, total) {
+  const battle = phase === 'battle', prep = phase === 'prep', loot = phase === 'loot' || phase === 'won';
+  $('phaseStep').textContent = battle ? '03' : prep ? '02' : loot ? '04' : '01';
+  $('fieldSector').textContent = String(game.wave).padStart(2, '0');
+  $('fieldTotal').textContent = `/ ${game.maxWaves}`;
+  $('fieldTitle').innerHTML = battle ? 'Hold.<br>The. Line.' : prep ? 'Built by you.<br>Ready for anything.' : loot ? 'A little luck.<br>A lot of possibility.' : phase === 'lost' ? 'New roots.<br>New chances.' : 'Grow your<br>advantage.';
+  $('fieldGuidance').textContent = battle ? 'Your answers made this road. Your towers make the difference.' : prep ? 'Fit your gear. Find a combination. Launch when you’re ready.' : loot ? 'Claim your finds. Build something better for the next battlefield.' : 'Every answer is a seed. Every seed is a possibility.';
+  $('fieldMetric').textContent = battle ? `${game.enemies.length} HOSTILES ON THE GRID` : `${game.towers.length} TOWERS GROWN`;
+  $('fieldProgress').style.width = `${Math.min(100, (game.roundSolvedCount || 0) / Math.max(1, total) * 100)}%`;
+  const n = tower?.number || selectedNumber, family = game.familyLevels[n] || 1;
+  const key = `${n}:${!!tower}`;
+  if (key !== specimenKey) { $('specimenArt').innerHTML = voxelArt(tower ? 'tower' : 'seed', { color: TOWERS[n - 1].color }); specimenKey = key; }
+  $('specimenArt').style.setProperty('--specimen-color', TOWERS[n - 1].color);
+  $('specimenKicker').textContent = tower ? 'TOWER SPECIMEN' : 'SEED SPECIMEN';
+  $('specimenNumber').textContent = String(n).padStart(2, '0');
+  $('specimenName').textContent = tower ? `${tower.attachments.length} / 5 modules fitted` : 'Ready to take root.';
+  $('specimenDetail').textContent = tower ? `Family level ${family} · Tower level ${tower.level || 1}. Open Bag to shape its firepower.` : `Family level ${family} · ${game.inventory[n]} in reserve. Correct answers grow this tower.`;
+  $('specimenFoot').textContent = tower ? 'YOUR BUILD. YOUR RULES.' : 'GROW SOMETHING DANGEROUS.';
+}
 function refresh() {
   const phase = game.phase, battle = phase === 'battle', prep = phase === 'prep', loot = phase === 'loot', finished = ['won', 'lost'].includes(phase);
   for (const p of ['battle', 'prep', 'loot']) $('app').classList.toggle(p, phase === p);
@@ -251,7 +279,7 @@ function refresh() {
   $('waveValue').innerHTML = `${String(game.wave).padStart(2, '0')}<span>/ ${String(game.maxWaves).padStart(2, '0')}</span>`;
   $('healthValue').textContent = game.health; $('healthBar').style.width = `${game.health / game.maxHealth * 100}%`;
   $('healthValue').nextElementSibling.textContent = `/ ${game.maxHealth}`;
-  $('creditsValue').textContent = game.credits; $('fragmentsValue').textContent = game.fragments;
+  updateResource('creditsValue', game.credits); updateResource('fragmentsValue', game.fragments);
   $('chestsValue').textContent = game.chests.length; $('bagCount').textContent = game.items.length + game.chests.length;
   $('scoreValue').textContent = String(game.score).padStart(4, '0');
   $('corruptionValue').textContent = `${Math.round(game.corruption * 7.5)}%`; $('corruptionValue').style.color = game.corruption ? '#ffad7b' : '';
@@ -295,7 +323,7 @@ function refresh() {
   const legal = notes && !filled && phase === 'solve' ? game.candidates(selectedCell) : [];
   for (const b of deck.children) b.classList.toggle('candidate', legal.includes(Number(b.dataset.number)));
   $('campBtn').hidden = !['prep', 'loot', 'won'].includes(phase);
-  inspectTower(); rogue.refresh(); quick?.refresh(); loadout?.refresh(); syncLoadoutState();
+  refreshField(phase, tower, total); inspectTower(); rogue.refresh(); quick?.refresh(); loadout?.refresh(); syncLoadoutState();
   $('motionBtn').textContent = `Reduce motion: ${reduced ? 'on' : 'off'}`;
   $('bestScore').textContent = `BEST SCORE ${storage.get('gridfall-best', 0).toLocaleString()}`;
 }
