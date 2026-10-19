@@ -1,0 +1,1 @@
+{"name":"sudoku-defense-marketing","private":true,"type":"module","scripts":{"stills":"node render-trailer.mjs --stills","steam":"node render-trailer.mjs","instagram":"node render-trailer.mjs --vertical"},"dependencies":{"@napi-rs/canvas":"0.1.100"}}

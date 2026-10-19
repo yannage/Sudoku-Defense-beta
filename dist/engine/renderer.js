@@ -1,5 +1,5 @@
 /**
- * GRIDFALL / voxel canvas renderer
+ * SUDOKU DEFENSE / voxel canvas renderer
  * A dependency-free, resolution-independent presentation layer. The simulation
  * owns the state; this module owns projection, picking, and short-lived FX.
  */

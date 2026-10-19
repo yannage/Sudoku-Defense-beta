@@ -1,4 +1,4 @@
-# Gridfall 0.2 integration contract
+# Sudoku Defense 0.2 integration contract
 
 Game(seed, options), reset(seed, options): options {mode:'campaign'|'freeplay'|'locked',sudokuDifficulty:'easy'|'medium'|'hard',combatDifficulty:'easy'|'medium'|'hard'}.
 Phases: solve -> prep -> battle -> loot -> next board (solve); final battle -> won. Campaign/locked 50 rounds; freeplay 1. `wave` is current round, `maxWaves`, `mode`, `sudokuDifficulty`, `combatDifficulty` exposed. Existing board, givens, solution, inventory[1..9] for reserve seeds, towers, enemies, route, timer, health, credits, etc preserved.

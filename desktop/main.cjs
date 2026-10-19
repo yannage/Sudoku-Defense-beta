@@ -2,6 +2,11 @@ const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('node:path');
 const { createGameServer } = require('./server.cjs');
 const { serializeStorage, readStorage, writeStorage } = require('./storage.cjs');
+const { legacyProfilePath } = require('./profile.cjs');
+
+// Retain the established save/profile directory after the display-name rebrand.
+// Set it before the single-instance lock so upgrades share the original profile.
+app.setPath('userData', legacyProfilePath(app.getPath('appData')));
 
 let window;
 let gameServer;
@@ -20,7 +25,7 @@ function save(event, value) {
     if (json !== lastSaved) writeStorage(storagePath, json);
     lastSaved = json;
     return true;
-  } catch (error) { console.error('Could not save Gridfall data:', error.message); return false; }
+  } catch (error) { console.error('Could not save Sudoku Defense data:', error.message); return false; }
 }
 
 if (!app.requestSingleInstanceLock()) {
@@ -38,7 +43,7 @@ if (!app.requestSingleInstanceLock()) {
     window = new BrowserWindow({
       width: 1280, height: 800, minWidth: 960, minHeight: 600,
       icon: path.join(__dirname, 'icon.png'),
-      title: 'Gridfall', backgroundColor: '#12132b', show: false,
+      title: 'Sudoku Defense', backgroundColor: '#12132b', show: false,
       fullscreen: !process.argv.includes('--windowed'), autoHideMenuBar: true,
       webPreferences: {
         preload: path.join(__dirname, 'preload.cjs'),
@@ -63,7 +68,7 @@ if (!app.requestSingleInstanceLock()) {
     await window.loadURL(gameServer.origin);
   }).catch(error => {
     console.error(error);
-    dialog.showErrorBox('Gridfall could not start', error.message);
+    dialog.showErrorBox('Sudoku Defense could not start', error.message);
     app.quit();
   });
   app.on('window-all-closed', () => app.quit());

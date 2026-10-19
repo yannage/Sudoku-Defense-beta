@@ -1,6 +1,6 @@
-# Gridfall 0.2.6 player guide
+# Sudoku Defense 0.2.7 player guide
 
-Gridfall mixes timed Sudoku with tower defense and a run-long collection of equipment. Your numbers create the towers; your loot determines how they fight.
+Sudoku Defense mixes timed Sudoku with tower defense and a run-long collection of equipment. Your numbers create the towers; your loot determines how they fight.
 
 ## The board and quick bar
 

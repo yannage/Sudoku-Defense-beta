@@ -1,8 +1,9 @@
 {
-  "name": "gridfall",
-  "version": "0.2.6",
+  "name": "sudoku-defense",
+  "productName": "Sudoku Defense",
+  "version": "0.2.7",
   "private": true,
-  "description": "A Sudoku tower-defense game and reusable voxel game foundation by Yak Studios.",
+  "description": "Sudoku Defense: a Sudoku tower-defense game and reusable voxel game foundation by Yak Studios.",
   "desktopName": "studio.yak.gridfall",
   "author": "Yak Studios",
   "license": "UNLICENSED",
@@ -25,17 +26,17 @@
   },
   "build": {
     "appId": "studio.yak.gridfall",
-    "productName": "Gridfall",
+    "productName": "Sudoku Defense",
     "asar": true,
     "directories": { "output": "release" },
     "files": ["dist/**/*", "desktop/**/*", "package.json"],
     "linux": {
       "target": ["AppImage", "dir"],
       "category": "Game",
-      "executableName": "gridfall",
+      "executableName": "sudoku-defense",
       "syncDesktopName": true,
       "icon": "desktop/icon.png",
-      "artifactName": "Gridfall-${version}-${arch}.${ext}"
+      "artifactName": "Sudoku-Defense-${version}-${arch}.${ext}"
     }
   }
 }

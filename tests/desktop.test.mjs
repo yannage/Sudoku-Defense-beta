@@ -1,15 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, symlink, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, symlink, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
 import { createGameServer } from '../desktop/server.cjs';
 import { serializeStorage, readStorage, writeStorage } from '../desktop/storage.cjs';
+import { legacyProfilePath } from '../desktop/profile.cjs';
 
 test('offline server serves ES modules and rejects writes, invalid hosts, and escaped paths', async t => {
   const root = await mkdtemp(path.join(tmpdir(), 'gridfall-http-'));
-  await writeFile(path.join(root, 'index.html'), '<html>Gridfall</html>');
+  await writeFile(path.join(root, 'index.html'), '<html>Sudoku Defense</html>');
   await writeFile(path.join(root, 'game.js'), 'export const ready = true;');
   await writeFile(path.join(root, '.private.json'), '{"secret":true}');
   await symlink('/etc/passwd', path.join(root, 'outside.json'));
@@ -19,7 +20,7 @@ test('offline server serves ES modules and rejects writes, invalid hosts, and es
   const index = await fetch(server.origin);
   assert.equal(index.status, 200);
   assert.match(index.headers.get('content-security-policy'), /object-src 'none'/);
-  assert.equal(await index.text(), '<html>Gridfall</html>');
+  assert.equal(await index.text(), '<html>Sudoku Defense</html>');
   const module = await fetch(`${server.origin}/game.js`);
   assert.match(module.headers.get('content-type'), /javascript/);
   assert.equal((await fetch(server.origin, { method: 'POST' })).status, 405);
@@ -44,4 +45,25 @@ test('desktop saves preserve JSON strings across origins and reject malformed or
   assert.equal(serializeStorage(['array']), null);
   await writeFile(filename, 'broken JSON');
   assert.deepEqual(readStorage(filename), {});
+});
+
+test('rebranded desktop keeps saved progress from either legacy profile name', async t => {
+  const root = await mkdtemp(path.join(tmpdir(), 'sudoku-defense-profile-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  for (const legacyName of ['Gridfall', 'gridfall']) {
+    const appData = path.join(root, legacyName);
+    const profile = path.join(appData, legacyName);
+    const otherProfile = path.join(appData, legacyName === 'Gridfall' ? 'gridfall' : 'Gridfall');
+    await mkdir(otherProfile, { recursive: true });
+    const saved = { 'gridfall-run-v2': '{"wave":12}', 'gridfall-muted': 'false' };
+    writeStorage(path.join(profile, 'game-storage.json'), serializeStorage(saved));
+    const selected = legacyProfilePath(appData);
+    assert.equal(selected, profile);
+    assert.deepEqual(readStorage(path.join(selected, 'game-storage.json')), saved);
+    assert.equal(legacyProfilePath(appData), selected, 'profile choice remains stable on restart');
+  }
+  const freshData = path.join(root, 'fresh');
+  const freshProfile = legacyProfilePath(freshData);
+  writeStorage(path.join(freshProfile, 'game-storage.json'), serializeStorage({ 'gridfall-run-v2': '{}' }));
+  assert.equal(legacyProfilePath(freshData), freshProfile);
 });

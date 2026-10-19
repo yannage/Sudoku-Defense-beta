@@ -1,0 +1,19 @@
+/* The compact two-line game title shares the field console's palette. */
+.cockpit .brand { gap:9px; }
+.cockpit .brand-wordmark {
+  display:flex; flex-direction:column; gap:2px;
+  font-size:18px; font-weight:950; line-height:.88; letter-spacing:1.25px;
+  color:#f1ecda; text-shadow:0 2px 0 #071513;
+}
+.cockpit .brand-wordmark>span:last-child {
+  color:#9fe7c0; font-size:13px; letter-spacing:2.25px; line-height:1;
+}
+@media(max-width:700px) {
+  .cockpit .brand { gap:8px; }
+  .cockpit .brand-wordmark { font-size:16px; letter-spacing:1px; }
+  .cockpit .brand-wordmark>span:last-child { font-size:11px; letter-spacing:2.1px; }
+}
+@media(min-width:740px) and (max-height:540px) {
+  .cockpit .brand-wordmark { font-size:15px; gap:1px; }
+  .cockpit .brand-wordmark>span:last-child { font-size:10px; letter-spacing:2.15px; }
+}

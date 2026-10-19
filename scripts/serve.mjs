@@ -22,5 +22,5 @@ const server = http.createServer(async (req, res) => {
     res.end(req.method === 'HEAD' ? null : data);
   } catch (error) { fail(error instanceof URIError ? 400 : 404); }
 });
-server.listen(port, '0.0.0.0', () => console.log(`Gridfall preview is running on http://0.0.0.0:${port}`));
+server.listen(port, '0.0.0.0', () => console.log(`Sudoku Defense preview is running on http://0.0.0.0:${port}`));
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => server.close(() => process.exit(0)));
