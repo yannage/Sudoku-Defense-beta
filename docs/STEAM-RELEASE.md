@@ -16,7 +16,11 @@ Confirmed in the owner's Steamworks session on October 21, 2026 (America/New_Yor
 | Uploaded source commit | `a6ba368b09dff0236b7cc70aeac280c07281b44f` |
 | Source CI run | [39249279780](https://github.com/yannage/Sudoku-Defense-beta/actions/runs/39249279780) |
 
-The Linux ZIP was uploaded as a Standard replacement and committed in Steamworks. An upload record does not establish that a particular branch is active, that store/build review passed, or that the game has released. Check those states in the live dashboard.
+The Linux ZIP was uploaded as a Standard replacement and committed in Steamworks. Build **26122487** is now active on the **default** branch, confirmed in both the branch listing and build history. The app configuration was published successfully.
+
+Developer Comp package **1309911** includes app **3721150** and depot **3721151**, with its release override enabled for developer access. Beta-testing package **1309912** and store package **1309913** also carry the Sudoku Defense name.
+
+The English short description and About section, plus developer/publisher information, have been saved. The trailer entry still needs the actual video file: upload `Sudoku-Defense-Steam-Trailer.mp4` through Steamworks' file-drop control. No Valve review or release was submitted during this migration. Default-branch activation and published app configuration do not establish store approval or public release.
 
 Keep future updates on this same app and depot. Package 1309913 is a store entitlement, not an upload destination or depot ID. Do not create a new Steam app for routine updates.
 
@@ -60,6 +64,7 @@ Configuration semantics follow Valve's [SteamPipe documentation](https://partner
 | Architecture | 64-bit |
 | Arguments | Empty |
 | Working directory | Empty (installation root) |
+| Installation folder | `Sudoku Defense` |
 
 Use the exact filename without a leading slash or `./`. The executable, Electron libraries, and `resources/` directory must share the same installed layout. Ensure depot 3721151 is included in the store and developer testing packages.
 
