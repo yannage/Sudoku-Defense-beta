@@ -1,0 +1,13 @@
+"AppBuild"
+{
+    "AppID" "3721150"
+    "Desc" "Sudoku Defense - Linux web/Electron build"
+    "ContentRoot" "../release/linux-unpacked"
+    "BuildOutput" "../release/steam-build-output"
+    "Preview" "0"
+    "SetLive" ""
+    "Depots"
+    {
+        "3721151" "depot_build_3721151.vdf"
+    }
+}

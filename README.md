@@ -58,7 +58,7 @@ Packaging produces `release/Sudoku-Defense-0.2.7-x64.AppImage` and `release/linu
 
 The Linux application embeds Electron and plays the web game offline. It uses the browser Gamepad API; start Deck testing with Steam Input's standard Gamepad layout. **F11** toggles desktop fullscreen. The shell serves local assets only on `127.0.0.1`, isolates web content from Node, blocks external navigation, and retains local data in the legacy `Gridfall` or `gridfall` directory under Electron's app-data directory so existing desktop saves and settings continue to work. Web save keys also remain unchanged. It does not upload player data.
 
-Physical Steam Deck testing, performance tuning, full controller-only playthroughs, and Steamworks submission remain release work. This is not a Steam Deck compatibility certification. See the [Steam release checklist](docs/STEAM-RELEASE.md).
+The primary Steam target is app **3721150**, Linux depot **3721151**, and store package **1309913**. Version 0.2.7 has been uploaded as build **26122487**; branch activation, review status, and release status are verified separately in Steamworks. Future web/Electron updates use the checked-in `steam/` scripts, which do not automatically activate a branch. Physical Steam Deck testing, performance tuning, full controller-only playthroughs, and release review remain required. See the [Steam release checklist](docs/STEAM-RELEASE.md).
 
 ## Desktop dependencies
 
