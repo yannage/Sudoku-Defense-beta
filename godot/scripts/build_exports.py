@@ -153,10 +153,15 @@ def main() -> None:
     if not args.skip_import:
         run([args.godot, "--headless", "--path", str(PROJECT), "--editor", "--import", "--quit"], logs / "import.log")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_run.gd"], logs / "simulation-tests.log", expected="PASS:")
+    run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_sudoku.gd"], logs / "sudoku-tests.log", expected="SUDOKU_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_ui_flow.gd"], logs / "ui-flow-tests.log", expected="UI_FLOW_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_ui_flow.gd", "--", "--canvas-graphics"], logs / "canvas-ui-flow-tests.log", expected="UI_FLOW_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_controller_flow.gd"], logs / "controller-tests.log", expected="CONTROLLER_FLOW_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_controller_flow.gd", "--", "--canvas-graphics"], logs / "canvas-controller-tests.log", expected="CONTROLLER_FLOW_PASS")
+    run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_touch_flow.gd"], logs / "touch-tests.log", expected="TOUCH_FLOW_PASS")
+    run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_touch_flow.gd", "--", "--canvas-graphics"], logs / "canvas-touch-tests.log", expected="TOUCH_FLOW_PASS")
+    run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_family_workshop.gd"], logs / "family-workshop-tests.log", expected="FAMILY_WORKSHOP_PASS")
+    run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_family_workshop.gd", "--", "--canvas-graphics"], logs / "canvas-family-workshop-tests.log", expected="FAMILY_WORKSHOP_PASS")
     if args.render_check:
         for script, flag, logfile, marker in [
             ("test_rendering.gd", "--safe-graphics", "rendering-tests.log", "RENDER_PASS"),

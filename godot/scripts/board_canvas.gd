@@ -4,12 +4,13 @@ extends Node2D
 ## This deliberately has no MeshInstance3D, SubViewport texture or spatial shader.
 ## The exact same authoritative run model drives the native and canvas renderers.
 
-const FAMILY_COLORS: Array[Color] = [Color("6de8ff"), Color("a4c7ff"), Color("c6a0ff"), Color("ffae68"), Color("fb86c3"), Color("9be878"), Color("ffe188"), Color("bb9bff"), Color("ff7289")]
+const FAMILY_COLORS: Array[Color] = [Color("6de8ff"), Color("a4c7ff"), Color("c6a0ff"), Color("ffae68"), Color("fb86c3"), Color("9be878"), Color("ffe188"), Color("bb9bff"), Color("dec3ed")]
 const MODULE_COLORS: Dictionary = {"rapid":Color("6de8ff"), "electric":Color("c6a0ff"), "frost":Color("a4c7ff"), "blast":Color("ffae68"), "venom":Color("9be878"), "range":Color("ffe188"), "power":Color("fb86c3"), "gravity":Color("bb9bff"), "nova":Color("ff7289")}
 
 var run: RefCounted
 var selected_cell: int = -1
-var selected_number: int = 1
+var selected_number: int = 0
+var _family_focus: int = 0
 var reduced_motion: bool = false
 var _board_rect: Rect2 = Rect2()
 var _clock: float = 0.0
@@ -28,6 +29,9 @@ var _enemy_positions: Dictionary = {}
 var _enemy_angles: Dictionary = {}
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var _font: Font
+var _drop_cell: int = -1
+var _drop_number: int = 0
+var _drop_allowed: bool = false
 
 func setup(model: RefCounted) -> void:
 	run = model
@@ -71,7 +75,19 @@ func tick(dt: float) -> void:
 
 func set_selected(cell: int, number: int = 0) -> void:
 	selected_cell = cell
-	if number > 0: selected_number = number
+	selected_number = clampi(number, 0, 9)
+	queue_redraw()
+
+func set_drop_preview(cell: int, number: int, allowed: bool) -> void:
+	_drop_cell = cell if cell >= 0 and cell < 81 else -1
+	_drop_number = clampi(number, 0, 9)
+	_drop_allowed = allowed
+	queue_redraw()
+
+func set_family_focus(number: int) -> void:
+	var value: int = clampi(number,0,9)
+	if _family_focus == value: return
+	_family_focus = value
 	queue_redraw()
 
 func set_panel_open(_value: bool) -> void:
@@ -161,6 +177,7 @@ func _draw() -> void:
 	if _blend > 0.08: _draw_route()
 	_draw_selection()
 	_draw_digits()
+	_draw_drop_preview()
 	_faces.clear()
 	if _blend > 0.05: _draw_gates()
 	for key: Variant in run.towers:
@@ -169,6 +186,7 @@ func _draw() -> void:
 	_flush_faces()
 	_draw_entity_labels()
 	_draw_effects()
+	_draw_tower_badges()
 
 func _draw_island() -> void:
 	# Layered floating chassis. All faces are normal 2D polygons, including trim.
@@ -191,46 +209,78 @@ func _draw_island() -> void:
 func _draw_tiles() -> void:
 	for cell: int in range(81):
 		var alternate: bool = ((cell%9)/3 + (cell/9)/3)%2 == 0
-		var paper: Color = Color("e8ecdf") if alternate else Color("d6e5dd")
+		var paper: Color = Color("f4f3e9") if alternate else Color("e4eee8")
 		var tactical: Color = Color("20474c") if alternate else Color("193e44")
 		if run.givens[cell]: tactical = tactical.lightened(0.025)
 		if selected_cell >= 0 and (cell%9 == selected_cell%9 or cell/9 == selected_cell/9):
-			paper = paper.lerp(Color("a6d4c5"),0.28)
+			paper = paper.lerp(Color("97cebc"),0.32)
 			tactical = tactical.lightened(0.045)
-		if int(run.board[cell]) == selected_number:
-			paper = paper.lerp(Color("afd9ca"),0.32)
+		var matching: bool = selected_number > 0 and int(run.board[cell]) == selected_number
+		if _family_focus > 0: matching = run.towers.has(cell) and int(run.towers[cell].number) == _family_focus
+		if matching:
+			paper = Color("c3e3ed")
+			tactical = Color("285b6e")
 		if cell == selected_cell:
-			paper = Color("9bdccc")
+			paper = Color("ffe6a6")
 			tactical = Color("326b65")
 		var pos: Vector3 = _cell_pos(cell)
 		var color: Color = paper.lerp(tactical,_blend)
 		draw_colored_polygon(_quad(pos,0.492,0.0),color)
-		# A hairline edge gives a clean regular Sudoku board in the solve phase.
-		var edge: Color = Color("789a95").lerp(Color("315e62"),_blend)
-		_polyline_closed(_quad(pos,0.5,0.001),edge,maxf(0.55,_scale*0.012))
-	var grid: Color = Color("507a79").lerp(Color("55918a"),_blend)
-	for boundary: float in [-4.5,-1.5,1.5,4.5]:
-		draw_line(project_point(Vector3(boundary,0.01,-4.5)),project_point(Vector3(boundary,0.01,4.5)),grid,maxf(1.6,_scale*0.047),true)
-		draw_line(project_point(Vector3(-4.5,0.01,boundary)),project_point(Vector3(4.5,0.01,boundary)),grid,maxf(1.6,_scale*0.047),true)
+		if matching:
+			var match_color: Color = FAMILY_COLORS[_family_focus-1].lightened(0.18) if _family_focus > 0 else Color("77d8ee")
+			_polyline_closed(_quad(pos,0.445,0.025),Color("357991").lerp(match_color,_blend),maxf(1.35,_scale*0.032))
+	# Draw each shared edge once, with a minimum pixel weight on small screens.
+	# The 3x3 separators are intentionally much stronger than cell boundaries.
+	for line: int in range(10):
+		var boundary: float = float(line)-4.5
+		var major: bool = line%3 == 0
+		var grid: Color = Color("193b46").lerp(Color("6ca69c"),_blend) if major else Color("83989a").lerp(Color("355b61"),_blend)
+		var width: float = maxf(2.6,_scale*0.075) if major else maxf(1.0,_scale*0.026)
+		draw_line(project_point(Vector3(boundary,0.01,-4.5)),project_point(Vector3(boundary,0.01,4.5)),grid,width,true)
+		draw_line(project_point(Vector3(-4.5,0.01,boundary)),project_point(Vector3(4.5,0.01,boundary)),grid,width,true)
 
 func _draw_digits() -> void:
 	for cell: int in range(81):
 		var number: int = int(run.board[cell])
 		if number <= 0: continue
 		var planted: bool = run.towers.has(cell)
-		var color: Color = Color("294954").lerp(Color("a4c6bd"),_blend)
+		if planted and _blend > 0.60: continue
+		var color: Color = Color("17343f").lerp(Color("c2d8d1"),_blend)
 		if planted:
-			color = FAMILY_COLORS[number-1].darkened(0.43).lerp(FAMILY_COLORS[number-1],_blend)
-			if bool(run.towers[cell].illegal): color = Color("e6767a").lerp(Color("ff9c9c"),_blend)
+			color = FAMILY_COLORS[number-1].darkened(0.55).lerp(FAMILY_COLORS[number-1],_blend)
+			if bool(run.towers[cell].illegal): color = Color("9d2440").lerp(Color("ff9c9c"),_blend)
 		var pos: Vector3 = _cell_pos(cell)
 		if planted: pos.z += _blend*0.32
-		var font_size: int = maxi(10,roundi(_scale*lerpf(0.52,0.34 if planted else 0.40,_blend)))
+		var font_size: int = maxi(10,roundi(_scale*lerpf(0.58,0.34 if planted else 0.40,_blend)))
 		_text_center(str(number),project_point(pos),font_size,color)
+
+func _draw_tower_badges() -> void:
+	if _blend <= 0.60: return
+	for key: Variant in run.towers:
+		var cell: int = int(key)
+		var number: int = int(run.towers[cell].number)
+		var focused: bool = number == (_family_focus if _family_focus > 0 else selected_number)
+		# Keep the compact ID beside the body so it cannot cover the next row's
+		# colored turret roof in the flatter portrait camera.
+		var center: Vector2 = project_point(_cell_pos(cell)+Vector3(0.22,0.13,0.28))
+		var size: int = maxi(16,roundi(_scale*(0.49 if focused else 0.46)))
+		var color: Color = Color("fff4d5") if cell == selected_cell else FAMILY_COLORS[number-1].lightened(0.25 if focused else 0.08)
+		if bool(run.towers[cell].illegal): color = Color("ff9c9c")
+		var text: String = str(number)
+		var width: float = _font.get_string_size(text,HORIZONTAL_ALIGNMENT_LEFT,-1,size).x
+		var badge_size: Vector2 = Vector2(width+8.0,float(size)+3.0)
+		var badge: Rect2 = Rect2(center-badge_size*0.5,badge_size)
+		draw_rect(badge.grow(1.0),Color("0a202a"))
+		draw_rect(badge,Color("102a35"))
+		draw_rect(badge,color if focused else Color(color,0.55),false,2.0 if focused else 1.0)
+		var baseline: Vector2 = center+Vector2(-width*0.5,(_font.get_ascent(size)-_font.get_descent(size))*0.5)
+		draw_string_outline(_font,baseline,text,HORIZONTAL_ALIGNMENT_LEFT,-1,size,maxi(3,roundi(_scale*0.07)),Color("0a202a"))
+		draw_string(_font,baseline,text,HORIZONTAL_ALIGNMENT_LEFT,-1,size,color)
 
 func _draw_selection() -> void:
 	if selected_cell < 0 or selected_cell >= 81: return
 	var pos: Vector3 = _cell_pos(selected_cell)
-	var tint: Color = Color("328d83").lerp(Color("8dffce"),_blend)
+	var tint: Color = Color("187568").lerp(Color("8dffce"),_blend)
 	if run.towers.has(selected_cell) and _blend > 0.7:
 		var radius: float = float(run.tower_stats(selected_cell).get("range",2.4))
 		for i: int in range(48):
@@ -242,11 +292,23 @@ func _draw_selection() -> void:
 			# Range hints are clipped to the battlefield to protect the compact HUD.
 			if absf(start.x) <= 4.5 and absf(start.z) <= 4.5 and absf(finish.x) <= 4.5 and absf(finish.z) <= 4.5:
 				draw_line(project_point(start),project_point(finish),Color(tint,0.48),maxf(1.0,_scale*0.024),true)
-	_polyline_closed(_quad(pos,0.455,0.02),tint,maxf(2.0,_scale*0.052))
-	for x: float in [-0.44,0.44]:
-		for z: float in [-0.44,0.44]:
-			var point: Vector2 = project_point(pos+Vector3(x,0.03,z))
-			draw_rect(Rect2(point-Vector2.ONE*_scale*0.035,Vector2.ONE*_scale*0.07),tint)
+	_polyline_closed(_quad(pos,0.455,0.02),Color("13333d"),maxf(3.6,_scale*0.10))
+	_polyline_closed(_quad(pos,0.455,0.03),tint,maxf(1.8,_scale*0.043))
+	for x: float in [-0.415,0.415]:
+		for z: float in [-0.415,0.415]:
+			var point: Vector2 = project_point(pos+Vector3(x,0.04,z))
+			var side: float = maxf(3.0,_scale*0.095)
+			draw_rect(Rect2(point-Vector2.ONE*side*0.5,Vector2.ONE*side),Color("ffe6a6"))
+
+func _draw_drop_preview() -> void:
+	if _drop_cell < 0 or _drop_cell >= 81: return
+	var pos: Vector3 = _cell_pos(_drop_cell)
+	var tint: Color = Color("81efc0") if _drop_allowed else Color("ff788b")
+	_polyline_closed(_quad(pos,0.455,0.035),Color("13333d"),maxf(4.0,_scale*0.12))
+	_polyline_closed(_quad(pos,0.455,0.04),tint,maxf(2.0,_scale*0.06))
+	if int(run.board[_drop_cell]) == 0 and _drop_number > 0:
+		var ink: Color = Color("176a54").lerp(Color("c2ffe3"),_blend) if _drop_allowed else Color("9c2440").lerp(Color("ffacb9"),_blend)
+		_text_center(str(_drop_number),project_point(pos),maxi(10,roundi(_scale*0.58)),ink)
 
 func _draw_route() -> void:
 	if run.route.size() < 2: return

@@ -3,7 +3,7 @@ extends RefCounted
 
 const Sudoku = preload("res://scripts/sudoku.gd")
 const Loot = preload("res://scripts/loot.gd")
-const COLORS: Array[String] = ["6de8ff", "a4c7ff", "c6a0ff", "ffae68", "fb86c3", "9be878", "ffe188", "bb9bff", "ff7289"]
+const COLORS: Array[String] = ["6de8ff", "a4c7ff", "c6a0ff", "ffae68", "fb86c3", "9be878", "ffe188", "bb9bff", "dec3ed"]
 const DIFFICULTIES: Dictionary = {
 	"easy":{"clues":48, "duration":150.0, "hp":0.72, "speed":0.85, "count":0.85, "reward":0.9},
 	"medium":{"clues":36, "duration":120.0, "hp":1.0, "speed":1.0, "count":1.0, "reward":1.0},
@@ -159,7 +159,7 @@ func place(cell: int, number: int) -> Dictionary:
 		return _fail("Printed clues stay fixed." if givens[cell] else "Select this tower to upgrade it.", cell)
 	var correct: bool = solution[cell] == number
 	var illegal: bool = not correct or not Sudoku.legal(board, cell, number)
-	if phase == "solve" and not correct:
+	if phase == "solve" and illegal:
 		combo = 0
 		return _fail("That number does not solve this square. Try the candidate notes.", cell)
 	if phase == "battle":
@@ -666,7 +666,9 @@ func _step(dt: float) -> void:
 				progress = float(enemy.progress)
 		if not target.is_empty():
 			_fire(tower,target,stats)
-			tower.cooldown = stats.interval
+			# Carry elapsed time past the shot boundary into the next interval,
+			# so larger steps at 2x/4x do not reduce the tower's fire rate.
+			tower.cooldown = float(tower.cooldown) + float(stats.interval)
 		else: tower.cooldown = 0.0
 	enemies = enemies.filter(func(enemy: Dictionary) -> bool: return float(enemy.hp)>0.0)
 	if spawned >= spawn_total and enemies.is_empty(): _finish_wave()
@@ -734,8 +736,19 @@ func load_data(data: Dictionary) -> bool:
 	if not DIFFICULTIES.has(str(state.get("puzzle_difficulty",""))) or not DIFFICULTIES.has(str(state.get("combat_difficulty",""))): return false
 	if int(state.get("round_no",0)) < 1 or int(state.round_no) > 50: return false
 	if not state.get("passives") is Dictionary or state.route.size()<2: return false
+	# Validate the original puzzle separately from player moves: emergency
+	# towers can deliberately violate Sudoku during battle and after a loss.
+	var clue_board: Array[int] = []
 	for i in range(81):
-		if int(state.board[i])<0 or int(state.board[i])>9 or int(state.solution[i])<1 or int(state.solution[i])>9: return false
+		var digit: Variant = state.board[i]
+		if not (digit is int or digit is float) or not state.givens[i] is bool: return false
+		var value: float = float(digit)
+		if not is_finite(value) or value != floorf(value) or value < 0.0 or value > 9.0: return false
+		clue_board.append(int(digit) if state.givens[i] else 0)
+	if not Sudoku.valid_puzzle({"board":clue_board,"solution":state.solution,"givens":state.givens}): return false
+	if not str(state.phase) in ["battle","lost"]:
+		for i in range(81):
+			if int(state.board[i]) != 0 and int(state.board[i]) != int(state.solution[i]): return false
 	for point in state.route:
 		if not point is Array or point.size()!=2: return false
 	for tower in state.towers:

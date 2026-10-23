@@ -2,13 +2,14 @@ class_name DefenseBoard
 extends Node3D
 ## Native voxel battlefield. The run model is authoritative; this node only renders it.
 
-const FAMILY_COLORS: Array[Color] = [Color("6de8ff"), Color("a4c7ff"), Color("c6a0ff"), Color("ffae68"), Color("fb86c3"), Color("9be878"), Color("ffe188"), Color("bb9bff"), Color("ff7289")]
+const FAMILY_COLORS: Array[Color] = [Color("6de8ff"), Color("a4c7ff"), Color("c6a0ff"), Color("ffae68"), Color("fb86c3"), Color("9be878"), Color("ffe188"), Color("bb9bff"), Color("dec3ed")]
 const MODULE_COLORS: Dictionary = {"rapid":Color("6de8ff"), "electric":Color("c6a0ff"), "frost":Color("a4c7ff"), "blast":Color("ffae68"), "venom":Color("9be878"), "range":Color("ffe188"), "power":Color("fb86c3"), "gravity":Color("bb9bff"), "nova":Color("ff7289")}
 const VoxelMaterial = preload("res://scripts/voxel_material.gd")
 
 var run: RefCounted
 var selected_cell: int = -1
-var selected_number: int = 1
+var selected_number: int = 0
+var _family_focus: int = 0
 var reduced_motion: bool = false
 var camera: Camera3D
 var _clock: float = 0.0
@@ -38,6 +39,16 @@ var _shake: float = 0.0
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var _tile_mats: Array[Material] = []
 var _grid_mats: Array[Material] = []
+var _fine_grid_mats: Array[Material] = []
+var _match_frames: Array[Node3D] = []
+var _match_accent: Material
+var _selection_accent: Material
+var _drop_preview: Node3D
+var _drop_label: Label3D
+var _drop_accent: Material
+var _drop_cell: int = -1
+var _drop_number: int = 0
+var _drop_allowed: bool = false
 var _environment: Environment
 var _board_rect: Rect2 = Rect2()
 
@@ -104,9 +115,10 @@ func _build_world() -> void:
 		for q: int in range(-4, 5):
 			_box(_world, Vector3(side * 4.84, -0.43, q), Vector3(0.045, 0.09, 0.42), Color("52c9ba"), true)
 			_box(_world, Vector3(q, -0.43, side * 4.84), Vector3(0.42, 0.09, 0.045), Color("52c9ba"), true)
+	_match_accent = VoxelMaterial.create(Color("357991"), true)
 	for i: int in range(81):
 		var pos: Vector3 = _cell_pos(i)
-		var material: Material = VoxelMaterial.create(Color("dbe5d6"))
+		var material: Material = VoxelMaterial.create(Color("f4f3e9"), true)
 		_tile_mats.append(material)
 		var tile: MeshInstance3D = _box(_world, pos + Vector3(0, -0.075, 0), Vector3(0.97, 0.12, 0.97), Color.WHITE)
 		tile.material_override = material
@@ -122,20 +134,55 @@ func _build_world() -> void:
 		label.position = pos + Vector3(0, 0.008, 0.035)
 		_world.add_child(label)
 		_labels.append(label)
-	for boundary: float in [-4.52, -1.5, 1.5, 4.52]:
-		var mat: Material = VoxelMaterial.create(Color("496f71"), true)
-		_grid_mats.append(mat)
-		var a: MeshInstance3D = _box(_world, Vector3(boundary, 0.003, 0), Vector3(0.045, 0.016, 9.06), Color.WHITE)
+		var match_frame: Node3D = Node3D.new()
+		_world.add_child(match_frame)
+		match_frame.position = pos
+		_square_frame(match_frame, 0.89, 0.032, Color.WHITE, 0.035)
+		for edge: MeshInstance3D in match_frame.get_children(): edge.material_override = _match_accent
+		match_frame.visible = false
+		_match_frames.append(match_frame)
+	# Give every square an explicit ink line. Tile gaps alone disappear under
+	# desktop lighting/MSAA; thicker 3x3 dividers keep Sudoku groups unmistakable.
+	for line: int in range(10):
+		var boundary: float = float(line) - 4.5
+		var major: bool = line % 3 == 0
+		var thickness: float = 0.075 if major else 0.026
+		var mat: Material = VoxelMaterial.create(Color("193b46") if major else Color("83989a"), true)
+		if major: _grid_mats.append(mat)
+		else: _fine_grid_mats.append(mat)
+		var a: MeshInstance3D = _box(_world, Vector3(boundary, 0.006, 0), Vector3(thickness, 0.018, 9.075), Color.WHITE)
 		a.material_override = mat
-		var b: MeshInstance3D = _box(_world, Vector3(0, 0.003, boundary), Vector3(9.06, 0.016, 0.045), Color.WHITE)
+		var b: MeshInstance3D = _box(_world, Vector3(0, 0.006, boundary), Vector3(9.075, 0.018, thickness), Color.WHITE)
 		b.material_override = mat
 	_selection = Node3D.new()
 	_world.add_child(_selection)
-	_square_frame(_selection, 0.98, 0.043, Color("76edd0"), 0.038)
-	for x: float in [-0.45, 0.45]:
-		for z: float in [-0.45, 0.45]:
-			_box(_selection, Vector3(x, 0.10, z), Vector3(0.08, 0.17, 0.08), Color("baffdf"), true)
+	_square_frame(_selection, 0.91, 0.10, Color("13333d"), 0.065)
+	var selection_trim: Node3D = Node3D.new()
+	_selection.add_child(selection_trim)
+	_square_frame(selection_trim, 0.91, 0.043, Color.WHITE, 0.125)
+	_selection_accent = VoxelMaterial.create(Color("187568"), true)
+	for edge: MeshInstance3D in selection_trim.get_children(): edge.material_override = _selection_accent
+	for x: float in [-0.415, 0.415]:
+		for z: float in [-0.415, 0.415]:
+			_box(_selection, Vector3(x, 0.14, z), Vector3(0.095, 0.08, 0.095), Color("ffe6a6"), true)
 	_selection.visible = false
+	_drop_preview = Node3D.new()
+	_world.add_child(_drop_preview)
+	_square_frame(_drop_preview, 0.91, 0.12, Color("13333d"), 0.16)
+	var drop_trim: Node3D = Node3D.new()
+	_drop_preview.add_child(drop_trim)
+	_square_frame(drop_trim, 0.91, 0.06, Color.WHITE, 0.235)
+	_drop_accent = VoxelMaterial.create(Color("81efc0"), true)
+	for edge: MeshInstance3D in drop_trim.get_children(): edge.material_override = _drop_accent
+	_drop_label = Label3D.new()
+	_drop_label.font_size = 72
+	_drop_label.pixel_size = 0.0106
+	_drop_label.outline_size = 0
+	_drop_label.shaded = false
+	_drop_label.rotation_degrees.x = -90.0
+	_drop_label.position = Vector3(0, 0.10, 0.035)
+	_drop_preview.add_child(_drop_label)
+	_drop_preview.visible = false
 	_range_root = Node3D.new()
 	_world.add_child(_range_root)
 	# Sparse voxel plants and edge terminals leave every playable cell readable.
@@ -201,12 +248,30 @@ func tick(dt: float) -> void:
 
 func set_selected(cell: int, number: int = 0) -> void:
 	selected_cell = cell
-	if number > 0:
-		selected_number = number
+	selected_number = clampi(number, 0, 9)
 	if camera == null:
 		return
 	_update_palette(smoothstep(0.0, 1.0, _morph))
 	_refresh_range()
+
+func set_drop_preview(cell: int, number: int, allowed: bool) -> void:
+	_drop_cell = cell if cell >= 0 and cell < 81 else -1
+	_drop_number = clampi(number, 0, 9)
+	_drop_allowed = allowed
+	if _drop_preview == null: return
+	_drop_preview.visible = _drop_cell >= 0
+	if not _drop_preview.visible: return
+	_drop_preview.position = _cell_pos(_drop_cell)
+	VoxelMaterial.set_color(_drop_accent, Color("81efc0") if allowed else Color("ff788b"))
+	_drop_label.text = str(_drop_number) if _drop_number > 0 and run != null and int(run.board[_drop_cell]) == 0 else ""
+	_drop_label.modulate = Color("176a54") if allowed else Color("9c2440")
+	if _morph > 0.5: _drop_label.modulate = Color("c2ffe3") if allowed else Color("ffacb9")
+
+func set_family_focus(number: int) -> void:
+	var value: int = clampi(number,0,9)
+	if _family_focus == value: return
+	_family_focus = value
+	if camera != null: _update_palette(smoothstep(0.0,1.0,_morph))
 
 func set_panel_open(value: bool) -> void:
 	_panel_open = value
@@ -309,30 +374,55 @@ func _update_palette(blend: float) -> void:
 		var row: int = i / 9
 		var col: int = i % 9
 		var block_even: bool = (row / 3 + col / 3) % 2 == 0
-		var flat: Color = Color("d8e5d8") if block_even else Color("e9ebdc")
+		var flat: Color = Color("f4f3e9") if block_even else Color("e4eee8")
 		var dark: Color = Color("153940") if block_even else Color("1b4449")
 		if i < givens.size() and bool(givens[i]):
 			dark = dark.lightened(0.025)
 		if selected_cell >= 0 and (row == selected_cell / 9 or col == selected_cell % 9):
-			flat = flat.lerp(Color("a6d4c5"), 0.24)
+			flat = flat.lerp(Color("97cebc"), 0.32)
 			dark = dark.lightened(0.045)
+		# Matching digits share a blue fill and border, including clues and towers.
+		# The active square remains gold so scanning does not hide the cursor.
+		var matching: bool = selected_number > 0 and i < values.size() and int(values[i]) == selected_number
+		if _family_focus > 0: matching = towers.has(i) and int(towers[i].number) == _family_focus
+		_match_frames[i].visible = matching
+		if matching:
+			flat = Color("c3e3ed")
+			dark = Color("285b6e")
 		if i == selected_cell:
-			flat = Color("9bdccc")
+			flat = Color("ffe6a6")
 			dark = Color("326b65")
-		elif i < values.size() and int(values[i]) == selected_number:
-			flat = flat.lerp(Color("b4d8c9"), 0.35)
 		VoxelMaterial.set_color(_tile_mats[i], flat.lerp(dark, blend))
-		var number_color: Color = Color("294954").lerp(Color("a3c4be"), blend)
+		var number_color: Color = Color("17343f").lerp(Color("c2d8d1"), blend)
 		if towers.has(i):
 			var tower: Dictionary = towers[i]
-			number_color = _family(int(tower.get("number", 1))).darkened(0.38).lerp(_family(int(tower.get("number", 1))).lightened(0.15), blend)
+			number_color = _family(int(tower.get("number", 1))).darkened(0.55).lerp(_family(int(tower.get("number", 1))).lightened(0.15), blend)
 			if bool(tower.get("illegal", false)):
-				number_color = Color("ff9c9c")
+				number_color = Color("9d2440").lerp(Color("ff9c9c"), blend)
 		_labels[i].modulate = number_color
-		_labels[i].pixel_size = lerpf(0.0095, 0.0067 if towers.has(i) else 0.0081, blend)
+		_labels[i].pixel_size = lerpf(0.0106, 0.0067 if towers.has(i) else 0.0081, blend)
 		_labels[i].position = _cell_pos(i) + Vector3(0, 0.014, lerpf(0.035, 0.35 if towers.has(i) else 0.02, blend))
+		# Battle tower numbers face the player and render above the voxel stack.
+		# Reuse the paper labels so these never add another interactive UI layer.
+		var badge: bool = towers.has(i) and blend > 0.60
+		_labels[i].billboard = BaseMaterial3D.BILLBOARD_ENABLED if badge else BaseMaterial3D.BILLBOARD_DISABLED
+		_labels[i].no_depth_test = badge
+		_labels[i].rotation_degrees.x = 0.0 if badge else -90.0
+		_labels[i].outline_size = 14 if badge else 0
+		_labels[i].outline_modulate = Color("0a202a")
+		if badge:
+			_labels[i].pixel_size = 0.0090 if matching else 0.0082
+			_labels[i].position.y = 0.13
+			_labels[i].modulate = Color("fff4d5") if i == selected_cell else _family(int(towers[i].number)).lightened(0.25 if matching else 0.08)
+			if bool(towers[i].illegal): _labels[i].modulate = Color("ff9c9c")
+	var match_color: Color = _family(_family_focus).lightened(0.18) if _family_focus > 0 else Color("77d8ee")
+	VoxelMaterial.set_color(_match_accent, Color("357991").lerp(match_color, blend))
 	for material: Material in _grid_mats:
-		VoxelMaterial.set_color(material, Color("527678").lerp(Color("477f7b"), blend))
+		VoxelMaterial.set_color(material, Color("193b46").lerp(Color("6ca69c"), blend))
+	for material: Material in _fine_grid_mats:
+		VoxelMaterial.set_color(material, Color("83989a").lerp(Color("355b61"), blend))
+	if _selection_accent != null:
+		VoxelMaterial.set_color(_selection_accent, Color("187568").lerp(Color("8dffce"), blend))
 
 func _sync_towers(dt: float) -> void:
 	var towers: Dictionary = run.get("towers")

@@ -5,6 +5,7 @@ signal changed(result: Dictionary)
 signal closed()
 signal cell_requested(cell: int)
 signal item_armed(item_id: String)
+signal family_preview_requested(number: int)
 
 const Card = preload("res://scripts/item_card.gd")
 const Icon = preload("res://scripts/voxel_icon.gd")
@@ -19,7 +20,7 @@ const TEXT: Color = Color("e9f4ee")
 const MUTED: Color = Color("91aab4")
 const MINT: Color = Color("74e0c3")
 const GOLD: Color = Color("ffc184")
-const FAMILY_COLORS: Array[Color] = [Color("ffffff"), Color("6de8ff"), Color("a4c7ff"), Color("c6a0ff"), Color("ffae68"), Color("fb86c3"), Color("9be878"), Color("ffe188"), Color("bb9bff"), Color("ff7289")]
+const FAMILY_COLORS: Array[Color] = [Color("ffffff"), Color("6de8ff"), Color("a4c7ff"), Color("c6a0ff"), Color("ffae68"), Color("fb86c3"), Color("9be878"), Color("ffe188"), Color("bb9bff"), Color("dec3ed")]
 
 class TowerDropButton extends Button:
 	signal module_dropped(item_id: String)
@@ -47,6 +48,24 @@ var _portrait: bool = false
 var _layout_size: Vector2 = Vector2(1280, 800)
 var _board_bottom: float = 760.0
 var controller_mode: bool = false
+var _hovered_family: int = 0
+var _focused_family: int = 0
+
+func _preview_family(number: int, focused: bool, active: bool) -> void:
+	if focused: _focused_family = number if active else 0
+	else: _hovered_family = number if active else 0
+	family_preview_requested.emit(_focused_family if _focused_family > 0 else _hovered_family)
+
+func _clear_family_preview() -> void:
+	_hovered_family = 0
+	_focused_family = 0
+	family_preview_requested.emit(0)
+
+func _family_tower_count(number: int) -> int:
+	var count: int = 0
+	for tower in run.towers.values():
+		if int(tower.number) == number: count += 1
+	return count
 
 func set_controller_mode(value: bool) -> void:
 	if controller_mode == value: return
@@ -121,6 +140,7 @@ func _focus_current() -> void:
 			_scroll.ensure_control_visible.call_deferred(_focus_target)
 
 func close_panel(preserve_armed: bool = false) -> void:
+	_clear_family_preview()
 	_opened = false
 	visible = false
 	if not preserve_armed: _armed_id = ""
@@ -148,6 +168,7 @@ func clear_armed() -> void:
 
 func refresh(preserve_focus: bool = true) -> void:
 	if not _opened or run == null: return
+	_clear_family_preview()
 	var old_scroll: int = _scroll.scroll_vertical if is_instance_valid(_scroll) else 0
 	var focus_owner: Control = get_viewport().gui_get_focus_owner()
 	var restore_focus: bool = preserve_focus and is_instance_valid(focus_owner) and _shell.is_ancestor_of(focus_owner)
@@ -266,7 +287,17 @@ func _tower_panel(content: VBoxContainer) -> void:
 	var cell: int = selected_cell
 	content.add_child(_button("Upgrade this tower   ·   %d" % cost, func(): _act("upgrade_tower", [cell]), true, int(run.credits) < cost, 42, "upgrade:tower"))
 	var family_cost: int = int(run.family_upgrade_cost(number))
-	content.add_child(_button("Upgrade all %ds   ·   %d" % [number, family_cost], func(): _act("upgrade_family", [number]), false, int(run.credits) < family_cost, 42, "upgrade:family"))
+	var family_count: int = _family_tower_count(number)
+	_section(content, "SEED %d FAMILY" % number, "LEVEL %d → %d" % [int(run.family_levels[number]), int(run.family_levels[number]) + 1])
+	var family_button: Button = _button("Upgrade all %ds · %d %s\n%d credits" % [number, family_count, "tower" if family_count == 1 else "towers", family_cost], func(): _act("upgrade_family", [number]), false, int(run.credits) < family_cost, 58, "upgrade:family")
+	family_button.tooltip_text = "Improves all %d planted seed %d towers and every %d you plant later. Printed Sudoku clues are not towers." % [family_count, number, number]
+	family_button.mouse_entered.connect(func(): _preview_family(number, false, true))
+	family_button.mouse_exited.connect(func(): _preview_family(number, false, false))
+	family_button.focus_entered.connect(func(): _preview_family(number, true, true))
+	family_button.focus_exited.connect(func(): _preview_family(number, true, false))
+	content.add_child(family_button)
+	_note(content, "Highlighted: your %ds. Future %ds inherit this level." % [number, number], FAMILY_COLORS[number])
+	_mini_grid(content)
 	var attachments: Array = tower.get("attachments", [])
 	_section(content, "ATTACHMENT STACK", "%d / 5 slots" % attachments.size())
 	for i in range(5):
@@ -294,7 +325,6 @@ func _tower_panel(content: VBoxContainer) -> void:
 			empty.add_theme_font_size_override("font_size", 12)
 			row.add_child(empty)
 	content.add_child(_button("Open bag & attach", func(): open_panel("bag", cell), true))
-	_mini_grid(content)
 
 func _bag_panel(content: VBoxContainer) -> void:
 	_note(content, "A selects a module. Choose its tower, then A to attach. LB / RB changes tabs." if controller_mode else "Drag a module onto a tower. Or select a module, then select its tower.")
@@ -474,7 +504,8 @@ func _camp_panel(content: VBoxContainer) -> void:
 	if str(run.phase) != "loot": _note(content, "The camp opens after you survive a siege.", GOLD)
 
 func _mini_grid(content: VBoxContainer, heading: bool = true) -> void:
-	if heading: _section(content, "YOUR TOWERS", "A inspects" if controller_mode else "Tap to inspect")
+	var selected_family: int = int(run.towers[selected_cell].number) if run.towers.has(selected_cell) else 0
+	if heading: _section(content, "FAMILY TARGETS" if selected_family > 0 else "YOUR TOWERS", "Gold: selected" if selected_family > 0 else "A inspects" if controller_mode else "Tap to inspect")
 	var center: CenterContainer = CenterContainer.new()
 	content.add_child(center)
 	var grid: GridContainer = GridContainer.new()
@@ -496,9 +527,16 @@ func _mini_grid(content: VBoxContainer, heading: bool = true) -> void:
 		button.disabled = not occupied
 		button.tooltip_text = "Row %d, column %d%s" % [cell / 9 + 1, cell % 9 + 1, " · select tower" if occupied else ""]
 		var color: Color = FAMILY_COLORS[number] if occupied else MUTED.darkened(0.3)
-		var bg: Color = color.darkened(0.73) if occupied else Color("0b1a24")
+		var affected: bool = occupied and number == selected_family
+		var selected: bool = occupied and cell == selected_cell
+		var bg: Color = color.darkened(0.53 if affected else 0.83) if occupied else Color("0b1a24")
+		var border: Color = GOLD if selected else color if affected else LINE
+		if occupied:
+			button.tooltip_text += " · Seed %d%s" % [number, " · included in family upgrade" if affected else ""]
+		elif number > 0:
+			button.tooltip_text += " · printed clue, not a tower"
 		for state in ["normal", "hover", "pressed", "disabled", "focus"]:
-			button.add_theme_stylebox_override(state, _style(bg.lightened(0.08) if state == "hover" else bg, MINT if cell == selected_cell or state == "focus" else LINE, 3, 2 if cell == selected_cell else 1, 0))
+			button.add_theme_stylebox_override(state, _style(bg.lightened(0.08) if state == "hover" else bg, TEXT if state == "focus" else border, 3, 3 if selected else 2 if affected else 1, 0))
 		button.add_theme_color_override("font_color", color)
 		button.add_theme_color_override("font_disabled_color", Color("4d6670"))
 		button.pressed.connect(func():

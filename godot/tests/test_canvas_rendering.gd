@@ -98,7 +98,12 @@ func exercise() -> void:
 	check_board(board,model,image,area,false)
 	for cell: int in planted:
 		check(board.cell_at_screen(board.tower_screen_position(cell)) == cell,"Visible tower head %d is directly selectable" % cell)
-		check(brightness(sample(image,board.tower_screen_position(cell))) > 0.18,"Tower %d has visible colored faces" % cell)
+		# Picking aims at the turret body, which its readable number badge can
+		# overlap. Validate actual voxel art on the center of the colored roof.
+		var roof_height: float = 0.63+float(mini(5,model.towers[cell].attachments.size()))*0.16
+		var roof: Vector3 = Vector3(float(cell%9)-4.0,roof_height,float(cell/9)-4.0)
+		var roof_color: Color = sample(image,board.project_point(roof))
+		check(brightness(roof_color) > 0.18,"Tower %d has a visible colored voxel roof" % cell)
 	var angle_before: Vector2 = board._axis_x
 	root.size = Vector2i(1280,800)
 	area = Rect2(246,118,838,562)

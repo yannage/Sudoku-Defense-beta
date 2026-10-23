@@ -8,13 +8,15 @@ const DockScript = preload("res://scripts/dock.gd")
 const SoundScript = preload("res://scripts/sound.gd")
 const DropScript = preload("res://scripts/board_drop.gd")
 const ControllerScript = preload("res://scripts/controller_input.gd")
+const SeedPointerScript = preload("res://scripts/seed_pointer.gd")
+const QuickIconScript = preload("res://scripts/quick_icon.gd")
 const INK := Color("0a1722")
 const PANEL := Color("112634")
 const MINT := Color("83e7c1")
 const AMBER := Color("ffb577")
 const WHITE := Color("eef6ec")
 const MUTED := Color("89a5ae")
-const COLORS := [Color("6de8ff"), Color("a4c7ff"), Color("c6a0ff"), Color("ffae68"), Color("fb86c3"), Color("9be878"), Color("ffe188"), Color("bb9bff"), Color("ff7289")]
+const COLORS := [Color("6de8ff"), Color("a4c7ff"), Color("c6a0ff"), Color("ffae68"), Color("fb86c3"), Color("9be878"), Color("ffe188"), Color("bb9bff"), Color("dec3ed")]
 
 var run = RunScript.new()
 var world
@@ -37,7 +39,10 @@ var game_speed := 1.0
 var last_phase := ""
 var ui_elapsed := 0.0
 var controller_used := false
+var _pointer_hint_owner := -2 # -1 mouse, >=0 native touch, -2 no pending handoff
 var controller
+var seed_pointer
+var board_input
 var _seed_text := ""
 var _seed_editing := false
 var _seed_return_initial := true
@@ -96,6 +101,9 @@ func _ready() -> void:
 	if "--smoke-test" in OS.get_cmdline_user_args(): print("SUDOKU_DEFENSE_READY")
 
 func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT and seed_pointer != null:
+		seed_pointer.cancel()
+		_finish_pointer_activity.call_deferred()
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
 		_save()
 		get_tree().quit()
@@ -160,6 +168,7 @@ func _build_ui() -> void:
 	ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	canvas.add_child(ui)
 	var drop = DropScript.new()
+	board_input = drop
 	drop.host = self
 	drop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.add_child(drop)
@@ -220,12 +229,17 @@ func _build_ui() -> void:
 	reserve_button.tooltip_text = "Buy one emergency seed of the selected number"
 	positioned(reserve_button,Rect2(30,617,174,44))
 	bag_button = button("Gear",func(): _toggle_dock("bag"))
+	bag_button.tooltip_text = "Manage attachments and upgrade towers (X)."
 	positioned(bag_button,Rect2(1092,94,164,46))
+	_add_quick_icon(bag_button,"gear")
 	loot_button = button("Chests",func(): _toggle_dock("loot"))
+	loot_button.tooltip_text = "Open earned chests with energy fragments."
 	positioned(loot_button,Rect2(1092,149,164,46))
+	_add_quick_icon(loot_button,"chest")
 	var camp: Button = hud("camp", button("Camp",func(): _toggle_dock("camp")))
 	camp.tooltip_text = "Passives and salvage slots, available between battles"
 	positioned(camp,Rect2(1092,204,164,46))
+	_add_quick_icon(camp,"camp")
 	pause_label = label("TACTICAL PAUSE",14,AMBER)
 	pause_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	positioned(pause_label,Rect2(430,85,420,32))
@@ -246,10 +260,9 @@ func _build_ui() -> void:
 	positioned(controls_label,Rect2(215,772,635,19))
 	next_button = button("Prepare defense",_advance,true)
 	positioned(next_button,Rect2(944,715,312,56))
-	var speed: Button = hud("speed", button("1x",func(): game_speed = 2.0 if game_speed == 1.0 else 1.0; _refresh()))
-	speed.tooltip_text = "Battle speed"
+	var speed: Button = hud("speed", button("1x",_cycle_speed))
+	speed.tooltip_text = "Battle speed: 1x / 2x / 4x. Sudoku time stays normal."
 	positioned(speed,Rect2(848,715,74,56))
-	speed.pressed.connect(func(): speed.text = "2x" if game_speed == 2.0 else "1x")
 	notice = label("",18,WHITE)
 	notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	notice.add_theme_stylebox_override("normal",style(Color("173c42ed"),MINT))
@@ -260,7 +273,8 @@ func _build_ui() -> void:
 	dock.setup(run)
 	dock.changed.connect(_action)
 	dock.closed.connect(func(): armed_item = ""; _release_ui_focus(); _refresh())
-	dock.cell_requested.connect(func(cell): _select(cell,false))
+	dock.cell_requested.connect(_inspect_tower)
+	dock.family_preview_requested.connect(_update_family_focus)
 	dock.item_armed.connect(func(item_id):
 		if controller_used:
 			dock.close_panel(true)
@@ -275,6 +289,32 @@ func _build_ui() -> void:
 	for child in ui.get_children():
 		if child is Button: child.focus_mode = Control.FOCUS_NONE
 	for b in number_buttons: b.focus_mode = Control.FOCUS_NONE
+	seed_pointer = SeedPointerScript.new()
+	seed_pointer.host = self
+	seed_pointer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	ui.add_child(seed_pointer)
+
+func _add_quick_icon(quick: Button, kind: String) -> void:
+	var icon := QuickIconScript.new()
+	icon.icon_kind = kind
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	quick.add_child(icon)
+	quick.set_meta("quick_icon",icon)
+
+func _layout_quick_icons() -> void:
+	for quick: Button in [bag_button,loot_button,hud_nodes.camp]:
+		var icon: Control = quick.get_meta("quick_icon")
+		icon.size = Vector2(30,30)
+		icon.position = Vector2((quick.size.x-30)*0.5,6) if portrait_layout else Vector2(12,(quick.size.y-30)*0.5)
+		# Phone tabs stack the glyph above the short label; wide screens keep a
+		# compact horizontal row. Both retain the entire original button target.
+		for state in ["normal","hover","pressed","disabled","focus"]:
+			var box: StyleBoxFlat = quick.get_theme_stylebox(state)
+			box.content_margin_left = 12 if portrait_layout else 50
+			box.content_margin_right = 12
+			box.content_margin_top = 36 if portrait_layout else 8
+			box.content_margin_bottom = 8
+		if portrait_layout: _font(quick,20)
 
 func _queue_layout() -> void:
 	if _layout_queued: return
@@ -427,6 +467,7 @@ func _layout_ui() -> void:
 	if dock != null and dock.has_method("set_layout"):
 		dock.set_layout(layout_size,portrait_layout,board_rect.end.y)
 		dock.z_index = 10
+	_layout_quick_icons()
 	_layout_modal()
 	_update_context_visibility()
 	_refresh()
@@ -517,7 +558,12 @@ func _process(dt: float) -> void:
 		save_elapsed = 0
 		_save()
 
+func _cycle_speed() -> void:
+	game_speed = 2.0 if game_speed == 1.0 else 4.0 if game_speed == 2.0 else 1.0
+	_refresh()
+
 func _refresh() -> void:
+	hud_nodes.speed.text = "%dx" % int(game_speed)
 	resources.text = "CORE %d/%d   CREDITS %d   FRAGMENTS %d" % [int(run.health),int(run.max_health),run.credits,run.fragments]
 	var phases := ["solve","prep","battle","loot"]
 	for i in range(4): phase_badges[i].modulate = MINT if run.phase == phases[i] else Color("647d85")
@@ -564,23 +610,99 @@ func _refresh() -> void:
 	else:
 		selected_label.text = "GROW YOUR ADVANTAGE"
 		candidate_label.text = "Select a square.\nPlant a number.\nBuild your own weapon."
+	var correct_counts: PackedInt32Array = _number_correct_counts()
 	for i in range(9):
 		var b: Button = number_buttons[i]
-		b.tooltip_text = "Seed %d · %d reserves for emergency battle planting" % [i+1,run.inventory[i+1]]
-		b.add_theme_stylebox_override("normal",style(Color("315950") if selected_number==i+1 else PANEL, COLORS[i] if selected_number==i+1 else Color("35505a")))
+		var complete: bool = correct_counts[i+1] == 9
+		var tint: Color = Color("82939a") if complete else COLORS[i]
+		b.tooltip_text = "9 / 9 complete. Tap to highlight. %d emergency reserves for battle." % run.inventory[i+1] if complete else "%d / 9 placed. Tap a square, then %d — or drag %d onto the grid. %d emergency reserves." % [correct_counts[i+1],i+1,i+1,run.inventory[i+1]]
+		# Completed families remain selectable for matching-number highlights,
+		# and their reserve seeds still work during the defense phase.
+		b.disabled = not _number_input_allowed()
+		b.add_theme_color_override("font_color",tint)
+		b.add_theme_color_override("font_hover_color",tint.lightened(0.15))
+		b.add_theme_color_override("font_pressed_color",tint)
+		var selected_bg: Color = Color("253740") if complete else Color("315950")
+		b.add_theme_stylebox_override("normal",style(selected_bg if selected_number==i+1 else PANEL, tint if selected_number==i+1 else Color("35505a")))
 	if portrait_layout: _refresh_portrait_text()
-	controls_label.text = "D-PAD move   LB/RB number   A plant   X gear   Y advance   B back" if controller_used else "CLICK select   1-9 plant   ENTER advance   TAB gear   ESC menu"
+	controls_label.text = "D-PAD move   LB/RB number   A plant   X gear   Y advance   B back" if controller_used else "TAP square + number   DRAG number to plant   TAB gear   ESC menu"
 	if controller_used and not armed_item.is_empty(): controls_label.text = "D-PAD / STICK choose tower     A attach module     B cancel"
+	_update_family_focus()
+
+func _number_correct_counts() -> PackedInt32Array:
+	# Derive from this puzzle each refresh; illegal emergency duplicates do not
+	# complete a family, and a new board cannot retain the previous gray state.
+	var counts := PackedInt32Array()
+	counts.resize(10)
+	for cell in range(mini(run.board.size(),run.solution.size())):
+		var number: int = run.board[cell]
+		if number >= 1 and number <= 9 and number == run.solution[cell]: counts[number] += 1
+	return counts
+
+func _number_complete(number: int) -> bool:
+	return number >= 1 and number <= 9 and _number_correct_counts()[number] == 9
+
+func _number_input_allowed() -> bool:
+	return has_active_run and not menu_open and not manual_pause and armed_item.is_empty() and run.phase in ["solve","prep","battle","loot"]
+
+func _number_placement_allowed() -> bool:
+	return _number_input_allowed() and not dock.is_open() and run.phase in ["solve","battle"]
+
+func _pointer_activity(pointer_owner: int = -2) -> void:
+	if pointer_owner == -2 and _pointer_hint_owner != -2: _finish_pointer_activity.call_deferred()
+	if controller_used:
+		controller_used = false
+		if controller != null: controller.reset_navigation()
+		_pointer_hint_owner = pointer_owner
+		if pointer_owner == -2: dock.set_controller_mode.call_deferred(false)
+		_refresh()
+
+func _finish_pointer_activity() -> void:
+	if _pointer_hint_owner == -2: return
+	_pointer_hint_owner = -2
+	# Rebuilding the dock between a pointer press and release discards the
+	# pressed control. Update its hints only after the GUI finishes that click.
+	if not controller_used: dock.set_controller_mode(false)
+
+func _tap_board(cell: int) -> void:
+	if menu_open or manual_pause or (seed_pointer != null and seed_pointer.is_active()): return
+	# Pointer taps choose an empty square; only a number tap/drop commits it.
+	# Controller A still uses _select(..., true) for deliberate planting.
+	_select(cell,run.towers.has(cell),true)
+
+func _drop_number(cell: int, number: int) -> void:
+	if not _number_placement_allowed() or cell < 0 or cell >= 81: return
+	if run.phase == "solve" and _number_complete(number): return
+	if run.board[cell] != 0:
+		_toast("Printed clues stay fixed." if run.givens[cell] else "Tap this tower to upgrade it.",false)
+		return
+	_select(cell,false,false)
+	_choose_number(number)
 
 func _choose_number(number: int) -> void:
+	if not _number_input_allowed(): return
 	selected_number = number
 	world.set_selected(selected_cell,selected_number)
-	if selected_cell >= 0 and not run.givens[selected_cell] and not run.towers.has(selected_cell):
+	if _number_placement_allowed() and not (run.phase == "solve" and _number_complete(number)) and selected_cell >= 0 and not run.givens[selected_cell] and not run.towers.has(selected_cell):
 		_action(run.place(selected_cell,number))
 	_refresh()
 
+func _inspect_tower(cell: int) -> void:
+	# Workshop mini-grid selection is explicit inspection, unlike moving the
+	# controller cursor across the battlefield on the way to an empty square.
+	if run.towers.has(cell): selected_number = int(run.towers[cell].number)
+	_select(cell,false)
+
+func _update_family_focus(number: int = 0) -> void:
+	var family: int = number
+	if family == 0 and dock.is_open() and dock.current_panel == "tower" and run.towers.has(selected_cell):
+		family = int(run.towers[selected_cell].number)
+	if not dock.is_open(): family = 0
+	if world.has_method("set_family_focus"): world.set_family_focus(family)
+
 func _select(cell: int, place_now: bool = true, equip_armed: bool = true) -> void:
 	if cell < 0 or cell >= 81: return
+	if place_now and run.towers.has(cell): selected_number = int(run.towers[cell].number)
 	selected_cell = cell
 	world.set_selected(cell,selected_number)
 	dock.set_selected(cell)
@@ -594,7 +716,7 @@ func _select(cell: int, place_now: bool = true, equip_armed: bool = true) -> voi
 		else: _toast("Choose a planted tower for this module.",false)
 	elif place_now and run.towers.has(cell):
 		dock.open_panel("tower",cell)
-	elif place_now and selected_number > 0 and not run.givens[cell]:
+	elif place_now and selected_number > 0 and not run.givens[cell] and not (run.phase == "solve" and _number_complete(selected_number)):
 		_action(run.place(cell,selected_number))
 	_refresh()
 
@@ -696,6 +818,8 @@ func _close_overlay() -> void:
 	_refresh()
 
 func _modal(width: float = 650, height: float = 640) -> VBoxContainer:
+	if seed_pointer != null: seed_pointer.cancel()
+	if board_input != null: board_input.cancel_pointer()
 	if is_instance_valid(overlay): overlay.queue_free()
 	menu_open = true
 	overlay = Control.new()
@@ -804,7 +928,7 @@ func _help() -> void:
 	var box := _modal(720,652)
 	box.add_child(label("A LITTLE LOGIC. A LOT OF FIREPOWER.",26,MINT))
 	for text in [
-		"01  SOLVE  ·  Select an empty square and plant a correct number. Every answer grows a tower and earns credits. Aim for 6–8 towers before your first wave.",
+		"01  SOLVE  ·  Tap an empty square, then a number — or drag a number onto its square. Every correct answer grows a tower and earns credits. Aim for 6–8 towers before your first wave.",
 		"02  PREPARE  ·  Click a tower to upgrade it. Open Gear to drag a module onto a tower, or select an item and then its target. Each tower holds five modules. Repeats stack.",
 		"03  DEFEND  ·  Your latest moves bend the enemy route. Need emergency firepower? Plant a number during battle—even an illegal one—at a credit and corruption cost.",
 		"04  LOOT  ·  Enemies drop energy fragments. Spend them to unlock chests. Gear and family upgrades follow you to the next garden. Visit Camp between waves."
@@ -819,7 +943,7 @@ func _help() -> void:
 	box.add_child(reduce)
 	box.add_child(button("Sound: " + ("OFF" if muted else "ON"),func(): _toggle_sound(); _help()))
 	box.add_child(button("Notes: " + ("ON" if board_notes else "OFF"),func(): board_notes=not board_notes; _help()))
-	box.add_child(button("Battle speed: " + ("2x" if game_speed>1.0 else "1x"),func(): game_speed=1.0 if game_speed>1.0 else 2.0; _help()))
+	box.add_child(button("Battle speed: %dx" % int(game_speed),func(): _cycle_speed(); _help()))
 	if has_active_run and selected_cell >= 0 and not run.givens[selected_cell] and not run.towers.has(selected_cell):
 		box.add_child(button("Reveal selected square · 6 credits",func(): _action(run.hint(selected_cell)); _close_overlay()))
 	box.add_child(label("Godot edition " + str(ProjectSettings.get_setting("application/config/version")) + "  /  " + ("Compatible voxels" if RenderProfile.uses_canvas() else "3D voxels"),11,MUTED))
@@ -890,13 +1014,19 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif event.keycode == KEY_DOWN: _move_selection(Vector2i.DOWN)
 
 func _input(event: InputEvent) -> void:
-	if controller_used and ((event is InputEventKey and event.pressed) or (event is InputEventMouseButton and event.pressed and event.device != InputEvent.DEVICE_ID_EMULATION) or event is InputEventScreenTouch):
-		controller_used = false
-		if controller != null: controller.reset_navigation()
-		dock.set_controller_mode.call_deferred(false)
-		_refresh()
+	if event is InputEventKey and event.pressed:
+		_pointer_activity()
+	elif event is InputEventMouseButton and event.device != InputEvent.DEVICE_ID_EMULATION:
+		if event.pressed: _pointer_activity(-1)
+		elif _pointer_hint_owner == -1: _finish_pointer_activity.call_deferred()
+	elif event is InputEventScreenTouch:
+		if event.pressed: _pointer_activity(event.index)
+		elif _pointer_hint_owner == event.index: _finish_pointer_activity.call_deferred()
 
 func _controller_activity() -> void:
+	_pointer_hint_owner = -2
+	if board_input != null: board_input.cancel_pointer()
+	if seed_pointer != null and seed_pointer.is_active(): seed_pointer.cancel()
 	if not controller_used:
 		controller_used = true
 		# Preserve the currently focused card through this input dispatch. The

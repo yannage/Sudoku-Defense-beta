@@ -11,8 +11,10 @@ func _initialize() -> void:
 	_test_actions()
 	_test_equipment()
 	_test_save()
+	_test_saved_puzzle_guards()
 	_test_slots()
 	_test_combat()
+	_test_combat_speed()
 	_test_progression()
 	_test_campaign()
 	if failures.is_empty():
@@ -138,6 +140,78 @@ func _test_save() -> void:
 	_check(_equal(run.save_data(),loaded.save_data()),"Save replay preserves entire state")
 	_check(not loaded.load_data({"version":1,"state":{}}),"Reject incomplete save")
 
+func _reject_save_without_changes(run: RefCounted, data: Dictionary, message: String) -> void:
+	var before: Dictionary = run.save_data()
+	_check(not run.load_data(data),message)
+	_check(_equal(before,run.save_data()),"Rejected save preserves the current run: " + message)
+
+func _test_saved_puzzle_guards() -> void:
+	var original = _game(875)
+	_plant(original,4)
+	var data: Dictionary = JSON.parse_string(JSON.stringify(original.save_data()))
+	var loaded = _game(12)
+	var damaged: Dictionary = data.duplicate(true)
+	damaged.state.solution[0] = damaged.state.solution[1]
+	_reject_save_without_changes(loaded,damaged,"Reject a complete solution with duplicate digits")
+	damaged = data.duplicate(true)
+	damaged.state.solution[0] = 0
+	_reject_save_without_changes(loaded,damaged,"Reject an incomplete saved solution")
+	var clue: int = original.givens.find(true)
+	damaged = data.duplicate(true)
+	damaged.state.board[clue] = int(damaged.state.solution[clue])%9+1
+	_reject_save_without_changes(loaded,damaged,"Reject a fixed clue inconsistent with the solution")
+	damaged = data.duplicate(true)
+	damaged.state.board[clue] = 0
+	_reject_save_without_changes(loaded,damaged,"Reject a fixed clue marked on an empty square")
+	damaged = data.duplicate(true)
+	for cell in range(81):
+		damaged.state.board[cell] = 0
+		damaged.state.givens[cell] = false
+	damaged.state.towers.clear()
+	_reject_save_without_changes(loaded,damaged,"Reject a clue set without a unique solution")
+	var empty: int = _blank(original)
+	for saved_phase in ["solve","prep","loot","won"]:
+		damaged = data.duplicate(true)
+		damaged.state.phase = saved_phase
+		damaged.state.board[empty] = original.solution[empty]%9+1
+		_reject_save_without_changes(loaded,damaged,"Reject a wrong player digit during " + saved_phase)
+	damaged = data.duplicate(true)
+	damaged.state.board[empty] = 1.5
+	_reject_save_without_changes(loaded,damaged,"Reject fractional saved digits rather than truncating them")
+
+	# A damaged in-memory board must not accept a nominal solution digit when
+	# another square already contains it in the same row.
+	var run = _game(123)
+	var target: int = _blank(run)
+	var number: int = run.solution[target]
+	var duplicate: int = (target/9)*9+(target%9+1)%9
+	run.board[duplicate] = number
+	var credits_before: int = run.credits
+	_check(not run.place(target,number).ok,"Solve rejects an otherwise-correct digit that duplicates its row")
+	_check(run.board[target]==0 and not run.towers.has(target) and run.credits==credits_before,"Rejected conflicting solve move grants no tower or currency")
+
+	# Intentional emergency towers remain valid saves and deterministic replays.
+	run = _game(875)
+	_plant(run,8)
+	run.advance_phase()
+	run.advance_phase()
+	target = _blank(run)
+	number = run.solution[target]%9+1
+	_check(run.place(target,number).ok and run.towers[target].illegal,"Battle still permits an illegal emergency tower")
+	run.update(2.5)
+	data = JSON.parse_string(JSON.stringify(run.save_data()))
+	loaded = Run.new()
+	_check(loaded.load_data(data),"Resume a battle containing an illegal emergency tower")
+	_check(loaded.board[target]==number and loaded.towers[target].illegal and loaded.corruption==run.corruption,"Emergency tower and corruption survive save loading")
+	for tick in range(20):
+		run.update(0.05)
+		loaded.update(0.05)
+	_check(_equal(run.save_data(),loaded.save_data()),"Emergency battle save preserves deterministic combat")
+	damaged = data.duplicate(true)
+	damaged.state.phase = "lost"
+	damaged.state.health = 0.0
+	_check(loaded.load_data(damaged),"Lost games retain their emergency towers for the result view")
+
 func _test_slots() -> void:
 	var total_units: int = 0
 	var weighted: int = 0
@@ -189,6 +263,42 @@ func _test_combat() -> void:
 		_check(float(stats.health)>prior_hp,"Enemy strength scales through 50 rounds")
 		_check(bool(stats.boss)==(stage%5==0),"Boss every five rounds")
 		prior_hp=stats.health
+
+func _test_combat_speed() -> void:
+	# Compare equal combat time with 60 FPS input at each UI speed. A stationary
+	# durable target isolates fire cadence from routing, spawn order and kills.
+	for rapid in [0.0, 20.0]:
+		var baseline_shots: int = -1
+		for speed in [1.0, 2.0, 4.0]:
+			var run = _game(123)
+			_plant(run,1)
+			var cell: int = int(run.towers.keys()[0])
+			run.advance_phase()
+			run.advance_phase()
+			run.spawned = 1
+			run.spawn_total = 1
+			var origin: Vector2 = run.cell_position(cell)
+			run.route.assign([origin,origin+Vector2.RIGHT])
+			run._route_distances.assign([0.0,1.0])
+			run.route_length = 1.0
+			run.enemies.append({"id":999,"pos":origin,"hp":100000.0,"max_hp":100000.0,"progress":0.0,"speed":0.0,"kind":"grunt","slow":1.0,"slow_time":0.0,"poison_time":0.0,"poison_dps":0.0})
+			var tower: Dictionary = run.towers[cell]
+			tower.growth = 1.0
+			tower.cooldown = 0.0
+			if rapid > 0.0:
+				# Five late-game rapid modules plus the ordinary temporary boost.
+				for i in range(5): tower.attachments.append({"kind":"rapid","power":rapid/5.0})
+				run.active_effects.append({"kind":"overclock","remaining":20.0})
+			run.drain_events()
+			var shots: int = 0
+			for tick in range(roundi(60.0*60.0/speed)):
+				run.update(speed/60.0)
+				for event in run.drain_events():
+					if event.type == "shot": shots += 1
+			_check(is_equal_approx(run.battle_time,60.0),"Speed cadence test compares equal simulated time")
+			if speed == 1.0: baseline_shots = shots
+			else:
+				_check(absi(shots-baseline_shots)<=1,"%dx speed preserves tower fire rate (rapid %.0f: %d vs %d shots)" % [int(speed),rapid,shots,baseline_shots])
 
 func _test_progression() -> void:
 	var run = _game(88)

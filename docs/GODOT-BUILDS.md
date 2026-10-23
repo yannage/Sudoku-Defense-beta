@@ -65,6 +65,14 @@ Headless import and executable boot checks detect packaging and script errors. T
 
 ## Current source and verification
 
+Version **0.3.4** adds bold 3×3 Sudoku separators, a stronger selected-square outline, and matching-number highlights for both printed clues and planted towers. Number 9 uses soft orchid instead of an error-like red. Completed number families turn gray and reset on every fresh puzzle. Touch or mouse taps select an empty square without planting; tapping a number commits it, and dragging a number previews its destination before release. The battle-speed control now cycles **1× → 2× → 4× → 1×**, while the solve countdown runs at normal speed. Tower cooldowns preserve elapsed overshoot so higher speed does not reduce rapid-fire damage. These changes apply to the native 3D board and the browser's compatible CanvasItem board.
+
+The touch regression suite sends mouse and physical-touch events through the actual main scene in both render modes. It covers tap selection and placement, drag/drop, invalid targets, multitouch ownership, overlay isolation, controller takeover, responsive coordinates, matching-digit selection, and battle versus solve timing at 4×. This exercises input routing without claiming a physical touchscreen hardware test.
+
+The workshop identifies towers with persistent number badges, previews the selected family's planted towers on the main board and mini-grid, and states the affected tower count beside the upgrade cost. Fixed Sudoku clues are excluded from that preview. Gear, Chests, and Camp have procedural voxel icons while retaining labels, counts, and controller focus.
+
+Sudoku generation validates each complete solution and every returned puzzle, including uniqueness. A separate audit uses an independent backtracking solver and direct row/column/box checks across 264 seeded puzzles, including campaign-round seeds and all difficulties. Save loading rejects invalid Sudoku solutions or clues before changing the active run. Solve-phase placements must satisfy both the solution and current board rules; intentionally illegal emergency placements remain a battle mechanic. The audit did not reproduce an invalid fresh board in the earlier generator, so these guards are not presented as a confirmed diagnosis of the reported duplicate.
+
 The port is developed on `godot-deck-edition`, based on the pre-Unity `gridfall-voxel-prototype` source. The original web build and Unity main branch remain available.
 
 Build validation includes the simulation suite, actual main-scene UI flow tests, and exported Linux startup reaching `SUDOKU_DEFENSE_READY`. The automated campaign bot clears fifty medium rounds with earned gear/family upgrades; that is a progression sanity check, not human balancing evidence. Physical Steam Deck input/performance and Windows execution still need device testing. Do not market the game as Deck Verified based on these checks.

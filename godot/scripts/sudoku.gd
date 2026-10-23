@@ -5,6 +5,39 @@ extends RefCounted
 const CLUE_COUNTS: Dictionary = {"easy": 48, "medium": 36, "hard": 27}
 const ALL_DIGITS: int = 1022
 
+static func valid_board(board: Array, complete: bool = false) -> bool:
+	if board.size() != 81: return false
+	var rows: Array[int] = []
+	var cols: Array[int] = []
+	var boxes: Array[int] = []
+	rows.resize(9); cols.resize(9); boxes.resize(9)
+	for cell: int in range(81):
+		var value = board[cell]
+		# JSON may contain integral floats, but never silently round a corrupt
+		# value, coerce a string, or treat true as the Sudoku digit 1.
+		if typeof(value) not in [TYPE_INT, TYPE_FLOAT]: return false
+		if not is_finite(float(value)) or float(value) != floor(float(value)): return false
+		if value < (1 if complete else 0) or value > 9: return false
+		var digit: int = int(value)
+		if digit == 0: continue
+		var row: int = cell / 9
+		var col: int = cell % 9
+		var box: int = (row / 3) * 3 + col / 3
+		var bit: int = 1 << digit
+		if ((rows[row] | cols[col] | boxes[box]) & bit) != 0: return false
+		rows[row] |= bit; cols[col] |= bit; boxes[box] |= bit
+	return true
+
+static func valid_puzzle(puzzle: Dictionary) -> bool:
+	for key in ["board", "solution", "givens"]:
+		if not puzzle.has(key) or not puzzle[key] is Array or puzzle[key].size() != 81: return false
+	if not valid_board(puzzle.board) or not valid_board(puzzle.solution, true): return false
+	for cell: int in range(81):
+		if typeof(puzzle.givens[cell]) != TYPE_BOOL: return false
+		if puzzle.givens[cell] != (puzzle.board[cell] != 0): return false
+		if puzzle.board[cell] != 0 and puzzle.board[cell] != puzzle.solution[cell]: return false
+	return count_solutions(puzzle.board) == 1
+
 static func legal(board: Array, cell: int, number: int) -> bool:
 	if board.size() != 81 or cell < 0 or cell > 80 or number < 1 or number > 9:
 		return false
@@ -36,7 +69,7 @@ static func candidates(board: Array, cell: int) -> Array[int]:
 	return result
 
 static func count_solutions(input: Array, limit: int = 2) -> int:
-	if input.size() != 81 or limit < 1:
+	if limit < 1 or not valid_board(input):
 		return 0
 	var board: PackedInt32Array = PackedInt32Array(input)
 	var rows: PackedInt32Array = PackedInt32Array()
@@ -141,6 +174,7 @@ static func make_puzzle(seed_value: int, difficulty: String = "medium") -> Dicti
 			for col: int in cols:
 				var pattern: int = (row * 3 + row / 3 + col) % 9
 				solution.append(digits[pattern])
+		if not valid_board(solution, true): continue
 		var board: Array[int] = solution.duplicate()
 		var positions: Array[int] = []
 		for cell: int in range(81):
@@ -159,8 +193,35 @@ static func make_puzzle(seed_value: int, difficulty: String = "medium") -> Dicti
 			var givens: Array[bool] = []
 			for digit: int in board:
 				givens.append(digit != 0)
-			best = {"board": board, "solution": solution, "givens": givens}
+			var candidate := {"board": board, "solution": solution, "givens": givens}
+			if not valid_puzzle(candidate): continue
+			best = candidate
 			best_clues = clues
 		if clues == target:
 			break
-	return best
+	if not best.is_empty(): return best
+	# A bounded generation failure must not hand an invalid board to a run.
+	# This independently checked classic puzzle stays unique as clues are added.
+	push_warning("Seeded Sudoku generation exhausted its safety retries; using a verified fallback puzzle.")
+	var fallback: Dictionary = _fallback_puzzle(target)
+	if valid_puzzle(fallback): return fallback
+	push_error("Sudoku fallback failed validation; refusing to return an invalid puzzle.")
+	return {}
+
+static func _fallback_puzzle(target: int) -> Dictionary:
+	const PRINTED := "530070000600195000098000060800060003400803001700020006060000280000419005000080079"
+	const ANSWERS := "534678912672195348198342567859761423426853791713924856961537284287419635345286179"
+	var board: Array[int] = []
+	var solution: Array[int] = []
+	var givens: Array[bool] = []
+	for cell: int in range(81):
+		board.append(int(PRINTED[cell]))
+		solution.append(int(ANSWERS[cell]))
+	var clues: int = 81 - board.count(0)
+	for cell: int in range(81):
+		if clues >= target: break
+		if board[cell] == 0:
+			board[cell] = solution[cell]
+			clues += 1
+	for digit: int in board: givens.append(digit != 0)
+	return {"board":board, "solution":solution, "givens":givens}

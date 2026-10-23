@@ -77,9 +77,13 @@ func exercise() -> void:
 	for node in scene.overlay.get_children():
 		if node is PanelContainer: check(node.get_rect().end.y <= 800,"Help fits 800px height: %s"%node.get_rect())
 	scene._close_overlay()
-	# A real touch also generates emulated mouse events. It must plant once,
-	# then inspect only on a second distinct tap; a swipe must never plant.
+	# A board tap selects first; a distinct number tap plants once. Emulated
+	# mouse events must not interpret either tap as a second tower inspection.
 	scene.run.phase = "solve"
+	# The earlier battle fixture leaves its elapsed clock near zero. Reset the
+	# solve countdown too, or it expires mid-gesture and moves the 3D camera.
+	scene.run.timer = scene.run.solve_duration
+	scene.last_phase = "solve"
 	for i in range(30): scene.world.tick(.05)
 	var touch_cell: int = -1
 	var drag_cell: int = -1
@@ -94,7 +98,13 @@ func exercise() -> void:
 	await process_frame
 	send_touch(touch_point,false)
 	for i in range(2): await process_frame
-	check(scene.run.towers.has(touch_cell),"Physical tap plants the selected number")
+	check(not scene.run.towers.has(touch_cell),"Physical board tap only selects the square")
+	var number_point: Vector2 = scene.number_buttons[scene.run.solution[touch_cell]-1].get_global_rect().get_center()
+	send_touch(number_point,true)
+	await process_frame
+	send_touch(number_point,false)
+	for i in range(2): await process_frame
+	check(scene.run.towers.has(touch_cell),"Distinct number tap plants the selected square")
 	check(not scene.dock.is_open(),"Emulated mouse does not open workshop after the same tap")
 	send_touch(touch_point,true)
 	await process_frame
