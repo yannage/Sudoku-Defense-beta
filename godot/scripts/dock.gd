@@ -46,6 +46,17 @@ var _focus_target: Control
 var _portrait: bool = false
 var _layout_size: Vector2 = Vector2(1280, 800)
 var _board_bottom: float = 760.0
+var controller_mode: bool = false
+
+func set_controller_mode(value: bool) -> void:
+	if controller_mode == value: return
+	controller_mode = value
+	if _opened: refresh()
+
+func cycle_panel(direction: int) -> void:
+	var panels: Array[String] = ["tower", "bag", "loot", "camp"]
+	var index: int = panels.find(current_panel)
+	open_panel(panels[posmod(index + direction, panels.size())], selected_cell)
 
 func set_layout(viewport_size: Vector2, portrait: bool, board_bottom: float) -> void:
 	var mode_changed: bool = _portrait != portrait
@@ -97,7 +108,7 @@ func open_panel(kind: String, cell: int = -1) -> void:
 	_opened = true
 	visible = true
 	_message = ""
-	refresh()
+	refresh(false)
 	_focus_current.call_deferred()
 	_shell.modulate.a = 0.0
 	var tween: Tween = create_tween()
@@ -106,11 +117,13 @@ func open_panel(kind: String, cell: int = -1) -> void:
 func _focus_current() -> void:
 	if _opened and is_instance_valid(_focus_target) and _focus_target.is_inside_tree():
 		_focus_target.grab_focus()
+		if is_instance_valid(_scroll) and _scroll.is_ancestor_of(_focus_target):
+			_scroll.ensure_control_visible.call_deferred(_focus_target)
 
-func close_panel() -> void:
+func close_panel(preserve_armed: bool = false) -> void:
 	_opened = false
 	visible = false
-	_armed_id = ""
+	if not preserve_armed: _armed_id = ""
 	closed.emit()
 
 func reset_for_run() -> void:
@@ -133,12 +146,13 @@ func clear_armed() -> void:
 	_armed_id = ""
 	if _opened: refresh()
 
-func refresh() -> void:
+func refresh(preserve_focus: bool = true) -> void:
 	if not _opened or run == null: return
 	var old_scroll: int = _scroll.scroll_vertical if is_instance_valid(_scroll) else 0
 	var focus_owner: Control = get_viewport().gui_get_focus_owner()
-	var restore_focus: bool = is_instance_valid(focus_owner) and _shell.is_ancestor_of(focus_owner)
+	var restore_focus: bool = preserve_focus and is_instance_valid(focus_owner) and _shell.is_ancestor_of(focus_owner)
 	var focus_id: String = str(focus_owner.get_meta("focus_id", "")) if restore_focus else ""
+	var old_focus_index: int = _focusable_buttons().find(focus_owner) if restore_focus else -1
 	for child in _body.get_children():
 		_body.remove_child(child)
 		child.queue_free()
@@ -148,7 +162,7 @@ func refresh() -> void:
 	var heading: Label = _label(str(names.get(current_panel, "LOADOUT")), 18, TEXT)
 	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(heading)
-	var close_button: Button = _button("X", close_panel, false, false, 34)
+	var close_button: Button = _button("B" if controller_mode else "X", close_panel, false, false, 34, "close")
 	close_button.custom_minimum_size = Vector2(34, 34)
 	close_button.tooltip_text = "Close panel · B / Escape"
 	top.add_child(close_button)
@@ -158,7 +172,7 @@ func refresh() -> void:
 	for tab in ["tower", "bag", "loot", "camp"]:
 		var tab_kind: String = str(tab)
 		var text_value: String = str({"tower":"Tower", "bag":"Bag", "loot":"Loot", "camp":"Camp"}[tab_kind])
-		var tab_button: Button = _button(text_value, func(): open_panel(tab_kind, selected_cell), tab_kind == current_panel, false, 32)
+		var tab_button: Button = _button(text_value, func(): open_panel(tab_kind, selected_cell), tab_kind == current_panel, false, 32, "tab:" + tab_kind)
 		tab_button.add_theme_font_size_override("font_size", 12)
 		tab_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		tabs.add_child(tab_button)
@@ -175,6 +189,7 @@ func refresh() -> void:
 		_body.add_child(note)
 	_scroll = ScrollContainer.new()
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_scroll.follow_focus = true
 	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_body.add_child(_scroll)
@@ -191,12 +206,25 @@ func refresh() -> void:
 	_apply_layout()
 	_scroll.set_deferred("scroll_vertical", old_scroll)
 	if restore_focus:
+		var focus_found: bool = false
 		if not focus_id.is_empty():
-			for candidate in _shell.find_children("*", "Button", true, false):
-				if str(candidate.get_meta("focus_id", "")) == focus_id and not candidate.disabled:
+			for candidate in _focusable_buttons():
+				if str(candidate.get_meta("focus_id", "")) == focus_id:
 					_focus_target = candidate
+					focus_found = true
 					break
+		if not focus_found and old_focus_index >= 0:
+			var controls: Array[Control] = _focusable_buttons()
+			if not controls.is_empty(): _focus_target = controls[mini(old_focus_index, controls.size() - 1)]
 		_focus_current.call_deferred()
+
+func _focusable_buttons() -> Array[Control]:
+	var controls: Array[Control] = []
+	if not is_instance_valid(_shell): return controls
+	for candidate in _shell.find_children("*", "Button", true, false):
+		if not candidate.disabled and candidate.focus_mode != Control.FOCUS_NONE:
+			controls.append(candidate)
+	return controls
 
 func _apply_touch_sizes(node: Node) -> void:
 	# A portrait canvas is 600 logical pixels wide; use larger type and touch
@@ -208,7 +236,7 @@ func _apply_touch_sizes(node: Node) -> void:
 		node.custom_minimum_size = Vector2(54, 54)
 	elif node is Button:
 		node.custom_minimum_size.y = maxf(68, node.custom_minimum_size.y * 1.5)
-		if node.text == "X": node.custom_minimum_size.x = 68
+		if str(node.get_meta("focus_id", "")) == "close": node.custom_minimum_size.x = 68
 	for child in node.get_children():
 		_apply_touch_sizes(child)
 
@@ -236,9 +264,9 @@ func _tower_panel(content: VBoxContainer) -> void:
 	_stat(stats_row, "RANGE", "%.1f" % float(stats.get("range", 0)))
 	var cost: int = int(run.upgrade_cost(selected_cell))
 	var cell: int = selected_cell
-	content.add_child(_button("Upgrade this tower   ·   %d" % cost, func(): _act("upgrade_tower", [cell]), true, int(run.credits) < cost))
+	content.add_child(_button("Upgrade this tower   ·   %d" % cost, func(): _act("upgrade_tower", [cell]), true, int(run.credits) < cost, 42, "upgrade:tower"))
 	var family_cost: int = int(run.family_upgrade_cost(number))
-	content.add_child(_button("Upgrade all %ds   ·   %d" % [number, family_cost], func(): _act("upgrade_family", [number]), false, int(run.credits) < family_cost))
+	content.add_child(_button("Upgrade all %ds   ·   %d" % [number, family_cost], func(): _act("upgrade_family", [number]), false, int(run.credits) < family_cost, 42, "upgrade:family"))
 	var attachments: Array = tower.get("attachments", [])
 	_section(content, "ATTACHMENT STACK", "%d / 5 slots" % attachments.size())
 	for i in range(5):
@@ -256,12 +284,12 @@ func _tower_panel(content: VBoxContainer) -> void:
 			row.add_child(item_text)
 			item_text.add_child(_label(str(Loot.NAMES.get(str(item.get("kind", "")), "Attachment")), 14, Loot.rarity_color(str(item.get("rarity", "common")))))
 			item_text.add_child(_label(Card._short_stat(item), 11, MUTED))
-			var remove_button: Button = _button("-", func(): _act("unequip_item", [cell, slot]), false, false, 32)
+			var remove_button: Button = _button("-", func(): _act("unequip_item", [cell, slot]), false, false, 32, "slot:" + str(slot))
 			remove_button.custom_minimum_size.x = 32
 			remove_button.tooltip_text = "Return attachment to inventory"
 			row.add_child(remove_button)
 		else:
-			var empty: Button = _button("Empty · add attachment", func(): open_panel("bag", cell), false, false, 32)
+			var empty: Button = _button("Empty · add attachment", func(): open_panel("bag", cell), false, false, 32, "slot:" + str(slot))
 			empty.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			empty.add_theme_font_size_override("font_size", 12)
 			row.add_child(empty)
@@ -269,7 +297,7 @@ func _tower_panel(content: VBoxContainer) -> void:
 	_mini_grid(content)
 
 func _bag_panel(content: VBoxContainer) -> void:
-	_note(content, "Drag a module onto a tower. Or select a module, then select its tower.")
+	_note(content, "A selects a module. Choose its tower, then A to attach. LB / RB changes tabs." if controller_mode else "Drag a module onto a tower. Or select a module, then select its tower.")
 	if run.towers.has(selected_cell):
 		var tower: Dictionary = run.towers[selected_cell]
 		var count: int = tower.get("attachments", []).size()
@@ -290,10 +318,10 @@ func _bag_panel(content: VBoxContainer) -> void:
 	for item in attachments:
 		var data: Dictionary = item
 		var card: Button = Card.new()
-		card.configure(data, str(data.id) == _armed_id)
+		card.configure(data, str(data.id) == _armed_id, controller_mode)
 		card.pressed.connect(func():
 			_armed_id = str(data.id)
-			_message = "Select a tower on the board to attach."
+			_message = "Choose a tower, then A to attach." if controller_mode else "Select a tower on the board to attach."
 			item_armed.emit(_armed_id)
 			refresh()
 		)
@@ -303,7 +331,7 @@ func _bag_panel(content: VBoxContainer) -> void:
 		for item in consumables:
 			var data: Dictionary = item
 			var card: Button = Card.new()
-			card.configure(data)
+			card.configure(data, false, controller_mode)
 			card.pressed.connect(func(): _act("use_item", [data.id]))
 			content.add_child(card)
 	_section(content, "EMERGENCY SEEDS", "6 credits each")
@@ -314,11 +342,11 @@ func _bag_panel(content: VBoxContainer) -> void:
 	content.add_child(seed_grid)
 	for seed_number in range(1,10):
 		var number: int = seed_number
-		var buy: Button = _button("%d  ·  ×%d" % [number,int(run.inventory[number])], func(): _act("buy_seed", [number]), false, int(run.credits)<6, 36)
+		var buy: Button = _button("%d  ·  ×%d" % [number,int(run.inventory[number])], func(): _act("buy_seed", [number]), false, int(run.credits)<6, 36, "seed:" + str(number))
 		buy.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		buy.tooltip_text = "Buy one reserve seed %d for 6 credits" % number
 		seed_grid.add_child(buy)
-	_section(content, "TOWER SELECTOR", "Tap a planted square")
+	_section(content, "TOWER SELECTOR", "A chooses a tower" if controller_mode else "Tap a planted square")
 	_mini_grid(content, false)
 
 func _loot_panel(content: VBoxContainer) -> void:
@@ -347,13 +375,13 @@ func _loot_panel(content: VBoxContainer) -> void:
 		text_box.add_child(_label(rarity.capitalize() + " cache", 18, color))
 		text_box.add_child(_label("%d fragments to unlock" % int(data.get("cost", 5)), 12, MUTED))
 		var can_open: bool = str(run.phase) in ["solve", "prep", "loot", "won"]
-		box.add_child(_button("Crack it open   ·   %d" % int(data.get("cost", 5)), func(): _open_chest(data.id), true, int(run.fragments) < int(data.get("cost", 5)) or not can_open))
+		box.add_child(_button("Crack it open   ·   %d" % int(data.get("cost", 5)), func(): _open_chest(data.id), true, int(run.fragments) < int(data.get("cost", 5)) or not can_open, 42, "chest:" + str(data.id)))
 	if not str(run.phase) in ["solve", "prep", "loot", "won"]:
 		_note(content, "Open caches before or after a siege.", GOLD)
 	if str(run.phase) == "loot":
 		_section(content, "SUPPLY CACHE", "Optional purchase")
 		var price: int = int(run.chest_price("common"))
-		content.add_child(_button("Buy common cache   ·   %d" % price, func(): _act("buy_chest", ["common"]), false, int(run.credits) < price))
+		content.add_child(_button("Buy common cache   ·   %d" % price, func(): _act("buy_chest", ["common"]), false, int(run.credits) < price, 42, "buy:chest"))
 
 func _reward_view(content: VBoxContainer) -> void:
 	var rarity: String = str(_reward.get("rarity", "common"))
@@ -376,7 +404,7 @@ func _reward_view(content: VBoxContainer) -> void:
 	for item in rewards:
 		if item is Dictionary:
 			var card: Button = Card.new()
-			card.configure(item)
+			card.configure(item, false, controller_mode)
 			card.pressed.connect(func(): open_panel("bag", selected_cell))
 			content.add_child(card)
 	_note(content, "Your new gear is already in the bag. Equip it to shape your next defense.", MINT)
@@ -410,7 +438,7 @@ func _camp_panel(content: VBoxContainer) -> void:
 		row.add_child(box)
 		box.add_child(_label(str(entry.name) + "  ·  Lv %d" % level, 16, TEXT))
 		_note(box, str(entry.detail))
-		box.add_child(_button("Improve   ·   %d" % cost, func(): _act("buy_passive", [kind]), false, int(run.credits) < cost or str(run.phase) != "loot", 34))
+		box.add_child(_button("Improve   ·   %d" % cost, func(): _act("buy_passive", [kind]), false, int(run.credits) < cost or str(run.phase) != "loot", 34, "passive:" + kind))
 	_section(content, "THE SALVAGE REELS", "10 credits / spin")
 	var slot_box: PanelContainer = _panel(Color("574835"))
 	content.add_child(slot_box)
@@ -440,13 +468,13 @@ func _camp_panel(content: VBoxContainer) -> void:
 		_note(slot_content, str(_slot_result.get("message", _slot_result.get("label", "Reward added to your bag."))), MINT)
 	slot_content.add_child(_button("Spin for salvage   ·   10", _spin, true, int(run.credits) < 10 or str(run.phase) != "loot"))
 	_note(content, "Below-stake results always include a usable module. No empty spins.", GOLD)
-	content.add_child(_button("Hide odds" if _show_odds else "View the fixed odds", func(): _show_odds = not _show_odds; refresh(), false, false, 32))
+	content.add_child(_button("Hide odds" if _show_odds else "View the fixed odds", func(): _show_odds = not _show_odds; refresh(), false, false, 32, "slot:odds"))
 	if _show_odds:
 		_note(content, "25% module · 20% 5 credits + module\n25% stake back · 20% double · 5% triple\n5% cache + stake back\n\nAverage credit return: 95%. Gear and caches are extra. Credits stay inside this game.")
 	if str(run.phase) != "loot": _note(content, "The camp opens after you survive a siege.", GOLD)
 
 func _mini_grid(content: VBoxContainer, heading: bool = true) -> void:
-	if heading: _section(content, "YOUR TOWERS", "Tap to inspect")
+	if heading: _section(content, "YOUR TOWERS", "A inspects" if controller_mode else "Tap to inspect")
 	var center: CenterContainer = CenterContainer.new()
 	content.add_child(center)
 	var grid: GridContainer = GridContainer.new()
@@ -525,10 +553,10 @@ func _label(text_value: String, font_size: int, color: Color) -> Label:
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return label
 
-func _button(text_value: String, action: Callable, primary: bool = false, disabled_value: bool = false, height: int = 42) -> Button:
+func _button(text_value: String, action: Callable, primary: bool = false, disabled_value: bool = false, height: int = 42, focus_id: String = "") -> Button:
 	var button: Button = Button.new()
 	button.text = text_value
-	button.set_meta("focus_id", "button:" + text_value)
+	button.set_meta("focus_id", focus_id if not focus_id.is_empty() else "button:" + text_value)
 	button.custom_minimum_size.y = height
 	button.focus_mode = Control.FOCUS_ALL
 	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
@@ -543,7 +571,7 @@ func _button(text_value: String, action: Callable, primary: bool = false, disabl
 		if state == "hover": bg = bg.lightened(0.10)
 		if state == "pressed": bg = bg.darkened(0.12)
 		if state == "disabled": bg = Color("12232c")
-		button.add_theme_stylebox_override(state, _style(bg, MINT if state == "focus" else LINE, 8, 2 if state == "focus" else 1, 6))
+		button.add_theme_stylebox_override(state, _style(bg, TEXT if state == "focus" else LINE, 8, 2 if state == "focus" else 1, 6))
 	button.pressed.connect(action)
 	return button
 

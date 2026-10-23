@@ -6,7 +6,7 @@ const Loot = preload("res://scripts/loot.gd")
 var item: Dictionary = {}
 var armed: bool = false
 
-func configure(data: Dictionary, is_armed: bool = false) -> void:
+func configure(data: Dictionary, is_armed: bool = false, controller_mode: bool = false) -> void:
 	item = data
 	set_meta("focus_id", "item:" + str(data.get("id", "")))
 	armed = is_armed
@@ -59,7 +59,10 @@ func configure(data: Dictionary, is_armed: bool = false) -> void:
 	detail.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(detail)
 	var tag: Label = Label.new()
-	tag.text = rarity.to_upper() + ("  ·  USE" if str(item.get("type", "")) == "consumable" else ("  ·  SELECTED" if armed else "  ·  DRAG TO TOWER"))
+	var action_hint: String = "A USE" if controller_mode else "USE"
+	if str(item.get("type", "")) != "consumable":
+		action_hint = "SELECTED" if armed else ("A SELECT" if controller_mode else "DRAG TO TOWER")
+	tag.text = rarity.to_upper() + "  ·  " + action_hint
 	tag.add_theme_font_size_override("font_size", 10)
 	tag.add_theme_color_override("font_color", color)
 	tag.mouse_filter = Control.MOUSE_FILTER_IGNORE

@@ -51,6 +51,16 @@ The Windows and Linux builds are separate deliverables from the same project. Th
 
 For Steam, place the contents of the appropriate platform folder at that platform depot's root. Use `SudokuDefense.exe` for a Windows launch option and `sudoku-defense.x86_64` for a Linux launch option. Preserve executable permissions for Linux. Do not replace the live Steam depot until launch, controls, audio, save/resume, and performance have been tested on an actual Deck.
 
+### Controller setup for this port
+
+Godot's desktop exports use its native gamepad input; receiving the Deck's buttons and sticks does not require a browser wrapper or the Steam Input API. Godot has used SDL 3 for desktop controllers since 4.5. The web export uses a different controller backend, so a browser pass is not a substitute for testing the installed Deck build. See [Godot controller support](https://docs.godotengine.org/en/stable/tutorials/inputs/controllers_gamepads_joysticks.html).
+
+When preparing the Steam release, select the built-in **Gamepad** template as the app's recommended Steam Input configuration and test it against the actual executable. This supplies ordinary gamepad events. Retire a mouse/keyboard configuration left over from the older web wrapper; avoid requiring the player to hold the Steam button to emulate a mouse. A custom Steam Input action manifest is not part of this build. This document does not change the account's published controller configuration. Valve describes the template choices in [Gamepad Emulation Best Practices](https://partner.steamgames.com/doc/features/steam_controller/steam_input_gamepad_emulation_bestpractices).
+
+The required device pass is: launch from the Deck library; use D-pad/stick and A to select a mode/difficulty and start; plant numbers with LB/RB and A; inspect/upgrade a tower; select and equip gear; open a cache and use an item; visit camp; move to another round; pause/resume and resume a save. Test a controller disconnect/reconnect and Deck suspend/resume too. Confirm every menu can be exited with B and no open panel sends button presses through to the board. The default configuration must expose the entire game, as described by [Valve's Deck recommendations](https://partner.steamgames.com/doc/steamhardware/recommendations).
+
+The controller regression suite injects joypad button/axis events through the actual scene for both board renderers. It checks the application's routing and focus behavior, not SDL hardware discovery or physical Deck mappings. Keep the native Deck pass as a release requirement before claiming Steam's Full Controller Support or Deck Verified status.
+
 Headless import and executable boot checks detect packaging and script errors. They do not establish controller usability, graphics performance, Proton compatibility, or Steam Deck verification. Browser play is a convenient test surface; desktop and Deck testing remain separate release gates.
 
 ## Current source and verification

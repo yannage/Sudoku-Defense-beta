@@ -7,6 +7,7 @@ const RenderProfile = preload("res://scripts/render_profile.gd")
 const DockScript = preload("res://scripts/dock.gd")
 const SoundScript = preload("res://scripts/sound.gd")
 const DropScript = preload("res://scripts/board_drop.gd")
+const ControllerScript = preload("res://scripts/controller_input.gd")
 const INK := Color("0a1722")
 const PANEL := Color("112634")
 const MINT := Color("83e7c1")
@@ -35,8 +36,11 @@ var board_notes := true
 var game_speed := 1.0
 var last_phase := ""
 var ui_elapsed := 0.0
-var stick_cooldown := 0.0
 var controller_used := false
+var controller
+var _seed_text := ""
+var _seed_editing := false
+var _seed_return_initial := true
 var save_elapsed := 0.0
 var header: Label
 var resources: Label
@@ -76,6 +80,14 @@ func _ready() -> void:
 	sound = SoundScript.new()
 	add_child(sound)
 	_build_ui()
+	controller = ControllerScript.new()
+	controller.activity.connect(_controller_activity)
+	controller.action_pressed.connect(_controller_action)
+	controller.navigated.connect(_controller_navigate)
+	controller.controller_lost.connect(_controller_disconnected)
+	add_child(controller)
+	controller_used = not Input.get_connected_joypads().is_empty()
+	dock.set_controller_mode(controller_used)
 	get_viewport().size_changed.connect(_queue_layout)
 	_update_canvas_scale()
 	_layout_ui()
@@ -247,9 +259,17 @@ func _build_ui() -> void:
 	ui.add_child(dock)
 	dock.setup(run)
 	dock.changed.connect(_action)
-	dock.closed.connect(func(): armed_item = ""; _refresh())
+	dock.closed.connect(func(): armed_item = ""; _release_ui_focus(); _refresh())
 	dock.cell_requested.connect(func(cell): _select(cell,false))
-	dock.item_armed.connect(func(item_id): armed_item = str(item_id); _toast("Choose a tower to attach this module"))
+	dock.item_armed.connect(func(item_id):
+		if controller_used:
+			dock.close_panel(true)
+			armed_item = str(item_id)
+			_toast("Choose a tower · A attach · B cancel")
+		else:
+			armed_item = str(item_id)
+			_toast("Choose a tower to attach this module")
+	)
 	var tools: Button = hud("tools",button("Tools",func(): tools_open = not tools_open; _layout_ui()))
 	positioned(tools,Rect2(0,0,100,72))
 	for child in ui.get_children():
@@ -466,7 +486,7 @@ func _process(dt: float) -> void:
 	if dock.is_open() != _dock_was_open:
 		_dock_was_open = dock.is_open()
 		_layout_ui()
-	var blocked: bool = menu_open or manual_pause or dock.is_open()
+	var blocked: bool = menu_open or manual_pause or dock.is_open() or not armed_item.is_empty()
 	if not blocked:
 		run.update(minf(dt,0.05)*game_speed if run.phase == "battle" else minf(dt,0.05))
 	if world.has_method("set_panel_open"): world.set_panel_open(dock.is_open())
@@ -492,14 +512,6 @@ func _process(dt: float) -> void:
 			dock.open_panel("loot",selected_cell)
 		elif run.phase in ["won","lost"] and not menu_open:
 			_show_result()
-	stick_cooldown = maxf(0,stick_cooldown-dt)
-	if not menu_open and not dock.is_open() and Input.get_connected_joypads().size() > 0 and stick_cooldown <= 0:
-		var joy: int = Input.get_connected_joypads()[0]
-		var axis := Vector2(Input.get_joy_axis(joy,JOY_AXIS_LEFT_X),Input.get_joy_axis(joy,JOY_AXIS_LEFT_Y))
-		if axis.length() > .55:
-			_move_selection(Vector2i(signi(int(axis.x*100)),0) if absf(axis.x)>absf(axis.y) else Vector2i(0,signi(int(axis.y*100))))
-			stick_cooldown = .18
-			controller_used = true
 	save_elapsed += dt
 	if save_elapsed > 15 and not menu_open:
 		save_elapsed = 0
@@ -536,13 +548,13 @@ func _refresh() -> void:
 	reserve_button.disabled = run.credits<6
 	bag_button.text = "Gear %d" % run.items.size()
 	loot_button.text = "Chests %d" % run.chests.size()
-	pause_label.visible = (manual_pause or dock.is_open()) and not menu_open
-	pause_label.text = "TACTICAL PAUSE  ·  Manage your loadout" if dock.is_open() else "PAUSED  ·  P / Start to resume"
+	pause_label.visible = (manual_pause or dock.is_open() or not armed_item.is_empty()) and not menu_open
+	pause_label.text = "TACTICAL PAUSE  ·  Choose a tower · A attach · B cancel" if not armed_item.is_empty() else ("TACTICAL PAUSE  ·  Manage your loadout" if dock.is_open() else "PAUSED  ·  P / Start to resume")
 	if selected_cell >= 0:
 		selected_label.text = "ROW %d  /  COLUMN %d" % [selected_cell/9+1,selected_cell%9+1]
 		if run.towers.has(selected_cell):
 			var t: Dictionary = run.towers[selected_cell]
-			candidate_label.text = "Seed %d · Lv %d\n%d / 5 modules\nClick to customize" % [t.number,run.tower_stats(selected_cell).level,t.attachments.size()]
+			candidate_label.text = "Seed %d · Lv %d\n%d / 5 modules\n%s" % [t.number,run.tower_stats(selected_cell).level,t.attachments.size(),"A customize" if controller_used else "Click to customize"]
 		elif run.givens[selected_cell]:
 			candidate_label.text = "A fixed clue.\nGrow towers in\nthe empty squares."
 		elif board_notes:
@@ -558,6 +570,7 @@ func _refresh() -> void:
 		b.add_theme_stylebox_override("normal",style(Color("315950") if selected_number==i+1 else PANEL, COLORS[i] if selected_number==i+1 else Color("35505a")))
 	if portrait_layout: _refresh_portrait_text()
 	controls_label.text = "D-PAD move   LB/RB number   A plant   X gear   Y advance   B back" if controller_used else "CLICK select   1-9 plant   ENTER advance   TAB gear   ESC menu"
+	if controller_used and not armed_item.is_empty(): controls_label.text = "D-PAD / STICK choose tower     A attach module     B cancel"
 
 func _choose_number(number: int) -> void:
 	selected_number = number
@@ -566,16 +579,18 @@ func _choose_number(number: int) -> void:
 		_action(run.place(selected_cell,number))
 	_refresh()
 
-func _select(cell: int, place_now: bool = true) -> void:
+func _select(cell: int, place_now: bool = true, equip_armed: bool = true) -> void:
 	if cell < 0 or cell >= 81: return
 	selected_cell = cell
 	world.set_selected(cell,selected_number)
 	dock.set_selected(cell)
-	if not armed_item.is_empty():
+	if not armed_item.is_empty() and equip_armed:
 		if run.towers.has(cell):
-			_action(run.equip_item(cell,armed_item))
-			armed_item = ""
-			dock.clear_armed()
+			var result: Dictionary = run.equip_item(cell,armed_item)
+			_action(result)
+			if result.get("ok",false):
+				armed_item = ""
+				dock.clear_armed()
 		else: _toast("Choose a planted tower for this module.",false)
 	elif place_now and run.towers.has(cell):
 		dock.open_panel("tower",cell)
@@ -589,7 +604,7 @@ func _move_selection(direction: Vector2i) -> void:
 		var x: int = clampi(selected_cell%9+direction.x,0,8)
 		var y: int = clampi(selected_cell/9+direction.y,0,8)
 		selected_cell = y*9+x
-	_select(selected_cell,false)
+	_select(selected_cell,false,false)
 
 func _action(result: Dictionary) -> void:
 	if result.has("message"): _toast(str(result.message),bool(result.get("ok",false)))
@@ -676,6 +691,8 @@ func _close_overlay() -> void:
 	if is_instance_valid(overlay): overlay.queue_free()
 	overlay = null
 	menu_open = false
+	_seed_editing = false
+	_release_ui_focus()
 	_refresh()
 
 func _modal(width: float = 650, height: float = 640) -> VBoxContainer:
@@ -702,6 +719,7 @@ func _modal(width: float = 650, height: float = 640) -> VBoxContainer:
 	panel.add_child(margin)
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.follow_focus = true
 	margin.add_child(scroll)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation",13)
@@ -729,6 +747,8 @@ func _choice_row(box: VBoxContainer, title: String, values: Array, current: Stri
 		)
 
 func _show_menu(initial: bool = false) -> void:
+	_seed_editing = false
+	_seed_return_initial = initial
 	var box := _modal(674,690)
 	box.add_child(label("Y A K   S T U D I O S     /     G O D O T   E D I T I O N",11,MINT))
 	box.add_child(label("SUDOKU DEFENSE",38,WHITE))
@@ -748,14 +768,19 @@ func _show_menu(initial: bool = false) -> void:
 	seed_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	seed_input.custom_minimum_size.y = 36
 	seed_input.add_theme_font_size_override("font_size",14)
+	seed_input.text = _seed_text
+	seed_input.text_changed.connect(func(value): _seed_text = value)
 	seed_row.add_child(seed_input)
+	seed_row.add_child(button("Keypad",_show_seed_pad))
 	var start := button("Start expedition ",_start_run,true)
 	box.add_child(start)
+	var initial_focus: Button = start
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation",10)
 	box.add_child(row)
 	if not initial:
 		var resume := button("Resume run",_close_overlay)
+		initial_focus = resume
 		resume.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(resume)
 	elif FileAccess.file_exists("user://sudoku-defense-run.json"):
@@ -773,7 +798,7 @@ func _show_menu(initial: bool = false) -> void:
 	how.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(how)
 	box.add_child(label("CONTROLLER • MOUSE • TOUCH     /     Saves automatically on this device",11,MUTED))
-	start.grab_focus()
+	initial_focus.grab_focus()
 
 func _help() -> void:
 	var box := _modal(720,652)
@@ -788,11 +813,15 @@ func _help() -> void:
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		box.add_child(l)
 	box.add_child(label("CONTROLLER",12,MINT))
-	var input_label := label("D-pad / left stick: select square  ·  LB / RB: choose number\nA: plant / inspect  ·  X: gear  ·  Y: next phase  ·  B: back\nStart: pause menu  ·  Touch / trackpad: direct selection",15,MUTED)
+	var input_label := label("D-pad / left stick: move  ·  LB / RB: number / inventory tab\nA: confirm / plant / attach  ·  X: gear  ·  Y: next phase  ·  B: back\nStart: pause / resume  ·  View: help / options",15,MUTED)
 	box.add_child(input_label)
 	var reduce := button("Reduced motion: " + ("ON" if reduced_motion else "OFF"),func(): reduced_motion=not reduced_motion; world.set_reduced_motion(reduced_motion); _help())
 	box.add_child(reduce)
 	box.add_child(button("Sound: " + ("OFF" if muted else "ON"),func(): _toggle_sound(); _help()))
+	box.add_child(button("Notes: " + ("ON" if board_notes else "OFF"),func(): board_notes=not board_notes; _help()))
+	box.add_child(button("Battle speed: " + ("2x" if game_speed>1.0 else "1x"),func(): game_speed=1.0 if game_speed>1.0 else 2.0; _help()))
+	if has_active_run and selected_cell >= 0 and not run.givens[selected_cell] and not run.towers.has(selected_cell):
+		box.add_child(button("Reveal selected square · 6 credits",func(): _action(run.hint(selected_cell)); _close_overlay()))
 	box.add_child(label("Godot edition " + str(ProjectSettings.get_setting("application/config/version")) + "  /  " + ("Compatible voxels" if RenderProfile.uses_canvas() else "3D voxels"),11,MUTED))
 	var back := button("Got it",_close_overlay,true)
 	box.add_child(back)
@@ -859,26 +888,144 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif event.keycode == KEY_RIGHT: _move_selection(Vector2i.RIGHT)
 		elif event.keycode == KEY_UP: _move_selection(Vector2i.UP)
 		elif event.keycode == KEY_DOWN: _move_selection(Vector2i.DOWN)
-	elif event is InputEventJoypadButton and event.pressed:
+
+func _input(event: InputEvent) -> void:
+	if controller_used and ((event is InputEventKey and event.pressed) or (event is InputEventMouseButton and event.pressed and event.device != InputEvent.DEVICE_ID_EMULATION) or event is InputEventScreenTouch):
+		controller_used = false
+		if controller != null: controller.reset_navigation()
+		dock.set_controller_mode.call_deferred(false)
+		_refresh()
+
+func _controller_activity() -> void:
+	if not controller_used:
 		controller_used = true
-		if event.button_index == JOY_BUTTON_B:
-			if menu_open: _close_overlay()
-			elif dock.is_open(): dock.close_panel()
-			else: selected_number=0; armed_item=""; _refresh()
-			return
-		if menu_open: return
-		if event.button_index == JOY_BUTTON_START: _show_menu(false); return
-		if event.button_index == JOY_BUTTON_X: _toggle_dock("bag"); return
-		if dock.is_open(): return
-		match event.button_index:
-			JOY_BUTTON_DPAD_LEFT: _move_selection(Vector2i.LEFT)
-			JOY_BUTTON_DPAD_RIGHT: _move_selection(Vector2i.RIGHT)
-			JOY_BUTTON_DPAD_UP: _move_selection(Vector2i.UP)
-			JOY_BUTTON_DPAD_DOWN: _move_selection(Vector2i.DOWN)
-			JOY_BUTTON_LEFT_SHOULDER: selected_number = 9 if selected_number<=1 else selected_number-1; world.set_selected(selected_cell,selected_number)
-			JOY_BUTTON_RIGHT_SHOULDER: selected_number = 1 if selected_number>=9 else selected_number+1; world.set_selected(selected_cell,selected_number)
-			JOY_BUTTON_A:
-				if selected_cell<0: _select(40,false)
-				elif run.towers.has(selected_cell): dock.open_panel("tower",selected_cell)
-				elif selected_number>0: _action(run.place(selected_cell,selected_number))
-			JOY_BUTTON_Y: _advance()
+		# Preserve the currently focused card through this input dispatch. The
+		# dock can rebuild hints afterwards without losing the first A press.
+		dock.set_controller_mode.call_deferred(true)
+		_refresh()
+
+func _release_ui_focus() -> void:
+	var focused: Control = get_viewport().gui_get_focus_owner()
+	if is_instance_valid(focused): focused.release_focus()
+
+func _controller_scope() -> Control:
+	if menu_open and is_instance_valid(overlay): return overlay
+	if dock.is_open(): return dock._shell
+	return null
+
+func _controller_buttons(scope: Control) -> Array[Control]:
+	var buttons: Array[Control] = []
+	for node in scope.find_children("*","BaseButton",true,false):
+		if node.is_visible_in_tree() and not node.disabled and node.focus_mode != Control.FOCUS_NONE:
+			buttons.append(node)
+	return buttons
+
+func _controller_navigate(direction: Vector2i) -> void:
+	var scope: Control = _controller_scope()
+	if scope == null:
+		if has_active_run and not manual_pause: _move_selection(direction)
+		return
+	var buttons: Array[Control] = _controller_buttons(scope)
+	if buttons.is_empty(): return
+	var focused: Control = get_viewport().gui_get_focus_owner()
+	if not buttons.has(focused):
+		buttons[0].grab_focus()
+		return
+	var side: int = SIDE_LEFT if direction.x < 0 else (SIDE_RIGHT if direction.x > 0 else (SIDE_TOP if direction.y < 0 else SIDE_BOTTOM))
+	var neighbor: Control = focused.find_valid_focus_neighbor(side)
+	if not buttons.has(neighbor) or neighbor == focused:
+		var increment: int = 1 if direction.x > 0 or direction.y > 0 else -1
+		neighbor = buttons[posmod(buttons.find(focused)+increment,buttons.size())]
+	neighbor.grab_focus()
+
+func _controller_confirm_ui() -> void:
+	var scope: Control = _controller_scope()
+	if scope == null: return
+	var focused: Control = get_viewport().gui_get_focus_owner()
+	var buttons: Array[Control] = _controller_buttons(scope)
+	if not buttons.has(focused):
+		if not buttons.is_empty(): buttons[0].grab_focus()
+		return
+	# This event is already consumed by ControllerInput, so GUI handling cannot
+	# activate another control or fall through to the board on button release.
+	if focused is BaseButton and not focused.disabled:
+		focused.pressed.emit()
+
+func _controller_action(action: String) -> void:
+	if action == "pause":
+		controller.reset_navigation()
+		if _seed_editing: _show_menu(_seed_return_initial)
+		elif menu_open:
+			if has_active_run: manual_pause = false; _close_overlay()
+		else: _show_menu(false)
+		return
+	if action == "cancel":
+		if _seed_editing: _show_menu(_seed_return_initial)
+		elif menu_open: _close_overlay()
+		elif dock.is_open(): dock.close_panel()
+		else:
+			armed_item = ""
+			dock.clear_armed()
+			selected_number = 0
+			world.set_selected(selected_cell,0)
+			_refresh()
+		return
+	if action == "help":
+		_help()
+		return
+	if menu_open:
+		if action == "confirm": _controller_confirm_ui()
+		return
+	if action == "gear":
+		_toggle_dock("bag")
+		return
+	if dock.is_open():
+		if action == "confirm": _controller_confirm_ui()
+		elif action in ["previous","next"]: dock.cycle_panel(-1 if action == "previous" else 1)
+		return
+	if manual_pause: return
+	match action:
+		"previous", "next":
+			if selected_number <= 0: selected_number = 9 if action == "previous" else 1
+			else: selected_number = posmod(selected_number-1+(-1 if action == "previous" else 1),9)+1
+			world.set_selected(selected_cell,selected_number)
+			_refresh()
+		"confirm":
+			if selected_cell < 0: _select(40,false,false)
+			else: _select(selected_cell,true)
+		"advance": _advance()
+
+func _controller_disconnected() -> void:
+	if has_active_run:
+		if not menu_open: _show_menu(false)
+		_toast("Controller disconnected. Game paused; reconnect or use touch / mouse.",false)
+
+func _show_seed_pad() -> void:
+	if is_instance_valid(seed_input): _seed_text = seed_input.text
+	_seed_editing = true
+	var box := _modal(490,570)
+	box.add_child(label("CHOOSE A RUN SEED",25,MINT))
+	box.add_child(label("D-pad / stick move · A select · B back",15,MUTED))
+	var display := label(_seed_text if not _seed_text.is_empty() else "Random",30,WHITE)
+	display.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(display)
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation",8)
+	grid.add_theme_constant_override("v_separation",8)
+	box.add_child(grid)
+	for digit in ["1","2","3","4","5","6","7","8","9","Clear","0","Delete"]:
+		var value: String = digit
+		var key := button(value,func():
+			if value == "Clear": _seed_text = ""
+			elif value == "Delete": _seed_text = _seed_text.left(maxi(0,_seed_text.length()-1))
+			elif _seed_text.length() < 10:
+				_seed_text += value
+				_seed_text = str(mini(2147483647,_seed_text.to_int()))
+			display.text = _seed_text if not _seed_text.is_empty() else "Random"
+		)
+		key.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		key.set_meta("seed_key",value)
+		grid.add_child(key)
+	box.add_child(button("Use seed",func(): _show_menu(_seed_return_initial),true))
+	grid.get_child(0).grab_focus()
