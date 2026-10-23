@@ -4,7 +4,9 @@ A native Godot 4.7.2 version of the pre-Unity Sudoku Defense game. The same GDSc
 
 ## Play
 
-Open the published Godot edition in a current WebGL 2 browser, preferably in landscape. The launch page includes desktop downloads. For Windows, extract the ZIP and run `SudokuDefense.exe`. For Linux, extract the archive and run `sudoku-defense.x86_64`; the tar.gz also preserves execute permissions.
+Open the published Godot edition in a current WebGL 2 browser. Version 0.3.1 adapts to portrait phones, wide landscape phones, and the Steam Deck screen. Portrait keeps the grid above a large number bar and four quick tabs; Tools reveals notes, hints, and reserve seeds. Management opens in a scrollable sheet, with the board still available for selecting towers. The launch page offers fullscreen and desktop downloads. For Windows, extract the ZIP and run `SudokuDefense.exe`. For Linux, extract the archive and run `sudoku-defense.x86_64`; the tar.gz also preserves execute permissions.
+
+The browser export uses a lightweight voxel material with directional face colors, linear tone mapping, and no multisample resolve. Geometry, depth, aiming, tower growth, and chest animation remain native 3D. This addresses the reported all-black mobile board by avoiding the heavier rendering paths; the exact affected phone GPU still needs a retest. Desktop builds retain their standard lighting profile. Pass `--safe-graphics` to a desktop build to exercise the browser material profile.
 
 The browser game saves automatically on that browser/device. Desktop builds save through Godot's `user://` storage. Browser and desktop saves do not synchronize. Steam Cloud and Steam achievements are not integrated in this version.
 
@@ -40,14 +42,16 @@ Import `project.godot` with Godot 4.7.2 standard (GDScript) edition. The Compati
 godot --headless --path godot --script res://tests/test_run.gd
 godot --headless --path godot --script res://tests/test_ui_flow.gd
 python3 godot/scripts/build_exports.py --godot /path/to/godot
+# On Linux with Xvfb/Mesa installed, require actual framebuffer validation too:
+python3 godot/scripts/build_exports.py --godot /path/to/godot --render-check
 ```
 
 Run these commands from the repository root. Output is in `godot/build/`. CI builds the same three exports on branch `godot-deck-edition` and on `godot-v*` tags. See `docs/GODOT-BUILDS.md` for packaging and Steam handoff.
 
 ## Validation and current limits
 
-The simulation regression suite covers unique puzzles, first-wave survival, illegal placements, gear ownership, upgrades, cache accounting, fixed slot odds, deterministic mid-battle resume, and an automated fifty-wave medium campaign using earned gear and upgrades. UI flow tests exercise planting, inspection, equipment, panel bounds, tactical pause, and save/load. The exported Linux executable must reach its ready marker without script errors.
+The simulation regression suite covers unique puzzles, first-wave survival, illegal placements, gear ownership, upgrades, cache accounting, fixed slot odds, deterministic mid-battle resume, and an automated fifty-wave medium campaign using earned gear and upgrades. UI flow tests exercise planting, inspection, equipment, panel bounds, tactical pause, and save/load at phone and Deck sizes. Real GLES framebuffer checks verify visible color on all 81 cells, digit contrast, board framing and picking, and visible voxel towers and chests. The render suite explicitly rejects dummy/headless rendering and captures the integrated phone and Deck HUD. The exported Linux executable must reach its ready marker without script errors.
 
-These checks do not establish human campaign balance, physical Steam Deck controller behavior, GPU frame rate, or Windows execution. Browser visual playtesting was blocked by the session's preview access policy during this build. This is a playable development build, not a Steam Deck Verified release. The existing Steam depot has not been replaced by this port.
+These checks do not establish human campaign balance, physical Steam Deck controller behavior, GPU frame rate, or Windows execution. The current published Site requires owner sign-in that is unavailable in the test browser, so the exact phone/WebGL result remains unverified. GLES framebuffer tests use Mesa software rendering; they do not substitute for real mobile GPUs. This is a playable development build, not a Steam Deck Verified release. The existing Steam depot has not been replaced by this port.
 
 Godot is MIT licensed; its copyright and third-party notices are included. Gameplay source, voxel meshes, UI, and synthesized audio were created for this project. See the parent repository for the earlier web reference and Unity work on their respective branches.

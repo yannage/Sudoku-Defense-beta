@@ -4,6 +4,7 @@ extends SubViewportContainer
 ## set_rarity("rare") colors the rails. open_chest() reveals the reward.
 
 const RARITY_COLORS: Dictionary = {"common":Color("bacbd0"),"uncommon":Color("91e8a6"),"rare":Color("77caff"),"epic":Color("c7a0ff"),"legendary":Color("ffca69")}
+const VoxelMaterial = preload("res://scripts/voxel_material.gd")
 var rarity: String = "common"
 var reduced_motion: bool = false
 var _viewport: SubViewport
@@ -11,7 +12,7 @@ var _world: Node3D
 var _chest: Node3D
 var _lid: Node3D
 var _glow: Node3D
-var _trim: StandardMaterial3D
+var _trim: Material
 var _cube: BoxMesh = BoxMesh.new()
 var _materials: Dictionary = {}
 var _tween: Tween
@@ -29,6 +30,7 @@ func _ready() -> void:
 	_viewport.own_world_3d = true
 	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	_viewport.gui_disable_input = true
+	_viewport.msaa_3d = Viewport.MSAA_DISABLED
 	add_child(_viewport)
 	_world = Node3D.new()
 	_viewport.add_child(_world)
@@ -59,9 +61,7 @@ func _ready() -> void:
 	camera.current = true
 	_chest = Node3D.new()
 	_world.add_child(_chest)
-	_trim = StandardMaterial3D.new()
-	_trim.albedo_color = RARITY_COLORS.get(rarity, Color("bacbd0"))
-	_trim.roughness = 0.60
+	_trim = VoxelMaterial.create(RARITY_COLORS.get(rarity, Color("bacbd0")))
 	# Stepped feet and steel chassis.
 	for x: float in [-0.83, 0.83]:
 		for z: float in [-0.47, 0.47]:
@@ -110,10 +110,12 @@ func _process(dt: float) -> void:
 func set_rarity(value: String) -> void:
 	rarity = value
 	if _trim != null:
-		_trim.albedo_color = RARITY_COLORS.get(value, Color("bacbd0"))
-		_trim.emission_enabled = true
-		_trim.emission = _trim.albedo_color
-		_trim.emission_energy_multiplier = 0.20
+		var color: Color = RARITY_COLORS.get(value, Color("bacbd0"))
+		VoxelMaterial.set_color(_trim, color)
+		if _trim is StandardMaterial3D:
+			(_trim as StandardMaterial3D).emission_enabled = true
+			(_trim as StandardMaterial3D).emission = color
+			(_trim as StandardMaterial3D).emission_energy_multiplier = 0.20
 
 func open_chest() -> void:
 	if _lid == null or _opened:
@@ -173,10 +175,7 @@ func _box(parent: Node3D, pos: Vector3, dimensions: Vector3, color: Color, trim:
 	else:
 		var key: String = color.to_html()
 		if not _materials.has(key):
-			var material: StandardMaterial3D = StandardMaterial3D.new()
-			material.albedo_color = color
-			material.roughness = 0.75
-			_materials[key] = material
+			_materials[key] = VoxelMaterial.create(color)
 		mesh.material_override = _materials[key]
 	parent.add_child(mesh)
 	return mesh

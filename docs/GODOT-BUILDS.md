@@ -12,6 +12,8 @@ python3 godot/scripts/build_exports.py --godot /absolute/path/to/godot
 
 Use `--targets web`, `--targets linux`, or `--targets windows` for a narrower build. Generated files stay under the ignored `godot/build/` directory. The helper imports resources, runs the simulation and UI-flow tests, fails on Godot script errors, exports the selected platforms, boots the Linux executable headlessly when selected, and creates packages plus SHA-256 checksums. Tests must print their success markers; the exported Linux game must print its ready marker after its board, run, and UI are initialized.
 
+Use `--render-check` to additionally require the real GLES framebuffer suite. It runs on the current display or uses `xvfb-run` when no display is set; a dummy/headless renderer is rejected. Install Xvfb, xauth, Mesa OpenGL drivers, and EGL first. CI requires this check and uploads its screenshots from `godot/build/render-checks/` alongside the logs. The suite passes `--safe-graphics` to exercise the exact web material path, sampling board cell colors and numeral contrast rather than relying on a successful process exit.
+
 Outputs:
 
 | Output | Purpose |
@@ -33,11 +35,13 @@ The build helper must be run after exporting in the Godot editor; simply copying
 
 The desktop download page reconstructs large ZIP packages from static chunks, verifies each chunk and the completed ZIP with SHA-256, and downloads a normal ZIP file. The small source ZIP is served directly. Download metadata lives in `web/downloads/manifest.json`. Use `--stage-downloads-only` to stage existing archives without exporting; this does not update their contents. For a release, export all targets together so downloadable packages match the browser game.
 
+The web shell owns canvas sizing with resize policy `0`, a safe-area container, and a device-pixel-ratio cap of 2. Godot follows the actual canvas size while the HUD selects its logical layout by aspect ratio. Fullscreen starts from an explicit user tap. Engine graphics errors are retained locally behind an optional diagnostics panel; no telemetry is sent. The browser voxel profile uses a small prelit shader, linear tone mapping, and disabled 3D MSAA. These changes avoid expensive or fragile mobile rendering paths while preserving the actual 3D scene.
+
 Every desktop folder and browser distribution includes `GODOT-LICENSE.txt` and `GODOT-THIRD-PARTY.txt`. The download page links both notices. The build fails if either required notice is missing from the project.
 
 ## GitHub builds and downloads
 
-`.github/workflows/godot.yml` builds the project on changes to the `godot-defense` branch, on relevant pull requests, or by manual workflow dispatch. It downloads the official editor and templates and checks their published SHA-512 hashes before running them. Workflow artifacts contain Web, desktop, source, and validation logs.
+`.github/workflows/godot.yml` builds the project on changes to the `godot-deck-edition` branch, on relevant pull requests, or by manual workflow dispatch. It downloads the official editor and templates and checks their published SHA-512 hashes before running them. Workflow artifacts contain Web, desktop, source, and validation logs.
 
 Tags beginning with `godot-v` also create a GitHub release with the packages. Tag only a reviewed and tested commit; the workflow does not upload to Steam or change Steam's live build.
 

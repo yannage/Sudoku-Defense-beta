@@ -20,6 +20,10 @@ jobs:
       GODOT_VERSION: '4.7.2'
     steps:
       - uses: actions/checkout@v4
+      - name: Install graphics test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb xauth libgl1-mesa-dri libegl1
       - name: Install official Godot and export templates
         shell: bash
         run: |
@@ -38,7 +42,7 @@ jobs:
           mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
           mv templates/* "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
       - name: Import, export, validate Linux boot, and package
-        run: python3 godot/scripts/build_exports.py
+        run: python3 godot/scripts/build_exports.py --render-check
       - uses: actions/upload-artifact@v4
         with:
           name: Sudoku-Defense-Godot-Web
@@ -53,7 +57,9 @@ jobs:
         if: always()
         with:
           name: Sudoku-Defense-Godot-Build-Logs
-          path: godot/build/logs/
+          path: |
+            godot/build/logs/
+            godot/build/render-checks/
           retention-days: 14
 
   release:

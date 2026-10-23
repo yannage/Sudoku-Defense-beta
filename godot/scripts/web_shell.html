@@ -9,10 +9,16 @@
 <style>
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#07141c;color:#edf4eb;font-family:system-ui,-apple-system,sans-serif}canvas{display:block;width:100%;height:100%;outline:none;touch-action:none}#launch{position:fixed;inset:0;display:grid;place-items:center;background:radial-gradient(ellipse at 50% 45%,#173b42 0,#091b26 48%,#06111a 100%);padding:24px;z-index:2}.card{width:min(430px,100%);text-align:center}.sigil{width:76px;height:76px;margin:0 auto 28px;display:grid;grid-template-columns:repeat(3,1fr);gap:4px;transform:rotate(-7deg)}.sigil i{background:#75e1be;box-shadow:3px 4px 0 #277e78}.sigil i:nth-child(3n){background:#edaa6b;box-shadow:3px 4px 0 #8b623f}.sigil i:nth-child(5){background:#dcebdc;box-shadow:3px 4px 0 #7b9d91}h1{font-size:clamp(36px,6vw,49px);font-weight:850;line-height:1;letter-spacing:-2px;margin:0 0 16px}.eyebrow{font-size:10px;letter-spacing:4px;color:#9cb4b8;text-transform:uppercase;margin:0 0 20px}.tagline{font-size:16px;color:#adc2c2;line-height:1.6;margin:0 0 30px}button{font:inherit;cursor:pointer;touch-action:manipulation;border:0;border-radius:10px;background:#edaa6b;color:#142831;font-size:14px;font-weight:800;letter-spacing:1.2px;padding:18px 32px;box-shadow:0 5px 0 #9e6544;min-width:240px;transition:transform .15s,filter .15s}button:hover{filter:brightness(1.12);transform:translateY(-2px)}button:focus-visible{outline:3px solid #d9fff2;outline-offset:6px}button:disabled{cursor:wait;opacity:.8;transform:none}.desktop-link{display:inline-block;color:#9bc4be;text-decoration:none;font-size:12px;margin-top:17px;padding:7px}.desktop-link:hover{text-decoration:underline}.desktop-link:focus-visible{outline:2px solid #d9fff2;outline-offset:3px}.hint{font-size:11px;color:#779a9f;line-height:1.8;margin-top:28px}.progress{height:4px;width:240px;max-width:100%;margin:22px auto 0;background:#203f49;border-radius:4px;overflow:hidden}.progress i{display:block;width:0;height:100%;background:#75e1be;transition:width .15s}#status{font-size:12px;color:#9cbbbd;min-height:34px;line-height:1.5;margin-top:12px}#brand{position:fixed;bottom:max(18px,env(safe-area-inset-bottom));left:0;right:0;font-size:9px;letter-spacing:3px;color:#66898b;text-align:center}#launch.hidden{display:none}@media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
+<style>
+html,body{height:100dvh;overscroll-behavior:none}#game-frame{position:fixed;inset:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}canvas{width:100%;height:100%}.secondary{display:block;min-width:0;margin:18px auto 0;padding:10px 16px;font-size:12px;letter-spacing:.3px;background:transparent;color:#b2d8ce;border:1px solid #39605e;box-shadow:none}.secondary:hover{transform:none}.build{font-size:10px;color:#779a9f;letter-spacing:.5px;margin-top:12px}#graphics-message{position:fixed;z-index:4;left:max(12px,env(safe-area-inset-left));right:max(12px,env(safe-area-inset-right));bottom:max(12px,env(safe-area-inset-bottom));max-width:600px;margin:auto;background:#102a34;border:1px solid #dca464;border-radius:12px;padding:16px;box-shadow:0 8px 30px #0008;font-size:13px;line-height:1.5}#graphics-message[hidden]{display:none}#graphics-message p{margin:0 0 8px}#graphics-message details{font-size:11px;color:#b5c9cb}#graphics-message summary{cursor:pointer}#diagnostics{white-space:pre-wrap;overflow:auto;max-height:160px;overflow-wrap:anywhere}#graphics-message button{font-size:11px;letter-spacing:0;min-width:0;padding:9px 14px;box-shadow:none;margin:6px 6px 0 0}#dismiss-error{background:#26434c;color:#edf4eb}
+@media(max-height:560px){#launch{padding:12px}.sigil{width:42px;height:42px;margin-bottom:12px}.eyebrow{margin-bottom:8px}h1{font-size:34px;margin-bottom:9px}.tagline{font-size:13px;margin-bottom:14px}.hint{margin-top:12px}.secondary{margin-top:10px}.progress{margin-top:12px}#brand{display:none}#status{min-height:20px;margin-top:6px}.desktop-link{margin-top:6px}.build{margin-top:6px}}
+#launch{display:flex;flex-direction:column;align-items:center;overflow-y:auto}.card{flex-shrink:0;margin:auto}
+</style>
 </head>
 <body>
-<canvas id="canvas" tabindex="0" aria-label="Sudoku Defense game. Use arrow keys or a controller to select squares, and number keys to plant towers.">Your browser needs WebGL 2 to play Sudoku Defense.</canvas>
-<div id="launch"><div class="card"><div class="sigil" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><p class="eyebrow">Logic grows into firepower</p><h1>SUDOKU<br>DEFENSE</h1><p class="tagline">Plant your answers. Stack your towers.<br>Hold the grid.</p><button id="play">ENTER THE GRID ↗</button><div class="progress" aria-hidden="true"><i id="bar"></i></div><div id="status" role="status" aria-live="polite"></div><div class="hint">Controller · keyboard · touch<br>Best played in landscape.</div><a class="desktop-link" href="downloads.html">Get desktop builds ↗</a></div><div id="brand">YAK STUDIOS</div></div>
+<div id="game-frame"><canvas id="canvas" tabindex="0" aria-label="Sudoku Defense game. Use arrow keys or a controller to select squares, and number keys to plant towers.">Your browser needs WebGL 2 to play Sudoku Defense.</canvas></div>
+<div id="launch"><div class="card"><div class="sigil" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><p class="eyebrow">Logic grows into firepower</p><h1>SUDOKU<br>DEFENSE</h1><p class="tagline">Plant your answers. Stack your towers.<br>Hold the grid.</p><button id="play">ENTER THE GRID ↗</button><button id="fullscreen-play" class="secondary">Play fullscreen</button><div class="progress" aria-hidden="true"><i id="bar"></i></div><div id="status" role="status" aria-live="polite"></div><div class="hint">Controller · keyboard · touch<br>Portrait or landscape. Your grid stays with you.</div><a class="desktop-link" href="downloads.html">Get desktop builds ↗</a><div class="build">Godot edition · 0.3.1</div></div><div id="brand">YAK STUDIOS</div></div>
+<aside id="graphics-message" role="status" hidden><p id="graphics-summary"></p><details><summary>Technical details</summary><pre id="diagnostics"></pre><button id="copy-error">Copy details</button></details><button id="dismiss-error">Dismiss</button><button id="reload-game" hidden>Reload game</button></aside>
 <script>
 const WASM_PARTS=__WASM_PARTS__;
 const WASM_BYTES=__WASM_BYTES__;
@@ -42,24 +48,74 @@ window.fetch=async function(resource,options){
 const GODOT_CONFIG=__GODOT_CONFIG__;
 const engine=new Engine(GODOT_CONFIG);
 const play=document.getElementById('play');
+const fullscreenPlay=document.getElementById('fullscreen-play');
 const status=document.getElementById('status');
 const bar=document.getElementById('bar');
+const canvas=document.getElementById('canvas');
+const gameFrame=document.getElementById('game-frame');
+function resizeCanvas(){
+  const rect=gameFrame.getBoundingClientRect();
+  // Keep phone GPUs from rendering an unnecessarily huge high-DPI framebuffer.
+  const ratio=Math.min(window.devicePixelRatio||1,2);
+  const width=Math.max(1,Math.round(rect.width*ratio));
+  const height=Math.max(1,Math.round(rect.height*ratio));
+  if(canvas.width!==width)canvas.width=width;
+  if(canvas.height!==height)canvas.height=height;
+}
+new ResizeObserver(resizeCanvas).observe(gameFrame);
+window.addEventListener('resize',resizeCanvas);
+resizeCanvas();
+const graphicsMessage=document.getElementById('graphics-message');
+const diagnostics=[];
+let dismissedGraphicsMessage=false;
+function recordEngineError(...parts){
+  const message=parts.map(String).join(' ');
+  console.error(...parts);
+  diagnostics.push(message);if(diagnostics.length>30)diagnostics.shift();
+  document.getElementById('diagnostics').textContent='Sudoku Defense 0.3.1\n'+navigator.userAgent+'\nCanvas '+canvas.width+' x '+canvas.height+'\n'+diagnostics.join('\n');
+  if(/shader.*(error|fail)|framebuffer.*(incomplete|error)|webgl.*(error|lost)|out of memory|SCRIPT ERROR/i.test(message)&&!dismissedGraphicsMessage){
+    document.getElementById('graphics-summary').textContent='The game hit a display problem. Technical details below can help us fix it.';
+    graphicsMessage.hidden=false;
+  }
+}
+canvas.addEventListener('webglcontextlost',event=>{
+  // Our recovery banner replaces the export's blocking context-loss alert.
+  event.preventDefault();event.stopImmediatePropagation();
+  recordEngineError('WebGL context lost');
+  document.getElementById('graphics-summary').textContent='The browser interrupted the game display. Reload to resume from your latest autosave.';
+  document.getElementById('reload-game').hidden=false;
+  graphicsMessage.hidden=false;
+});
+document.getElementById('dismiss-error').addEventListener('click',()=>{graphicsMessage.hidden=true;dismissedGraphicsMessage=true;canvas.focus();});
+document.getElementById('reload-game').addEventListener('click',()=>location.reload());
+document.getElementById('copy-error').addEventListener('click',async event=>{
+  try{await navigator.clipboard.writeText(document.getElementById('diagnostics').textContent);event.target.textContent='Copied';}
+  catch{event.target.textContent='Select and copy the details above';}
+});
 let starting=false;
-play.addEventListener('click',async()=>{
+async function startGame(fullscreen){
   if(starting)return;
-  starting=true;play.disabled=true;play.textContent='GROWING THE GRID…';status.textContent='Preparing your defense';
+  starting=true;play.disabled=true;fullscreenPlay.disabled=true;play.textContent='GROWING THE GRID…';status.textContent='Preparing your defense';
+  if(fullscreen&&document.documentElement.requestFullscreen){
+    // Fullscreen must begin directly in this tap, before engine downloads.
+    try{const request=document.documentElement.requestFullscreen();if(request)request.catch(()=>{});}catch{}
+  }
   try{
     const missing=Engine.getMissingFeatures({threads:false});
     if(missing.length)throw new Error('This browser is missing '+missing.join(', ')+'. Try a current Chrome, Firefox, or Edge browser.');
-    await engine.startGame({canvas:document.getElementById('canvas'),onProgress:(current,total)=>{
+    await engine.startGame({canvas,canvasResizePolicy:0,onPrintError:recordEngineError,onProgress:(current,total)=>{
       const fraction=total>0?current/total:0;
       bar.style.width=Math.round(Math.min(1,fraction)*100)+'%';
       status.textContent=fraction>.99?'Building the battlefield…':'Loading game '+Math.round(fraction*100)+'%';
     }});
+    resizeCanvas();
     document.getElementById('launch').classList.add('hidden');
-    document.getElementById('canvas').focus();
-  }catch(error){status.textContent=error.message||String(error);play.textContent='TRY AGAIN';play.disabled=false;starting=false;engineBytes=undefined;console.error(error);}
-});
+    canvas.focus();
+  }catch(error){status.textContent=error.message||String(error);play.textContent='TRY AGAIN';play.disabled=false;fullscreenPlay.disabled=false;starting=false;engineBytes=undefined;recordEngineError(error);}
+}
+play.addEventListener('click',()=>startGame(false));
+fullscreenPlay.addEventListener('click',()=>startGame(true));
+if(!document.documentElement.requestFullscreen)fullscreenPlay.hidden=true;
 </script>
 </body>
 </html>

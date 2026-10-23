@@ -55,6 +55,14 @@ var mode_choice := "campaign"
 var puzzle_choice := "easy"
 var combat_choice := "easy"
 var seed_input: LineEdit
+var hud_nodes: Dictionary = {}
+var portrait_layout := false
+var tools_open := false
+var board_rect := Rect2(246,118,838,562)
+var layout_size := Vector2.ZERO
+var _layout_queued := false
+var _dock_was_open := false
+var _notice_replaces_context := false
 
 func _ready() -> void:
 	get_tree().auto_accept_quit = false
@@ -65,6 +73,9 @@ func _ready() -> void:
 	sound = SoundScript.new()
 	add_child(sound)
 	_build_ui()
+	get_viewport().size_changed.connect(_queue_layout)
+	_update_canvas_scale()
+	_layout_ui()
 	_show_menu(true)
 	_refresh()
 	if "--smoke-test" in OS.get_cmdline_user_args(): print("SUDOKU_DEFENSE_READY")
@@ -110,6 +121,17 @@ func button(text: String, fn: Callable, accent: bool = false) -> Button:
 	b.pressed.connect(func(): sound.click(); fn.call())
 	return b
 
+func hud(id: String, node: Control) -> Control:
+	hud_nodes[id] = node
+	return node
+
+func _place(node: Control, rect: Rect2) -> void:
+	node.position = rect.position
+	node.size = rect.size
+
+func _font(node: Control, pixels: int) -> void:
+	node.add_theme_font_size_override("font_size", pixels)
+
 func positioned(node: Control, rect: Rect2, parent: Node = null) -> void:
 	(parent if parent != null else ui).add_child(node)
 	node.position = rect.position
@@ -126,32 +148,32 @@ func _build_ui() -> void:
 	drop.host = self
 	drop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.add_child(drop)
-	var top := Panel.new()
+	var top: Panel = hud("top", Panel.new())
 	top.add_theme_stylebox_override("panel", style(Color("0a1722ed"), Color("28414c"), 0))
 	positioned(top, Rect2(0,0,1280,78))
-	var icon := TextureRect.new()
+	var icon: TextureRect = hud("logo", TextureRect.new())
 	icon.texture = preload("res://assets/icon.svg")
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	positioned(icon, Rect2(24,18,42,42))
 	header = label("SUDOKU DEFENSE",24)
 	positioned(header, Rect2(80,14,325,32))
-	positioned(label("Y A K   S T U D I O S   /   G O D O T",10,MUTED), Rect2(82,47,350,18))
+	positioned(hud("brand",label("Y A K   S T U D I O S",10,MUTED)), Rect2(82,47,350,18))
 	resources = label("",19)
 	resources.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	positioned(resources,Rect2(470,22,540,32))
-	var help_btn := button("?",_help)
+	var help_btn: Button = hud("help", button("?",_help))
 	help_btn.tooltip_text = "How to play / controller controls"
 	positioned(help_btn,Rect2(1030,17,46,44))
-	var mute_btn := button("♪",func(): muted = not muted; sound.set_muted(muted); _toast("Sound off" if muted else "Sound on"))
+	var mute_btn: Button = hud("mute", button("Sound",_toggle_sound))
 	mute_btn.tooltip_text = "Toggle sound (M)"
 	positioned(mute_btn,Rect2(1084,17,46,44))
-	var pause_btn := button("Ⅱ",_toggle_pause)
+	var pause_btn: Button = hud("pause", button("Pause",_toggle_pause))
 	pause_btn.tooltip_text = "Pause (P)"
 	positioned(pause_btn,Rect2(1138,17,46,44))
-	var menu_btn := button("☰",func(): _show_menu(false))
+	var menu_btn: Button = hud("menu", button("Menu",func(): _show_menu(false)))
 	menu_btn.tooltip_text = "Run settings / main menu (Escape)"
 	positioned(menu_btn,Rect2(1192,17,64,44))
-	var journey := HBoxContainer.new()
+	var journey: HBoxContainer = hud("journey", HBoxContainer.new())
 	journey.add_theme_constant_override("separation",10)
 	positioned(journey,Rect2(28,93,480,28))
 	for title in ["01 SOLVE", "02 PREPARE", "03 DEFEND", "04 LOOT"]:
@@ -173,29 +195,31 @@ func _build_ui() -> void:
 	candidate_label = label("",17)
 	candidate_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	positioned(candidate_label,Rect2(30,383,193,100))
-	var notes_btn := button("Notes  ON",func(): board_notes = not board_notes; _refresh())
+	var notes_btn: Button = hud("notes", button("Notes ON",func(): board_notes = not board_notes; _refresh()))
 	positioned(notes_btn,Rect2(30,509,174,44))
 	notes_btn.pressed.connect(func(): notes_btn.text = "Notes  ON" if board_notes else "Notes  OFF")
-	var hint_btn := button("Reveal  ·  6",func(): _action(run.hint(selected_cell)))
+	var hint_btn: Button = hud("hint", button("Reveal / 6",func(): _action(run.hint(selected_cell))))
 	hint_btn.tooltip_text = "Reveal selected square, costs credits (H)"
 	positioned(hint_btn,Rect2(30,563,174,44))
 	reserve_button = button("Buy reserve  ·  6",func(): _action(run.buy_seed(selected_number if selected_number>0 else 1)))
 	reserve_button.tooltip_text = "Buy one emergency seed of the selected number"
 	positioned(reserve_button,Rect2(30,617,174,44))
-	bag_button = button("▣  Gear",func(): _toggle_dock("bag"))
+	bag_button = button("Gear",func(): _toggle_dock("bag"))
 	positioned(bag_button,Rect2(1092,94,164,46))
-	loot_button = button("◇  Chests",func(): _toggle_dock("loot"))
+	loot_button = button("Chests",func(): _toggle_dock("loot"))
 	positioned(loot_button,Rect2(1092,149,164,46))
-	var camp := button("✦  Camp",func(): _toggle_dock("camp"))
+	var camp: Button = hud("camp", button("Camp",func(): _toggle_dock("camp")))
 	camp.tooltip_text = "Passives and salvage slots, available between battles"
 	positioned(camp,Rect2(1092,204,164,46))
 	pause_label = label("TACTICAL PAUSE",14,AMBER)
 	pause_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	positioned(pause_label,Rect2(430,85,420,32))
-	var bottom := Panel.new()
+	var bottom: Panel = hud("bottom", Panel.new())
 	bottom.add_theme_stylebox_override("panel",style(Color("0a1722f5"),Color("28414c"),0))
 	positioned(bottom,Rect2(0,696,1280,104))
-	positioned(label("PLANT A NUMBER",11,MUTED),Rect2(26,710,170,22))
+	bottom.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ui.move_child(bottom,1) # Background must stay behind the quick tabs moved here on phones.
+	positioned(hud("plant_caption",label("PLANT A NUMBER",11,MUTED)),Rect2(26,710,170,22))
 	for n in range(1,10):
 		var b := button(str(n),func(): _choose_number(n))
 		b.add_theme_font_size_override("font_size",25)
@@ -205,12 +229,12 @@ func _build_ui() -> void:
 		number_buttons.append(b)
 	controls_label = label("",11,MUTED)
 	positioned(controls_label,Rect2(215,772,635,19))
-	next_button = button("Prepare defense  →",_advance,true)
+	next_button = button("Prepare defense",_advance,true)
 	positioned(next_button,Rect2(944,715,312,56))
-	var speed := button("1×",func(): game_speed = 2.0 if game_speed == 1.0 else 1.0; _refresh())
+	var speed: Button = hud("speed", button("1x",func(): game_speed = 2.0 if game_speed == 1.0 else 1.0; _refresh()))
 	speed.tooltip_text = "Battle speed"
 	positioned(speed,Rect2(848,715,74,56))
-	speed.pressed.connect(func(): speed.text = "2×" if game_speed == 2.0 else "1×")
+	speed.pressed.connect(func(): speed.text = "2x" if game_speed == 2.0 else "1x")
 	notice = label("",18,WHITE)
 	notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	notice.add_theme_stylebox_override("normal",style(Color("173c42ed"),MINT))
@@ -223,11 +247,222 @@ func _build_ui() -> void:
 	dock.closed.connect(func(): armed_item = ""; _refresh())
 	dock.cell_requested.connect(func(cell): _select(cell,false))
 	dock.item_armed.connect(func(item_id): armed_item = str(item_id); _toast("Choose a tower to attach this module"))
+	var tools: Button = hud("tools",button("Tools",func(): tools_open = not tools_open; _layout_ui()))
+	positioned(tools,Rect2(0,0,100,72))
 	for child in ui.get_children():
 		if child is Button: child.focus_mode = Control.FOCUS_NONE
 	for b in number_buttons: b.focus_mode = Control.FOCUS_NONE
 
+func _queue_layout() -> void:
+	if _layout_queued: return
+	_layout_queued = true
+	_apply_resize.call_deferred()
+
+func _apply_resize() -> void:
+	_layout_queued = false
+	_update_canvas_scale()
+	_layout_ui()
+
+func _update_canvas_scale() -> void:
+	# A portrait phone needs its own logical canvas, not a tiny letterboxed Deck.
+	var window := get_window()
+	var portrait: bool = window.size.y > window.size.x
+	var wide_handheld: bool = not portrait and float(window.size.x)/maxi(1,window.size.y) > 1.9
+	var target := Vector2i(600,1066) if portrait else Vector2i(960,600) if wide_handheld else Vector2i(1280,800)
+	if window.content_scale_size != target:
+		window.content_scale_size = target
+	window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
+
+func _layout_ui() -> void:
+	if ui == null or hud_nodes.is_empty(): return
+	layout_size = get_viewport().get_visible_rect().size
+	var w := layout_size.x
+	var h := layout_size.y
+	portrait_layout = h > w
+	var open: bool = dock != null and dock.is_open()
+	for key in ["brand","journey","mute","pause","plant_caption"]:
+		hud_nodes[key].visible = not portrait_layout
+	hud_nodes.tools.visible = portrait_layout
+	controls_label.visible = not portrait_layout
+	phase_detail.visible = true
+	selected_label.visible = not (portrait_layout and tools_open)
+	candidate_label.visible = not (portrait_layout and tools_open)
+	for node in [hud_nodes.notes,hud_nodes.hint,reserve_button]:
+		node.visible = not portrait_layout or tools_open
+	if portrait_layout:
+		_place(hud_nodes.top,Rect2(0,0,w,142))
+		_place(hud_nodes.logo,Rect2(20,22,48,48))
+		_place(header,Rect2(82,20,w-280,50)); _font(header,29)
+		_place(hud_nodes.help,Rect2(w-180,14,68,72)); _font(hud_nodes.help,29)
+		_place(hud_nodes.menu,Rect2(w-100,14,80,72)); _font(hud_nodes.menu,22)
+		_place(resources,Rect2(20,98,w-40,32)); _font(resources,22)
+		resources.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_place(phase_label,Rect2(20,156,260,42)); _font(phase_label,27)
+		_place(phase_detail,Rect2(292,153,w-312,50)); _font(phase_detail,24)
+		_place(progress,Rect2(20,207,w-40,5))
+		board_rect = Rect2(16,228,w-32,minf(w-32,h-600))
+		var info_y := board_rect.end.y+10
+		_place(selected_label,Rect2(22,info_y,w-44,26)); _font(selected_label,19)
+		_place(candidate_label,Rect2(22,info_y+29,w-44,38)); _font(candidate_label,25)
+		var tool_w := (w-64)/3.0
+		_place(hud_nodes.notes,Rect2(20,info_y,tool_w,72)); _font(hud_nodes.notes,23)
+		_place(hud_nodes.hint,Rect2(32+tool_w,info_y,tool_w,72)); _font(hud_nodes.hint,23)
+		_place(reserve_button,Rect2(44+2*tool_w,info_y,tool_w,72)); _font(reserve_button,22)
+		_place(hud_nodes.bottom,Rect2(0,h-292,w,292))
+		# Four quick tabs expose one management surface at a time.
+		var quick_w := (w-64)/4.0
+		var quick_buttons: Array = [bag_button,loot_button,hud_nodes.camp,hud_nodes.tools]
+		for i in range(quick_buttons.size()):
+			var quick: Button = quick_buttons[i]
+			_place(quick,Rect2(20+i*(quick_w+8),h-276,quick_w,72)); _font(quick,24)
+		var number_w := (w-56)/9.0
+		for i in range(9):
+			var b := number_buttons[i]
+			_place(b,Rect2(20+i*(number_w+2),h-190,number_w,76)); _font(b,34)
+		_place(hud_nodes.speed,Rect2(20,h-96,88,76)); _font(hud_nodes.speed,26)
+		_place(next_button,Rect2(120,h-96,w-140,76)); _font(next_button,27)
+		_place(pause_label,Rect2(20,board_rect.end.y-42,w-40,32)); _font(pause_label,20)
+		var notice_y := info_y+80
+		_notice_replaces_context = notice_y+72 > h-288
+		if _notice_replaces_context: notice_y = info_y
+		_place(notice,Rect2(24,notice_y,w-48,72)); _font(notice,23)
+		notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		hud_nodes.tools.text = "Done" if tools_open else "Tools"
+	else:
+		_place(hud_nodes.top,Rect2(0,0,w,78))
+		_place(hud_nodes.logo,Rect2(24,18,42,42))
+		_place(header,Rect2(80,14,325,32)); _font(header,24)
+		_place(hud_nodes.brand,Rect2(82,47,350,18))
+		_place(resources,Rect2(w-810,22,440,32)); _font(resources,17)
+		resources.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		_place(hud_nodes.help,Rect2(w-348,17,46,46)); _font(hud_nodes.help,17)
+		_place(hud_nodes.mute,Rect2(w-294,17,84,46)); _font(hud_nodes.mute,15)
+		_place(hud_nodes.pause,Rect2(w-202,17,84,46)); _font(hud_nodes.pause,15)
+		_place(hud_nodes.menu,Rect2(w-110,17,86,46)); _font(hud_nodes.menu,15)
+		_place(hud_nodes.journey,Rect2(28,93,480,28))
+		_place(phase_label,Rect2(28,135,240,44)); _font(phase_label,31)
+		_place(phase_detail,Rect2(30,184,216,115)); _font(phase_detail,15)
+		_place(progress,Rect2(30,313,174,5))
+		_place(selected_label,Rect2(30,352,200,24)); _font(selected_label,13)
+		_place(candidate_label,Rect2(30,383,193,100)); _font(candidate_label,17)
+		_place(hud_nodes.notes,Rect2(30,509,174,46)); _font(hud_nodes.notes,17)
+		_place(hud_nodes.hint,Rect2(30,563,174,46)); _font(hud_nodes.hint,17)
+		_place(reserve_button,Rect2(30,617,174,46)); _font(reserve_button,17)
+		_place(bag_button,Rect2(w-188,94,164,46)); _font(bag_button,17)
+		_place(loot_button,Rect2(w-188,149,164,46)); _font(loot_button,17)
+		_place(hud_nodes.camp,Rect2(w-188,204,164,46)); _font(hud_nodes.camp,17)
+		_place(hud_nodes.bottom,Rect2(0,h-104,w,104))
+		_place(hud_nodes.plant_caption,Rect2(26,h-90,170,22))
+		for i in range(9):
+			var b := number_buttons[i]
+			_place(b,Rect2(215+i*61,h-91,54,53)); _font(b,25)
+		_place(controls_label,Rect2(215,h-28,635,19))
+		_place(hud_nodes.speed,Rect2(w-432,h-85,74,56)); _font(hud_nodes.speed,17)
+		_place(next_button,Rect2(w-336,h-85,312,56)); _font(next_button,17)
+		_place(pause_label,Rect2(430,85,420,32)); _font(pause_label,14)
+		_place(notice,Rect2(26,352,202,142)); _font(notice,17)
+		_notice_replaces_context = true
+		notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		board_rect = Rect2(246,118,w-(606 if open else 442),h-238)
+		if h < 700:
+			# Wide phones use a shorter HUD with tools tucked away, keeping the
+			# battlefield readable instead of retaining desktop-sized sidebars.
+			for key in ["brand","journey","help","mute","plant_caption"]: hud_nodes[key].hide()
+			hud_nodes.tools.show()
+			hud_nodes.tools.text = "Done" if tools_open else "Tools"
+			_place(hud_nodes.top,Rect2(0,0,w,64))
+			_place(hud_nodes.logo,Rect2(20,15,34,34))
+			_place(header,Rect2(66,15,300,34)); _font(header,24)
+			_place(resources,Rect2(w-690,19,450,30)); _font(resources,19)
+			_place(hud_nodes.pause,Rect2(w-216,9,92,46)); _font(hud_nodes.pause,19)
+			_place(hud_nodes.menu,Rect2(w-114,9,92,46)); _font(hud_nodes.menu,19)
+			_place(phase_label,Rect2(20,86,192,34)); _font(phase_label,24)
+			_place(phase_detail,Rect2(20,128,184,105)); _font(phase_detail,17)
+			_place(progress,Rect2(20,248,174,5))
+			_place(selected_label,Rect2(20,270,184,26)); _font(selected_label,14)
+			_place(candidate_label,Rect2(20,307,184,96)); _font(candidate_label,19)
+			selected_label.visible = not tools_open
+			candidate_label.visible = not tools_open
+			for node in [hud_nodes.notes,hud_nodes.hint,reserve_button]: node.visible = tools_open
+			_place(hud_nodes.notes,Rect2(20,266,174,48)); _font(hud_nodes.notes,19)
+			_place(hud_nodes.hint,Rect2(20,322,174,48)); _font(hud_nodes.hint,19)
+			_place(reserve_button,Rect2(20,378,174,48)); _font(reserve_button,18)
+			_place(hud_nodes.tools,Rect2(20,442,174,54)); _font(hud_nodes.tools,21)
+			_place(bag_button,Rect2(w-180,80,160,50)); _font(bag_button,21)
+			_place(loot_button,Rect2(w-180,140,160,50)); _font(loot_button,21)
+			_place(hud_nodes.camp,Rect2(w-180,200,160,50)); _font(hud_nodes.camp,21)
+			_place(hud_nodes.bottom,Rect2(0,h-80,w,80))
+			for i in range(9):
+				_place(number_buttons[i],Rect2(20+i*61,h-70,54,50)); _font(number_buttons[i],29)
+			_place(hud_nodes.speed,Rect2(w-418,h-70,74,50)); _font(hud_nodes.speed,22)
+			_place(next_button,Rect2(w-326,h-70,304,50)); _font(next_button,21)
+			_place(controls_label,Rect2(20,h-19,680,17))
+			_place(pause_label,Rect2(260,68,w-480,28)); _font(pause_label,16)
+			_place(notice,Rect2(18,270,188,158)); _font(notice,18)
+			board_rect = Rect2(218,80,w-(578 if open else 406),h-170)
+	if world.has_method("set_board_rect"): world.set_board_rect(board_rect)
+	if dock != null and dock.has_method("set_layout"):
+		dock.set_layout(layout_size,portrait_layout,board_rect.end.y)
+		dock.z_index = 10
+	_layout_modal()
+	_update_context_visibility()
+	_refresh()
+
+func _update_context_visibility() -> void:
+	var tools_cover_context: bool = tools_open and (portrait_layout or layout_size.y < 700)
+	var notice_covers_context: bool = notice.visible and _notice_replaces_context
+	selected_label.visible = not tools_cover_context and not notice_covers_context
+	candidate_label.visible = not tools_cover_context and not notice_covers_context
+
+func _refresh_portrait_text() -> void:
+	phase_label.text = "ROUND %02d / %02d" % [run.round_no,run.max_rounds]
+	match run.phase:
+		"solve": phase_detail.text = "SOLVE  %02d:%02d" % [int(run.timer)/60,int(run.timer)%60]
+		"prep": phase_detail.text = "PREPARE  /  %d towers" % run.towers.size()
+		"battle": phase_detail.text = "DEFEND  %d / %d" % [run.kills,run.spawn_total]
+		"loot": phase_detail.text = "LOOT & GROW"
+		_: phase_detail.text = "RUN COMPLETE"
+	if selected_cell >= 0:
+		selected_label.text = "ROW %d / COL %d" % [selected_cell/9+1,selected_cell%9+1]
+		if run.towers.has(selected_cell):
+			var t: Dictionary = run.towers[selected_cell]
+			candidate_label.text = "Tower %d  /  Lv %d  /  %d of 5 modules" % [t.number,run.tower_stats(selected_cell).level,t.attachments.size()]
+		elif run.givens[selected_cell]: candidate_label.text = "Fixed clue. Choose an empty square."
+		elif board_notes: candidate_label.text = "Try  " + "  ".join(run.candidates(selected_cell).map(func(v): return str(v)))
+		else: candidate_label.text = "Tap a number to plant here."
+	else:
+		selected_label.text = "YOUR ANSWERS GROW TOWERS"
+		candidate_label.text = "Tap an empty square, then a number."
+	reserve_button.text = "Seed %d / 6" % (selected_number if selected_number>0 else 1)
+	pause_label.text = "TACTICAL PAUSE" if dock.is_open() else "PAUSED"
+
+func _layout_modal() -> void:
+	if not is_instance_valid(overlay): return
+	overlay.z_index = 20
+	for panel in overlay.get_children():
+		if not panel is PanelContainer: continue
+		var requested: Vector2 = panel.get_meta("requested_size",Vector2(650,640))
+		var wanted := Vector2(minf(requested.x,layout_size.x-32),minf(requested.y,layout_size.y-32))
+		if portrait_layout: wanted = Vector2(layout_size.x-32,minf(requested.y*1.7,layout_size.y-48))
+		_place(panel,Rect2((layout_size-wanted)/2,wanted))
+		_style_modal_tree(panel)
+
+func _style_modal_tree(node: Node) -> void:
+	if node is Label or node is Button or node is LineEdit:
+		if not node.has_meta("base_font"): node.set_meta("base_font",node.get_theme_font_size("font_size"))
+		var base: int = node.get_meta("base_font")
+		_font(node,maxi(21,int(base*1.35)) if portrait_layout else base)
+		if node is Label: node.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		if node is Button:
+			node.custom_minimum_size.y = 72 if portrait_layout else 46
+			node.clip_text = true
+		if node is LineEdit: node.custom_minimum_size.y = 60 if portrait_layout else 36
+	for child in node.get_children(): _style_modal_tree(child)
+
 func _process(dt: float) -> void:
+	if dock.is_open() != _dock_was_open:
+		_dock_was_open = dock.is_open()
+		_layout_ui()
 	var blocked: bool = menu_open or manual_pause or dock.is_open()
 	if not blocked:
 		run.update(minf(dt,0.05)*game_speed if run.phase == "battle" else minf(dt,0.05))
@@ -239,7 +474,9 @@ func _process(dt: float) -> void:
 	if notice_time > 0:
 		notice_time -= dt
 		notice.modulate.a = minf(1,notice_time*2)
-		if notice_time <= 0: notice.hide()
+		if notice_time <= 0:
+			notice.hide()
+			_update_context_visibility()
 	ui_elapsed += dt
 	if ui_elapsed > .15:
 		ui_elapsed = 0
@@ -266,7 +503,7 @@ func _process(dt: float) -> void:
 		_save()
 
 func _refresh() -> void:
-	resources.text = "♥  %d/%d     ⚡  %d     ◇  %d" % [int(run.health),int(run.max_health),run.credits,run.fragments]
+	resources.text = "CORE %d/%d   CREDITS %d   FRAGMENTS %d" % [int(run.health),int(run.max_health),run.credits,run.fragments]
 	var phases := ["solve","prep","battle","loot"]
 	for i in range(4): phase_badges[i].modulate = MINT if run.phase == phases[i] else Color("647d85")
 	phase_label.text = "ROUND %02d / %02d" % [run.round_no,run.max_rounds]
@@ -275,27 +512,27 @@ func _refresh() -> void:
 		"solve":
 			phase_detail.text = "PLANT YOUR DEFENSE\n\n%d towers grown\n%02d:%02d remaining" % [count,int(run.timer)/60,int(run.timer)%60]
 			progress.value = 100.0*run.timer/maxf(1,run.solve_duration)
-			next_button.text = "Prepare defense  →"
+			next_button.text = "Prepare defense"
 		"prep":
 			phase_detail.text = "MAKE IT YOURS\n\nAttach modules.\nUpgrade your favorites.\nThen hold the line."
 			progress.value = 100
-			next_button.text = "Launch wave  →"
+			next_button.text = "Launch wave"
 		"battle":
 			phase_detail.text = "HOLD THE LINE\n\n%d / %d defeated\n%d towers active\n%d corruption" % [run.kills,run.spawn_total,count,run.corruption]
 			progress.value = 100.0*run.kills/maxi(1,run.spawn_total)
-			next_button.text = "⚔  Wave in progress"
+			next_button.text = "Wave in progress"
 		"loot":
 			phase_detail.text = "A LITTLE STRONGER\n\nCollect your loot.\nRefine your loadout.\nChoose the next grid."
 			progress.value = 100
-			next_button.text = "Next garden  →"
+			next_button.text = "Next garden"
 		_:
 			phase_detail.text = "RUN COMPLETE"
-			next_button.text = "New expedition  →"
+			next_button.text = "New expedition"
 	next_button.disabled = run.phase == "battle"
 	reserve_button.text = "Seed %d  +1  ·  6" % selected_number if selected_number>0 else "Buy seed 1  ·  6"
 	reserve_button.disabled = run.credits<6
-	bag_button.text = "▣  Gear  %d" % run.items.size()
-	loot_button.text = "◇  Chests  %d" % run.chests.size()
+	bag_button.text = "Gear %d" % run.items.size()
+	loot_button.text = "Chests %d" % run.chests.size()
 	pause_label.visible = (manual_pause or dock.is_open()) and not menu_open
 	pause_label.text = "TACTICAL PAUSE  ·  Manage your loadout" if dock.is_open() else "PAUSED  ·  P / Start to resume"
 	if selected_cell >= 0:
@@ -316,7 +553,8 @@ func _refresh() -> void:
 		var b: Button = number_buttons[i]
 		b.tooltip_text = "Seed %d · %d reserves for emergency battle planting" % [i+1,run.inventory[i+1]]
 		b.add_theme_stylebox_override("normal",style(Color("315950") if selected_number==i+1 else PANEL, COLORS[i] if selected_number==i+1 else Color("35505a")))
-	controls_label.text = "D-PAD move   LB/RB number   A plant   X gear   Y advance   B back" if controller_used else "CLICK select   1–9 plant   ENTER advance   TAB gear   ESC menu"
+	if portrait_layout: _refresh_portrait_text()
+	controls_label.text = "D-PAD move   LB/RB number   A plant   X gear   Y advance   B back" if controller_used else "CLICK select   1-9 plant   ENTER advance   TAB gear   ESC menu"
 
 func _choose_number(number: int) -> void:
 	selected_number = number
@@ -371,9 +609,14 @@ func _advance() -> void:
 
 func _toggle_dock(kind: String) -> void:
 	if menu_open: return
-	if dock.is_open(): dock.close_panel()
+	if dock.is_open() and dock.current_panel == kind: dock.close_panel()
 	else: dock.open_panel(kind,selected_cell)
 	_refresh()
+
+func _toggle_sound() -> void:
+	muted = not muted
+	sound.set_muted(muted)
+	_toast("Sound off" if muted else "Sound on")
 
 func _toggle_pause() -> void:
 	if menu_open: return
@@ -386,6 +629,10 @@ func _toast(text: String, success: bool = true) -> void:
 	notice_time = 3.8
 	notice.modulate.a = 1
 	notice.show()
+	if _notice_replaces_context and tools_open and (portrait_layout or layout_size.y < 700):
+		tools_open = false
+		_layout_ui()
+	_update_context_visibility()
 
 func _save() -> void:
 	if not has_active_run: return
@@ -441,6 +688,7 @@ func _modal(width: float = 650, height: float = 640) -> VBoxContainer:
 	var panel := PanelContainer.new()
 	panel.add_theme_stylebox_override("panel",style(Color("102330"),Color("40636b"),22))
 	overlay.add_child(panel)
+	panel.set_meta("requested_size",Vector2(width,height))
 	panel.position = Vector2((1280-width)/2,(800-height)/2)
 	panel.size = Vector2(width,height)
 	var margin := MarginContainer.new()
@@ -449,9 +697,14 @@ func _modal(width: float = 650, height: float = 640) -> VBoxContainer:
 	margin.add_theme_constant_override("margin_top",16)
 	margin.add_theme_constant_override("margin_bottom",16)
 	panel.add_child(margin)
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	margin.add_child(scroll)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation",13)
-	margin.add_child(box)
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(box)
+	_layout_modal.call_deferred()
 	return box
 
 func _choice_row(box: VBoxContainer, title: String, values: Array, current: String, callback: Callable) -> void:
@@ -481,7 +734,7 @@ func _show_menu(initial: bool = false) -> void:
 	var desc := label("A quiet grid becomes a living battlefield. Solve, stack your towers with loot, and keep your core alive.",16,MUTED)
 	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(desc)
-	_choice_row(box,"EXPEDITION",[["campaign","Campaign · 50 rounds"],["freeplay","Free play · 1 round"],["locked","Locked in · 50"]],mode_choice,func(v): mode_choice=v)
+	_choice_row(box,"EXPEDITION",[["campaign","Campaign / 50"],["freeplay","Free play / 1"],["locked","Locked in / 50"]],mode_choice,func(v): mode_choice=v)
 	_choice_row(box,"SUDOKU  ·  HARDER GRIDS LEAVE MORE ROOM TO GROW",[["easy","Easy"],["medium","Medium"],["hard","Hard"]],puzzle_choice,func(v): puzzle_choice=v)
 	_choice_row(box,"SIEGE DIFFICULTY",[["easy","Easy"],["medium","Medium"],["hard","Hard"]],combat_choice,func(v): combat_choice=v)
 	var seed_row := HBoxContainer.new()
@@ -493,7 +746,7 @@ func _show_menu(initial: bool = false) -> void:
 	seed_input.custom_minimum_size.y = 36
 	seed_input.add_theme_font_size_override("font_size",14)
 	seed_row.add_child(seed_input)
-	var start := button("Start expedition   →",_start_run,true)
+	var start := button("Start expedition ",_start_run,true)
 	box.add_child(start)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation",10)
@@ -536,7 +789,8 @@ func _help() -> void:
 	box.add_child(input_label)
 	var reduce := button("Reduced motion: " + ("ON" if reduced_motion else "OFF"),func(): reduced_motion=not reduced_motion; world.set_reduced_motion(reduced_motion); _help())
 	box.add_child(reduce)
-	var back := button("Got it  →",_close_overlay,true)
+	box.add_child(button("Sound: " + ("OFF" if muted else "ON"),func(): _toggle_sound(); _help()))
+	var back := button("Got it",_close_overlay,true)
 	box.add_child(back)
 	back.grab_focus()
 
@@ -553,7 +807,7 @@ func _show_next_round() -> void:
 	var note := label("Your gear, credits, and family levels carry over. Equipped modules return safely to your bag.",16,MUTED)
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(note)
-	var go := button("Plant the next garden  →",func():
+	var go := button("Plant the next garden",func():
 		var next_result: Dictionary = run.next_round({"puzzle_difficulty":puzzle_choice,"combat_difficulty":combat_choice})
 		if not next_result.ok:
 			_toast(next_result.message,false)
@@ -573,7 +827,7 @@ func _show_result() -> void:
 	box.add_child(label("THE GARDEN ENDURES" if run.phase=="won" else "ROOTS REMAIN",31,MINT if run.phase=="won" else AMBER))
 	box.add_child(label("Victory." if run.phase=="won" else "A new garden awaits.",23))
 	box.add_child(label("ROUND %02d     /     SCORE %d\n\n%d towers grown  ·  %d credits collected\nSeed %d" % [run.round_no,run.score,run.towers.size(),run.credits,run.seed_value],18,MUTED))
-	var go := button("Another expedition  →",func(): _show_menu(true),true)
+	var go := button("Another expedition",func(): _show_menu(true),true)
 	box.add_child(go)
 	box.add_child(button("Inspect the board",_close_overlay))
 	go.grab_focus()

@@ -40,7 +40,9 @@ def make_web_shell(web: Path) -> None:
         raise RuntimeError("Exported Godot HTML has no recognized engine config")
     config = json.loads(match.group(1))
     config["ensureCrossOriginIsolationHeaders"] = False
-    config["canvasResizePolicy"] = 2
+    # The shell owns safe-area and high-DPI sizing. Policy 2 would overwrite it
+    # with window.innerWidth/innerHeight and the uncapped device pixel ratio.
+    config["canvasResizePolicy"] = 0
     engine_path = web / "index.wasm"
     payload = engine_path.read_bytes()
     parts = []
@@ -132,6 +134,7 @@ def main() -> None:
     parser.add_argument("--targets", nargs="+", choices=["web", "linux", "windows"], default=["web", "linux", "windows"])
     parser.add_argument("--skip-import", action="store_true")
     parser.add_argument("--skip-smoke", action="store_true", help="Skip Linux executable boot (for cross-platform builders only)")
+    parser.add_argument("--render-check", action="store_true", help="Require real GLES pixel checks; uses Xvfb when no display is available")
     parser.add_argument("--stage-downloads-only", action="store_true", help="Prepare existing archives for static hosting without rebuilding")
     args = parser.parse_args()
     if args.stage_downloads_only:
@@ -151,6 +154,14 @@ def main() -> None:
         run([args.godot, "--headless", "--path", str(PROJECT), "--editor", "--import", "--quit"], logs / "import.log")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_run.gd"], logs / "simulation-tests.log", expected="PASS:")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_ui_flow.gd"], logs / "ui-flow-tests.log", expected="UI_FLOW_PASS")
+    if args.render_check:
+        command = [args.godot, "--path", str(PROJECT), "--audio-driver", "Dummy", "--rendering-method", "gl_compatibility", "--rendering-driver", "opengl3_es", "--script", "res://tests/test_rendering.gd", "--", "--safe-graphics"]
+        if not os.environ.get("DISPLAY"):
+            xvfb = shutil.which("xvfb-run")
+            if not xvfb:
+                raise SystemExit("The render check requires a display or xvfb-run; headless rendering cannot validate pixels.")
+            command = [xvfb, "-a", "-s", "-screen 0 1600x1200x24"] + command
+        run(command, logs / "rendering-tests.log", expected="RENDER_PASS")
     targets = {"web": ("Web", "index.html"), "linux": ("Linux", "sudoku-defense.x86_64"), "windows": ("Windows", "SudokuDefense.exe")}
     for name in args.targets:
         folder = build / name

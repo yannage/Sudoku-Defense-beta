@@ -41,6 +41,31 @@ var _shell: PanelContainer
 var _body: VBoxContainer
 var _scroll: ScrollContainer
 var _focus_target: Control
+var _portrait: bool = false
+var _layout_size: Vector2 = Vector2(1280, 800)
+var _board_bottom: float = 760.0
+
+func set_layout(viewport_size: Vector2, portrait: bool, board_bottom: float) -> void:
+	var mode_changed: bool = _portrait != portrait
+	_portrait = portrait
+	_layout_size = viewport_size
+	_board_bottom = board_bottom
+	_apply_layout()
+	if mode_changed and _opened:
+		refresh()
+
+func _apply_layout() -> void:
+	if not is_instance_valid(_shell): return
+	_shell.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	if _portrait:
+		# The battlefield stays visible above this sheet, including while a module
+		# is armed or dragged. Long equipment lists scroll inside the sheet.
+		var top: float = clampf(_board_bottom + 8.0, 16.0, _layout_size.y - 300.0)
+		_shell.position = Vector2(16, top)
+		_shell.size = Vector2(_layout_size.x - 32, _layout_size.y - top - 16)
+	else:
+		_shell.position = Vector2(_layout_size.x - 340, 96)
+		_shell.size = Vector2(320, maxf(300, _layout_size.y - 204))
 
 func setup(game_run) -> void:
 	run = game_run
@@ -54,13 +79,6 @@ func _build_shell() -> void:
 		remove_child(_shell)
 		_shell.queue_free()
 	_shell = PanelContainer.new()
-	_shell.anchor_left = 1.0
-	_shell.anchor_right = 1.0
-	_shell.anchor_bottom = 1.0
-	_shell.offset_left = -340
-	_shell.offset_right = -20
-	_shell.offset_top = 96
-	_shell.offset_bottom = -108
 	_shell.mouse_filter = Control.MOUSE_FILTER_STOP
 	_shell.add_theme_stylebox_override("panel", _style(PANEL, LINE, 14, 1, 16))
 	add_child(_shell)
@@ -68,6 +86,7 @@ func _build_shell() -> void:
 	outer.add_theme_constant_override("separation", 10)
 	_shell.add_child(outer)
 	_body = outer
+	_apply_layout()
 
 func open_panel(kind: String, cell: int = -1) -> void:
 	current_panel = kind
@@ -127,7 +146,7 @@ func refresh() -> void:
 	var heading: Label = _label(str(names.get(current_panel, "LOADOUT")), 18, TEXT)
 	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(heading)
-	var close_button: Button = _button("×", close_panel, false, false, 34)
+	var close_button: Button = _button("X", close_panel, false, false, 34)
 	close_button.custom_minimum_size = Vector2(34, 34)
 	close_button.tooltip_text = "Close panel · B / Escape"
 	top.add_child(close_button)
@@ -166,6 +185,8 @@ func refresh() -> void:
 		"bag": _bag_panel(content)
 		"loot": _loot_panel(content)
 		"camp": _camp_panel(content)
+	if _portrait: _apply_touch_sizes(_body)
+	_apply_layout()
 	_scroll.set_deferred("scroll_vertical", old_scroll)
 	if restore_focus:
 		if not focus_id.is_empty():
@@ -174,6 +195,20 @@ func refresh() -> void:
 					_focus_target = candidate
 					break
 		_focus_current.call_deferred()
+
+func _apply_touch_sizes(node: Node) -> void:
+	# A portrait canvas is 600 logical pixels wide; use larger type and touch
+	# targets instead of scaling the desktop sidebar into a phone-sized strip.
+	if node is Label or node is Button:
+		var base_font: int = node.get_theme_font_size("font_size")
+		node.add_theme_font_size_override("font_size", maxi(20, roundi(base_font * 1.5)))
+	if node is TowerDropButton:
+		node.custom_minimum_size = Vector2(54, 54)
+	elif node is Button:
+		node.custom_minimum_size.y = maxf(68, node.custom_minimum_size.y * 1.5)
+		if node.text == "X": node.custom_minimum_size.x = 68
+	for child in node.get_children():
+		_apply_touch_sizes(child)
 
 func _tower_panel(content: VBoxContainer) -> void:
 	if not run.towers.has(selected_cell):
@@ -219,7 +254,7 @@ func _tower_panel(content: VBoxContainer) -> void:
 			row.add_child(item_text)
 			item_text.add_child(_label(str(Loot.NAMES.get(str(item.get("kind", "")), "Attachment")), 14, Loot.rarity_color(str(item.get("rarity", "common")))))
 			item_text.add_child(_label(Card._short_stat(item), 11, MUTED))
-			var remove_button: Button = _button("−", func(): _act("unequip_item", [cell, slot]), false, false, 32)
+			var remove_button: Button = _button("-", func(): _act("unequip_item", [cell, slot]), false, false, 32)
 			remove_button.custom_minimum_size.x = 32
 			remove_button.tooltip_text = "Return attachment to inventory"
 			row.add_child(remove_button)

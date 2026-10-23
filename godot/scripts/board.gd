@@ -4,6 +4,7 @@ extends Node3D
 
 const FAMILY_COLORS: Array[Color] = [Color("6de8ff"), Color("a4c7ff"), Color("c6a0ff"), Color("ffae68"), Color("fb86c3"), Color("9be878"), Color("ffe188"), Color("bb9bff"), Color("ff7289")]
 const MODULE_COLORS: Dictionary = {"rapid":Color("6de8ff"), "electric":Color("c6a0ff"), "frost":Color("a4c7ff"), "blast":Color("ffae68"), "venom":Color("9be878"), "range":Color("ffe188"), "power":Color("fb86c3"), "gravity":Color("bb9bff"), "nova":Color("ff7289")}
+const VoxelMaterial = preload("res://scripts/voxel_material.gd")
 
 var run: RefCounted
 var selected_cell: int = -1
@@ -35,9 +36,10 @@ var _box_mesh: BoxMesh
 var _last_palette_morph: float = -1.0
 var _shake: float = 0.0
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
-var _tile_mats: Array[StandardMaterial3D] = []
-var _grid_mats: Array[StandardMaterial3D] = []
+var _tile_mats: Array[Material] = []
+var _grid_mats: Array[Material] = []
 var _environment: Environment
+var _board_rect: Rect2 = Rect2()
 
 func setup(model: RefCounted) -> void:
 	run = model
@@ -49,6 +51,8 @@ func setup(model: RefCounted) -> void:
 	_sync_board(true)
 
 func _build_world() -> void:
+	if VoxelMaterial.safe_profile():
+		get_viewport().msaa_3d = Viewport.MSAA_DISABLED
 	_box_mesh = BoxMesh.new()
 	_box_mesh.size = Vector3.ONE
 	_world = Node3D.new()
@@ -63,7 +67,7 @@ func _build_world() -> void:
 	_environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	_environment.ambient_light_color = Color("91b7c1")
 	_environment.ambient_light_energy = 0.75
-	_environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	_environment.tonemap_mode = Environment.TONE_MAPPER_LINEAR if VoxelMaterial.safe_profile() else Environment.TONE_MAPPER_FILMIC
 	var environment_node: WorldEnvironment = WorldEnvironment.new()
 	environment_node.environment = _environment
 	add_child(environment_node)
@@ -71,7 +75,7 @@ func _build_world() -> void:
 	sun.rotation_degrees = Vector3(-55, -35, 0)
 	sun.light_color = Color("fff0d6")
 	sun.light_energy = 1.7
-	sun.shadow_enabled = true
+	sun.shadow_enabled = not VoxelMaterial.safe_profile()
 	sun.directional_shadow_max_distance = 28.0
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
 	add_child(sun)
@@ -82,6 +86,7 @@ func _build_world() -> void:
 	add_child(rim)
 	camera = Camera3D.new()
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+	camera.keep_aspect = Camera3D.KEEP_HEIGHT
 	camera.size = 11.65
 	camera.near = 0.1
 	camera.far = 100.0
@@ -101,9 +106,7 @@ func _build_world() -> void:
 			_box(_world, Vector3(q, -0.43, side * 4.84), Vector3(0.42, 0.09, 0.045), Color("52c9ba"), true)
 	for i: int in range(81):
 		var pos: Vector3 = _cell_pos(i)
-		var material: StandardMaterial3D = StandardMaterial3D.new()
-		material.roughness = 0.85
-		material.albedo_color = Color("dbe5d6")
+		var material: Material = VoxelMaterial.create(Color("dbe5d6"))
 		_tile_mats.append(material)
 		var tile: MeshInstance3D = _box(_world, pos + Vector3(0, -0.075, 0), Vector3(0.97, 0.12, 0.97), Color.WHITE)
 		tile.material_override = material
@@ -120,9 +123,7 @@ func _build_world() -> void:
 		_world.add_child(label)
 		_labels.append(label)
 	for boundary: float in [-4.52, -1.5, 1.5, 4.52]:
-		var mat: StandardMaterial3D = StandardMaterial3D.new()
-		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		mat.albedo_color = Color("496f71")
+		var mat: Material = VoxelMaterial.create(Color("496f71"), true)
 		_grid_mats.append(mat)
 		var a: MeshInstance3D = _box(_world, Vector3(boundary, 0.003, 0), Vector3(0.045, 0.016, 9.06), Color.WHITE)
 		a.material_override = mat
@@ -165,7 +166,11 @@ func tick(dt: float) -> void:
 	_morph = move_toward(_morph, target, dt * (4.0 if reduced_motion else 1.35))
 	_panel_blend = move_toward(_panel_blend, 1.0 if _panel_open else 0.0, dt * 4.0)
 	var eased: float = smoothstep(0.0, 1.0, _morph)
-	var target_position: Vector3 = Vector3(0, 16, 0.02).lerp(Vector3(10.5, 13.4, 13.2), eased)
+	# A gentler portrait yaw makes the grid larger and keeps rows easy to read
+	# on phones, while the Deck keeps the wider tactical diorama perspective.
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	var battle_pose: Vector3 = Vector3(2.4, 15.5, 10.4) if viewport_size.y > viewport_size.x else Vector3(10.5, 13.4, 13.2)
+	var target_position: Vector3 = Vector3(0, 16, 0.02).lerp(battle_pose, eased)
 	var focus: Vector3 = Vector3(0, -0.12 - eased * 0.25, 0)
 	_shake = maxf(0, _shake - dt * 2.4)
 	if _shake > 0.001 and not reduced_motion:
@@ -174,6 +179,9 @@ func tick(dt: float) -> void:
 	camera.look_at(focus, Vector3(0, 0, -1) if eased < 0.001 else Vector3.UP)
 	camera.size = lerpf(11.65, 13.25, eased) + lerpf(0.30, 1.45, eased) * _panel_blend
 	camera.h_offset = lerpf(0.90, 1.05, eased) * _panel_blend
+	camera.v_offset = 0.0
+	if _board_rect.has_area():
+		_fit_board_rect(eased)
 	_sync_board(false)
 	_sync_towers(dt)
 	_sync_enemies(dt)
@@ -203,6 +211,37 @@ func set_selected(cell: int, number: int = 0) -> void:
 func set_panel_open(value: bool) -> void:
 	_panel_open = value
 
+func set_board_rect(value: Rect2) -> void:
+	# HUD layout supplies the usable area in root-viewport coordinates. Fitting
+	# the actual camera-space bounds keeps every tile reachable after rotation.
+	_board_rect = value
+	if camera != null and value.has_area():
+		_fit_board_rect(smoothstep(0.0, 1.0, _morph))
+
+func _fit_board_rect(blend: float) -> void:
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	if viewport_size.x <= 0.0 or viewport_size.y <= 0.0:
+		return
+	var area: Rect2 = _board_rect.grow(-8.0)
+	if not area.has_area():
+		return
+	var low: Vector2 = Vector2(INF, INF)
+	var high: Vector2 = Vector2(-INF, -INF)
+	# Include the island edge, garden decorations, and maximum tower stack.
+	for x: float in [-5.35, 5.35]:
+		for z: float in [-5.35, 5.35]:
+			for y: float in [-0.95, lerpf(0.40, 1.90, blend)]:
+				var local: Vector3 = camera.to_local(Vector3(x, y, z))
+				low = low.min(Vector2(local.x, local.y))
+				high = high.max(Vector2(local.x, local.y))
+	var span: Vector2 = high - low
+	var units_per_pixel: float = maxf(span.x / area.size.x, span.y / area.size.y)
+	var center: Vector2 = (low + high) * 0.5
+	var target_offset: Vector2 = area.get_center() - viewport_size * 0.5
+	camera.size = maxf(1.0, units_per_pixel * viewport_size.y)
+	camera.h_offset = center.x - target_offset.x * units_per_pixel
+	camera.v_offset = center.y + target_offset.y * units_per_pixel
+
 func set_reduced_motion(value: bool) -> void:
 	reduced_motion = value
 	if value:
@@ -210,6 +249,8 @@ func set_reduced_motion(value: bool) -> void:
 
 func cell_at_screen(screen_pos: Vector2) -> int:
 	if camera == null:
+		return -1
+	if _board_rect.has_area() and not _board_rect.has_point(screen_pos):
 		return -1
 	# Pick visible tower tops before the plane, so selecting a tall tower feels direct.
 	if _morph > 0.65:
@@ -280,7 +321,7 @@ func _update_palette(blend: float) -> void:
 			dark = Color("326b65")
 		elif i < values.size() and int(values[i]) == selected_number:
 			flat = flat.lerp(Color("b4d8c9"), 0.35)
-		_tile_mats[i].albedo_color = flat.lerp(dark, blend)
+		VoxelMaterial.set_color(_tile_mats[i], flat.lerp(dark, blend))
 		var number_color: Color = Color("294954").lerp(Color("a3c4be"), blend)
 		if towers.has(i):
 			var tower: Dictionary = towers[i]
@@ -290,8 +331,8 @@ func _update_palette(blend: float) -> void:
 		_labels[i].modulate = number_color
 		_labels[i].pixel_size = lerpf(0.0095, 0.0067 if towers.has(i) else 0.0081, blend)
 		_labels[i].position = _cell_pos(i) + Vector3(0, 0.014, lerpf(0.035, 0.35 if towers.has(i) else 0.02, blend))
-	for material: StandardMaterial3D in _grid_mats:
-		material.albedo_color = Color("527678").lerp(Color("477f7b"), blend)
+	for material: Material in _grid_mats:
+		VoxelMaterial.set_color(material, Color("527678").lerp(Color("477f7b"), blend))
 
 func _sync_towers(dt: float) -> void:
 	var towers: Dictionary = run.get("towers")
@@ -676,15 +717,10 @@ func _line_box(parent: Node3D, a: Vector3, b: Vector3, width: float, color: Colo
 		mesh.rotation = Basis.looking_at((b - a).normalized(), Vector3.UP if absf((b - a).normalized().y) < 0.99 else Vector3.RIGHT).get_euler()
 	return mesh
 
-func _material(color: Color, unshaded: bool = false) -> StandardMaterial3D:
+func _material(color: Color, unshaded: bool = false) -> Material:
 	var key: String = color.to_html() + ("u" if unshaded else "s")
 	if not _materials.has(key):
-		var material: StandardMaterial3D = StandardMaterial3D.new()
-		material.albedo_color = color
-		material.roughness = 0.75
-		if unshaded:
-			material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		_materials[key] = material
+		_materials[key] = VoxelMaterial.create(color, unshaded)
 	return _materials[key]
 
 func _cell_pos(cell: int) -> Vector3:
