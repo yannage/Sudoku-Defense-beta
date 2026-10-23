@@ -68,8 +68,11 @@ def make_web_shell(web: Path) -> None:
 def archive_directory(source: Path, target: Path) -> None:
     with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
         for path in sorted(source.rglob("*")):
-            if path.is_file():
-                archive.write(path, path.relative_to(source))
+            relative = path.relative_to(source)
+            # Godot may leave a hidden temporary executable while exporting.
+            # Only public output files belong in a downloadable distribution.
+            if path.is_file() and not any(part.startswith(".") for part in relative.parts):
+                archive.write(path, relative)
 
 
 def copy_license_notices(destination: Path) -> None:
@@ -167,8 +170,10 @@ def main() -> None:
             if not args.skip_smoke:
                 run([str(output), "--headless", "--audio-driver", "Dummy", "--quit-after", "120", "--", "--smoke-test"], logs / "native-linux-boot.log", expected="SUDOKU_DEFENSE_READY")
             with tarfile.open(downloads / "Sudoku-Defense-Godot-Linux-x86_64.tar.gz", "w:gz") as archive:
-                for path in sorted(folder.iterdir()):
-                    archive.add(path, arcname=path.name)
+                for path in sorted(folder.rglob("*")):
+                    relative = path.relative_to(folder)
+                    if path.is_file() and not any(part.startswith(".") for part in relative.parts):
+                        archive.add(path, arcname=str(relative), recursive=False)
         if name != "web":
             archive_directory(folder, downloads / f"Sudoku-Defense-Godot-{name.capitalize()}.zip")
     with zipfile.ZipFile(downloads / "Sudoku-Defense-Godot-Source.zip", "w", zipfile.ZIP_DEFLATED) as archive:
