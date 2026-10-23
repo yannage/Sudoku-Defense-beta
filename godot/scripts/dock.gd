@@ -10,6 +10,8 @@ const Card = preload("res://scripts/item_card.gd")
 const Icon = preload("res://scripts/voxel_icon.gd")
 const Loot = preload("res://scripts/loot.gd")
 const ChestStage = preload("res://scripts/chest_stage.gd")
+const CanvasChestStage = preload("res://scripts/chest_canvas.gd")
+const RenderProfile = preload("res://scripts/render_profile.gd")
 const INK: Color = Color("081923")
 const PANEL: Color = Color("0d202c")
 const LINE: Color = Color("28434e")
@@ -363,7 +365,7 @@ func _reward_view(content: VBoxContainer) -> void:
 	var label: Label = _label(rarity.to_upper() + " CACHE OPENED", 17, color)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(label)
-	var icon: Control = ChestStage.new()
+	var icon: Control = CanvasChestStage.new() if RenderProfile.uses_canvas() else ChestStage.new()
 	icon.custom_minimum_size = Vector2(0, 180)
 	icon.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	box.add_child(icon)

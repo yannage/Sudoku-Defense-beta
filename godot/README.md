@@ -4,9 +4,9 @@ A native Godot 4.7.2 version of the pre-Unity Sudoku Defense game. The same GDSc
 
 ## Play
 
-Open the published Godot edition in a current WebGL 2 browser. Version 0.3.1 adapts to portrait phones, wide landscape phones, and the Steam Deck screen. Portrait keeps the grid above a large number bar and four quick tabs; Tools reveals notes, hints, and reserve seeds. Management opens in a scrollable sheet, with the board still available for selecting towers. The launch page offers fullscreen and desktop downloads. For Windows, extract the ZIP and run `SudokuDefense.exe`. For Linux, extract the archive and run `sudoku-defense.x86_64`; the tar.gz also preserves execute permissions.
+Open the published Godot edition in a current WebGL 2 browser. Version 0.3.2 adapts to portrait phones, wide landscape phones, and the Steam Deck screen. Portrait keeps the grid above a large number bar and four quick tabs; Tools reveals notes, hints, and reserve seeds. Management opens in a scrollable sheet, with the board still available for selecting towers. The launch page offers fullscreen and desktop downloads. For Windows, extract the ZIP and run `SudokuDefense.exe`. For Linux, extract the archive and run `sudoku-defense.x86_64`; the tar.gz also preserves execute permissions.
 
-The browser export uses a lightweight voxel material with directional face colors, linear tone mapping, and no multisample resolve. Geometry, depth, aiming, tower growth, and chest animation remain native 3D. This addresses the reported all-black mobile board by avoiding the heavier rendering paths; the exact affected phone GPU still needs a retest. Desktop builds retain their standard lighting profile. Pass `--safe-graphics` to a desktop build to exercise the browser material profile.
+The browser export now projects the voxel board and animated chests with ordinary Godot CanvasItem polygons. This bypasses the entire spatial rendering pass that continued to show black on the affected phone, even with simpler materials. The same GDScript run drives tower growth, aiming, routes, equipment, combat, and loot. Desktop builds retain the native 3D scene; pass `--canvas-graphics` to use the browser's compatible voxel view on desktop. The older `--safe-graphics` option only simplifies desktop 3D materials and is no longer the web default. The exact phone still needs a retest; local framebuffer checks cannot establish its GPU behavior.
 
 The browser game saves automatically on that browser/device. Desktop builds save through Godot's `user://` storage. Browser and desktop saves do not synchronize. Steam Cloud and Steam achievements are not integrated in this version.
 
@@ -41,6 +41,7 @@ Import `project.godot` with Godot 4.7.2 standard (GDScript) edition. The Compati
 ```sh
 godot --headless --path godot --script res://tests/test_run.gd
 godot --headless --path godot --script res://tests/test_ui_flow.gd
+godot --headless --path godot --script res://tests/test_ui_flow.gd -- --canvas-graphics
 python3 godot/scripts/build_exports.py --godot /path/to/godot
 # On Linux with Xvfb/Mesa installed, require actual framebuffer validation too:
 python3 godot/scripts/build_exports.py --godot /path/to/godot --render-check
@@ -50,7 +51,7 @@ Run these commands from the repository root. Output is in `godot/build/`. CI bui
 
 ## Validation and current limits
 
-The simulation regression suite covers unique puzzles, first-wave survival, illegal placements, gear ownership, upgrades, cache accounting, fixed slot odds, deterministic mid-battle resume, and an automated fifty-wave medium campaign using earned gear and upgrades. UI flow tests exercise planting, inspection, equipment, panel bounds, tactical pause, and save/load at phone and Deck sizes. Real GLES framebuffer checks verify visible color on all 81 cells, digit contrast, board framing and picking, and visible voxel towers and chests. The render suite explicitly rejects dummy/headless rendering and captures the integrated phone and Deck HUD. The exported Linux executable must reach its ready marker without script errors.
+The simulation regression suite covers unique puzzles, first-wave survival, illegal placements, gear ownership, upgrades, cache accounting, fixed slot odds, deterministic mid-battle resume, and an automated fifty-wave medium campaign using earned gear and upgrades. UI flow tests run with both board renderers and exercise planting, inspection, equipment, panel bounds, tactical pause, and save/load at phone and Deck sizes. Real GLES framebuffer checks cover both 3D and compatible CanvasItem voxels: visible cells and digits, board framing and picking, towers, chests, and the integrated phone/Deck HUD. The render suites reject dummy/headless rendering. The exported Linux executable must reach its ready marker without script errors.
 
 These checks do not establish human campaign balance, physical Steam Deck controller behavior, GPU frame rate, or Windows execution. The current published Site requires owner sign-in that is unavailable in the test browser, so the exact phone/WebGL result remains unverified. GLES framebuffer tests use Mesa software rendering; they do not substitute for real mobile GPUs. This is a playable development build, not a Steam Deck Verified release. The existing Steam depot has not been replaced by this port.
 

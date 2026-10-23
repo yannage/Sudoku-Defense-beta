@@ -18,6 +18,9 @@ func exercise() -> void:
 	var scene = load("res://scenes/main.tscn").instantiate()
 	root.add_child(scene)
 	for i in range(3): await process_frame
+	if "--canvas-graphics" in OS.get_cmdline_user_args():
+		check(scene.world is Node2D,"Web profile uses an ordinary CanvasItem board")
+		check(root.disable_3d,"Web profile disables the failing 3D pass entirely")
 	check(scene.menu_open,"Menu should open at launch")
 	scene._close_overlay()
 	check(scene.menu_open and not scene.has_active_run,"Closing initial menu must not silently start placeholder run")

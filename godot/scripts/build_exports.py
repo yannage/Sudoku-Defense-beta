@@ -154,14 +154,20 @@ def main() -> None:
         run([args.godot, "--headless", "--path", str(PROJECT), "--editor", "--import", "--quit"], logs / "import.log")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_run.gd"], logs / "simulation-tests.log", expected="PASS:")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_ui_flow.gd"], logs / "ui-flow-tests.log", expected="UI_FLOW_PASS")
+    run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_ui_flow.gd", "--", "--canvas-graphics"], logs / "canvas-ui-flow-tests.log", expected="UI_FLOW_PASS")
     if args.render_check:
-        command = [args.godot, "--path", str(PROJECT), "--audio-driver", "Dummy", "--rendering-method", "gl_compatibility", "--rendering-driver", "opengl3_es", "--script", "res://tests/test_rendering.gd", "--", "--safe-graphics"]
-        if not os.environ.get("DISPLAY"):
-            xvfb = shutil.which("xvfb-run")
-            if not xvfb:
-                raise SystemExit("The render check requires a display or xvfb-run; headless rendering cannot validate pixels.")
-            command = [xvfb, "-a", "-s", "-screen 0 1600x1200x24"] + command
-        run(command, logs / "rendering-tests.log", expected="RENDER_PASS")
+        for script, flag, logfile, marker in [
+            ("test_rendering.gd", "--safe-graphics", "rendering-tests.log", "RENDER_PASS"),
+            ("test_canvas_rendering.gd", "--canvas-graphics", "canvas-rendering-tests.log", "CANVAS_RENDER_PASS"),
+            ("test_chest_canvas.gd", "--canvas-graphics", "canvas-chest-tests.log", "0 failures (real GLES pixels)"),
+        ]:
+            command = [args.godot, "--path", str(PROJECT), "--audio-driver", "Dummy", "--rendering-method", "gl_compatibility", "--rendering-driver", "opengl3_es", "--script", "res://tests/" + script, "--", flag]
+            if not os.environ.get("DISPLAY"):
+                xvfb = shutil.which("xvfb-run")
+                if not xvfb:
+                    raise SystemExit("The render check requires a display or xvfb-run; headless rendering cannot validate pixels.")
+                command = [xvfb, "-a", "-s", "-screen 0 1600x1200x24"] + command
+            run(command, logs / logfile, expected=marker)
     targets = {"web": ("Web", "index.html"), "linux": ("Linux", "sudoku-defense.x86_64"), "windows": ("Windows", "SudokuDefense.exe")}
     for name in args.targets:
         folder = build / name

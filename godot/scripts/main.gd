@@ -2,6 +2,8 @@ extends Node3D
 
 const RunScript = preload("res://scripts/run.gd")
 const BoardScript = preload("res://scripts/board.gd")
+const CanvasBoardScript = preload("res://scripts/board_canvas.gd")
+const RenderProfile = preload("res://scripts/render_profile.gd")
 const DockScript = preload("res://scripts/dock.gd")
 const SoundScript = preload("res://scripts/sound.gd")
 const DropScript = preload("res://scripts/board_drop.gd")
@@ -67,7 +69,8 @@ var _notice_replaces_context := false
 func _ready() -> void:
 	get_tree().auto_accept_quit = false
 	run.new_run(784217, {"mode":"campaign", "puzzle_difficulty":"easy", "combat_difficulty":"easy"})
-	world = BoardScript.new()
+	get_viewport().disable_3d = RenderProfile.uses_canvas()
+	world = CanvasBoardScript.new() if RenderProfile.uses_canvas() else BoardScript.new()
 	add_child(world)
 	world.setup(run)
 	sound = SoundScript.new()
@@ -790,6 +793,7 @@ func _help() -> void:
 	var reduce := button("Reduced motion: " + ("ON" if reduced_motion else "OFF"),func(): reduced_motion=not reduced_motion; world.set_reduced_motion(reduced_motion); _help())
 	box.add_child(reduce)
 	box.add_child(button("Sound: " + ("OFF" if muted else "ON"),func(): _toggle_sound(); _help()))
+	box.add_child(label("Godot edition " + str(ProjectSettings.get_setting("application/config/version")) + "  /  " + ("Compatible voxels" if RenderProfile.uses_canvas() else "3D voxels"),11,MUTED))
 	var back := button("Got it",_close_overlay,true)
 	box.add_child(back)
 	back.grab_focus()
