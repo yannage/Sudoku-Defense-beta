@@ -1,0 +1,694 @@
+class_name DefenseBoard
+extends Node3D
+## Native voxel battlefield. The run model is authoritative; this node only renders it.
+
+const FAMILY_COLORS: Array[Color] = [Color("6de8ff"), Color("a4c7ff"), Color("c6a0ff"), Color("ffae68"), Color("fb86c3"), Color("9be878"), Color("ffe188"), Color("bb9bff"), Color("ff7289")]
+const MODULE_COLORS: Dictionary = {"rapid":Color("6de8ff"), "electric":Color("c6a0ff"), "frost":Color("a4c7ff"), "blast":Color("ffae68"), "venom":Color("9be878"), "range":Color("ffe188"), "power":Color("fb86c3"), "gravity":Color("bb9bff"), "nova":Color("ff7289")}
+
+var run: RefCounted
+var selected_cell: int = -1
+var selected_number: int = 1
+var reduced_motion: bool = false
+var camera: Camera3D
+var _clock: float = 0.0
+var _morph: float = 0.0
+var _panel_open: bool = false
+var _panel_blend: float = 0.0
+var _last_board: String = ""
+var _route_signature: String = ""
+var _world: Node3D
+var _tiles: Array[MeshInstance3D] = []
+var _labels: Array[Label3D] = []
+var _tower_nodes: Dictionary = {}
+var _enemy_nodes: Dictionary = {}
+var _route_root: Node3D
+var _route_markers: Array[MeshInstance3D] = []
+var _fx_root: Node3D
+var _selection: Node3D
+var _range_root: Node3D
+var _decor: Array[Node3D] = []
+var _particles: Array[Dictionary] = []
+var _beams: Array[Dictionary] = []
+var _rings: Array[Dictionary] = []
+var _materials: Dictionary = {}
+var _box_mesh: BoxMesh
+var _last_palette_morph: float = -1.0
+var _shake: float = 0.0
+var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
+var _tile_mats: Array[StandardMaterial3D] = []
+var _grid_mats: Array[StandardMaterial3D] = []
+var _environment: Environment
+
+func setup(model: RefCounted) -> void:
+	run = model
+	_rng.seed = 44219
+	if camera == null:
+		_build_world()
+	_last_board = ""
+	_route_signature = ""
+	_sync_board(true)
+
+func _build_world() -> void:
+	_box_mesh = BoxMesh.new()
+	_box_mesh.size = Vector3.ONE
+	_world = Node3D.new()
+	add_child(_world)
+	_fx_root = Node3D.new()
+	add_child(_fx_root)
+	_route_root = Node3D.new()
+	_world.add_child(_route_root)
+	_environment = Environment.new()
+	_environment.background_mode = Environment.BG_COLOR
+	_environment.background_color = Color("09151d")
+	_environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	_environment.ambient_light_color = Color("91b7c1")
+	_environment.ambient_light_energy = 0.75
+	_environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	var environment_node: WorldEnvironment = WorldEnvironment.new()
+	environment_node.environment = _environment
+	add_child(environment_node)
+	var sun: DirectionalLight3D = DirectionalLight3D.new()
+	sun.rotation_degrees = Vector3(-55, -35, 0)
+	sun.light_color = Color("fff0d6")
+	sun.light_energy = 1.7
+	sun.shadow_enabled = true
+	sun.directional_shadow_max_distance = 28.0
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
+	add_child(sun)
+	var rim: DirectionalLight3D = DirectionalLight3D.new()
+	rim.rotation_degrees = Vector3(-30, 135, 0)
+	rim.light_color = Color("70c9d0")
+	rim.light_energy = 0.55
+	add_child(rim)
+	camera = Camera3D.new()
+	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+	camera.size = 11.65
+	camera.near = 0.1
+	camera.far = 100.0
+	camera.current = true
+	add_child(camera)
+	camera.position = Vector3(0, 16, 0.02)
+	camera.look_at(Vector3.ZERO, Vector3(0, 0, -1))
+	# A layered, floating circuit garden. Every piece is a real shaded mesh.
+	_box(_world, Vector3(0, -0.42, 0), Vector3(9.65, 0.60, 9.65), Color("172e38"))
+	_box(_world, Vector3(0, -0.77, 0), Vector3(8.95, 0.16, 8.95), Color("0b202a"))
+	_box(_world, Vector3(0, -0.91, 0), Vector3(7.35, 0.13, 7.35), Color("132c37"))
+	for side: int in [-1, 1]:
+		_box(_world, Vector3(side * 4.76, -0.07, 0), Vector3(0.12, 0.13, 9.57), Color("608b86"))
+		_box(_world, Vector3(0, -0.07, side * 4.76), Vector3(9.57, 0.13, 0.12), Color("608b86"))
+		for q: int in range(-4, 5):
+			_box(_world, Vector3(side * 4.84, -0.43, q), Vector3(0.045, 0.09, 0.42), Color("52c9ba"), true)
+			_box(_world, Vector3(q, -0.43, side * 4.84), Vector3(0.42, 0.09, 0.045), Color("52c9ba"), true)
+	for i: int in range(81):
+		var pos: Vector3 = _cell_pos(i)
+		var material: StandardMaterial3D = StandardMaterial3D.new()
+		material.roughness = 0.85
+		material.albedo_color = Color("dbe5d6")
+		_tile_mats.append(material)
+		var tile: MeshInstance3D = _box(_world, pos + Vector3(0, -0.075, 0), Vector3(0.97, 0.12, 0.97), Color.WHITE)
+		tile.material_override = material
+		_tiles.append(tile)
+		var label: Label3D = Label3D.new()
+		label.font_size = 72
+		label.pixel_size = 0.0095
+		label.outline_size = 0
+		label.modulate = Color("294450")
+		label.no_depth_test = false
+		label.shaded = false
+		label.rotation_degrees.x = -90.0
+		label.position = pos + Vector3(0, 0.008, 0.035)
+		_world.add_child(label)
+		_labels.append(label)
+	for boundary: float in [-4.52, -1.5, 1.5, 4.52]:
+		var mat: StandardMaterial3D = StandardMaterial3D.new()
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.albedo_color = Color("496f71")
+		_grid_mats.append(mat)
+		var a: MeshInstance3D = _box(_world, Vector3(boundary, 0.003, 0), Vector3(0.045, 0.016, 9.06), Color.WHITE)
+		a.material_override = mat
+		var b: MeshInstance3D = _box(_world, Vector3(0, 0.003, boundary), Vector3(9.06, 0.016, 0.045), Color.WHITE)
+		b.material_override = mat
+	_selection = Node3D.new()
+	_world.add_child(_selection)
+	_square_frame(_selection, 0.98, 0.043, Color("76edd0"), 0.038)
+	for x: float in [-0.45, 0.45]:
+		for z: float in [-0.45, 0.45]:
+			_box(_selection, Vector3(x, 0.10, z), Vector3(0.08, 0.17, 0.08), Color("baffdf"), true)
+	_selection.visible = false
+	_range_root = Node3D.new()
+	_world.add_child(_range_root)
+	# Sparse voxel plants and edge terminals leave every playable cell readable.
+	for i: int in range(16):
+		var corner: int = i % 4
+		var u: float = -3.7 + float(i / 4) * 2.35
+		var pos: Vector3 = Vector3(5.1 if corner == 0 else -5.1 if corner == 1 else u, -0.10, u if corner < 2 else 5.1 if corner == 2 else -5.1)
+		var plant: Node3D = _plant(pos, i)
+		_decor.append(plant)
+	for x: float in [-4.65, 4.65]:
+		for z: float in [-4.65, 4.65]:
+			_box(_world, Vector3(x, -0.03, z), Vector3(0.38, 0.26, 0.38), Color("203c44"))
+			_box(_world, Vector3(x, 0.12, z), Vector3(0.2, 0.05, 0.2), Color("ffbf78"), true)
+	# Small star-like cubes suggest a suspended island, without a noisy texture.
+	for i: int in range(36):
+		var p: Vector3 = Vector3(_rng.randf_range(-15, 15), _rng.randf_range(-3.5, -1.4), _rng.randf_range(-13, 13))
+		if absf(p.x) < 5.7 and absf(p.z) < 5.7:
+			continue
+		var dust: MeshInstance3D = _box(_world, p, Vector3.ONE * _rng.randf_range(0.025, 0.07), Color("335d65"), true)
+		dust.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+func tick(dt: float) -> void:
+	if run == null or camera == null:
+		return
+	_clock += dt
+	var phase: String = str(run.get("phase"))
+	var target: float = 0.0 if phase == "solve" else 1.0
+	_morph = move_toward(_morph, target, dt * (4.0 if reduced_motion else 1.35))
+	_panel_blend = move_toward(_panel_blend, 1.0 if _panel_open else 0.0, dt * 4.0)
+	var eased: float = smoothstep(0.0, 1.0, _morph)
+	var target_position: Vector3 = Vector3(0, 16, 0.02).lerp(Vector3(10.5, 13.4, 13.2), eased)
+	var focus: Vector3 = Vector3(0, -0.12 - eased * 0.25, 0)
+	_shake = maxf(0, _shake - dt * 2.4)
+	if _shake > 0.001 and not reduced_motion:
+		focus += Vector3(sin(_clock * 74.0), cos(_clock * 91.0), 0) * _shake * 0.06
+	camera.position = target_position
+	camera.look_at(focus, Vector3(0, 0, -1) if eased < 0.001 else Vector3.UP)
+	camera.size = lerpf(11.65, 13.25, eased) + lerpf(0.30, 1.45, eased) * _panel_blend
+	camera.h_offset = lerpf(0.90, 1.05, eased) * _panel_blend
+	_sync_board(false)
+	_sync_towers(dt)
+	_sync_enemies(dt)
+	_update_fx(dt)
+	_animate_route()
+	_selection.visible = selected_cell >= 0 and selected_cell < 81
+	if _selection.visible:
+		_selection.position = _cell_pos(selected_cell)
+		_selection.scale.y = 1.0 + (0.0 if reduced_motion else sin(_clock * 3.4) * 0.14)
+	if absf(_last_palette_morph - eased) > 0.02:
+		_last_palette_morph = eased
+		_update_palette(eased)
+	for i: int in range(_decor.size()):
+		var d: Node3D = _decor[i]
+		d.rotation.z = 0.0 if reduced_motion else sin(_clock * 0.8 + float(i)) * 0.025
+	_range_root.visible = _morph > 0.65 and selected_cell >= 0 and phase != "solve"
+
+func set_selected(cell: int, number: int = 0) -> void:
+	selected_cell = cell
+	if number > 0:
+		selected_number = number
+	if camera == null:
+		return
+	_update_palette(smoothstep(0.0, 1.0, _morph))
+	_refresh_range()
+
+func set_panel_open(value: bool) -> void:
+	_panel_open = value
+
+func set_reduced_motion(value: bool) -> void:
+	reduced_motion = value
+	if value:
+		_shake = 0.0
+
+func cell_at_screen(screen_pos: Vector2) -> int:
+	if camera == null:
+		return -1
+	# Pick visible tower tops before the plane, so selecting a tall tower feels direct.
+	if _morph > 0.65:
+		var best: int = -1
+		var best_distance: float = 26.0
+		for key: Variant in _tower_nodes:
+			var entry: Dictionary = _tower_nodes[key]
+			var tower: Node3D = entry["node"]
+			var head: Node3D = entry["head"]
+			var spot: Vector2 = camera.unproject_position(tower.position + Vector3(0, head.position.y, 0))
+			var distance: float = spot.distance_to(screen_pos)
+			if distance < best_distance:
+				best_distance = distance
+				best = int(key)
+		if best >= 0:
+			return best
+	var origin: Vector3 = camera.project_ray_origin(screen_pos)
+	var direction: Vector3 = camera.project_ray_normal(screen_pos)
+	var hit: Variant = Plane(Vector3.UP, 0.0).intersects_ray(origin, direction)
+	if hit == null:
+		return -1
+	var p: Vector3 = hit
+	if p.x < -4.5 or p.x >= 4.5 or p.z < -4.5 or p.z >= 4.5:
+		return -1
+	return int(floor(p.z + 4.5)) * 9 + int(floor(p.x + 4.5))
+
+func cell_screen_position(cell: int) -> Vector2:
+	return camera.unproject_position(_cell_pos(cell) + Vector3(0, 0.05, 0)) if camera != null else Vector2.ZERO
+
+func _sync_board(force: bool) -> void:
+	if run == null:
+		return
+	var values: Array = run.get("board")
+	if values.size() < 81:
+		return
+	var signature: String = str(values) + str(run.get("round_no"))
+	if force or signature != _last_board:
+		_last_board = signature
+		for i: int in range(81):
+			_labels[i].text = str(values[i]) if int(values[i]) > 0 else ""
+		_update_palette(smoothstep(0.0, 1.0, _morph))
+	var route: Array = run.get("route")
+	var route_signature: String = str(route)
+	if force or route_signature != _route_signature:
+		_route_signature = route_signature
+		_build_route(route)
+	_route_root.visible = _morph > 0.3
+
+func _update_palette(blend: float) -> void:
+	if run == null:
+		return
+	var givens: Array = run.get("givens")
+	var values: Array = run.get("board")
+	var towers: Dictionary = run.get("towers")
+	for i: int in range(_tiles.size()):
+		var row: int = i / 9
+		var col: int = i % 9
+		var block_even: bool = (row / 3 + col / 3) % 2 == 0
+		var flat: Color = Color("d8e5d8") if block_even else Color("e9ebdc")
+		var dark: Color = Color("153940") if block_even else Color("1b4449")
+		if i < givens.size() and bool(givens[i]):
+			dark = dark.lightened(0.025)
+		if selected_cell >= 0 and (row == selected_cell / 9 or col == selected_cell % 9):
+			flat = flat.lerp(Color("a6d4c5"), 0.24)
+			dark = dark.lightened(0.045)
+		if i == selected_cell:
+			flat = Color("9bdccc")
+			dark = Color("326b65")
+		elif i < values.size() and int(values[i]) == selected_number:
+			flat = flat.lerp(Color("b4d8c9"), 0.35)
+		_tile_mats[i].albedo_color = flat.lerp(dark, blend)
+		var number_color: Color = Color("294954").lerp(Color("a3c4be"), blend)
+		if towers.has(i):
+			var tower: Dictionary = towers[i]
+			number_color = _family(int(tower.get("number", 1))).darkened(0.38).lerp(_family(int(tower.get("number", 1))).lightened(0.15), blend)
+			if bool(tower.get("illegal", false)):
+				number_color = Color("ff9c9c")
+		_labels[i].modulate = number_color
+		_labels[i].pixel_size = lerpf(0.0095, 0.0067 if towers.has(i) else 0.0081, blend)
+		_labels[i].position = _cell_pos(i) + Vector3(0, 0.014, lerpf(0.035, 0.35 if towers.has(i) else 0.02, blend))
+	for material: StandardMaterial3D in _grid_mats:
+		material.albedo_color = Color("527678").lerp(Color("477f7b"), blend)
+
+func _sync_towers(dt: float) -> void:
+	var towers: Dictionary = run.get("towers")
+	for key: Variant in _tower_nodes.keys():
+		if not towers.has(key):
+			var removed: Dictionary = _tower_nodes[key]
+			(removed["node"] as Node3D).queue_free()
+			_tower_nodes.erase(key)
+	for key: Variant in towers:
+		var tower: Dictionary = towers[key]
+		var attachments: Array = tower.get("attachments", [])
+		var signature: String = str(tower.get("number", 1)) + "/" + str(attachments) + "/" + str(tower.get("level", 1))
+		if not _tower_nodes.has(key) or str(_tower_nodes[key].get("signature", "")) != signature:
+			if _tower_nodes.has(key):
+				(_tower_nodes[key]["node"] as Node3D).queue_free()
+			_tower_nodes[key] = _build_tower(int(key), tower, signature)
+		var entry: Dictionary = _tower_nodes[key]
+		var node: Node3D = entry["node"]
+		var seed_node: Node3D = entry["seed"]
+		var body: Node3D = entry["body"]
+		var head: Node3D = entry["head"]
+		var growth: float = clampf(float(tower.get("growth", 1.0)), 0.0, 1.0)
+		var show_amount: float = smoothstep(0.12, 0.8, _morph) * maxf(0.1, growth)
+		body.scale = Vector3(lerpf(0.45, 1.0, show_amount), maxf(0.015, show_amount), lerpf(0.45, 1.0, show_amount))
+		seed_node.visible = _morph < 0.7
+		seed_node.scale = Vector3.ONE * lerpf(1.0, 0.2, smoothstep(0.2, 0.72, _morph))
+		body.visible = show_amount > 0.01
+		node.position = _cell_pos(int(key))
+		var origin2: Vector2 = Vector2(float(int(key) % 9), float(int(key) / 9))
+		var aim: Vector2 = (tower.get("aim", origin2 + Vector2(0, -1)) as Vector2) - origin2
+		if aim.length_squared() > 0.001:
+			var angle: float = atan2(aim.x, aim.y)
+			head.rotation.y = lerp_angle(head.rotation.y, angle, 1.0 if reduced_motion else minf(1.0, dt * 18.0))
+		var recoil: float = maxf(0.0, float(entry.get("recoil", 0.0)) - dt * 3.7)
+		entry["recoil"] = recoil
+		(entry["barrel"] as Node3D).position.z = 0.25 - recoil * 0.16
+
+func _build_tower(cell: int, tower: Dictionary, signature: String) -> Dictionary:
+	var color: Color = _family(int(tower.get("number", 1)))
+	var node: Node3D = Node3D.new()
+	_world.add_child(node)
+	node.position = _cell_pos(cell)
+	var seed_node: Node3D = Node3D.new()
+	node.add_child(seed_node)
+	seed_node.position = Vector3(0.29, 0.05, -0.30)
+	_box(seed_node, Vector3.ZERO, Vector3(0.14, 0.08, 0.14), Color("997f53"))
+	_box(seed_node, Vector3(0, 0.07, 0), Vector3(0.035, 0.12, 0.035), Color("4c8d65"))
+	_box(seed_node, Vector3(-0.05, 0.12, 0), Vector3(0.12, 0.04, 0.06), color)
+	_box(seed_node, Vector3(0.05, 0.15, 0), Vector3(0.10, 0.04, 0.06), color.lightened(0.2))
+	var body: Node3D = Node3D.new()
+	node.add_child(body)
+	_box(body, Vector3(0, 0.07, 0), Vector3(0.64, 0.12, 0.64), Color("3b6264"))
+	_box(body, Vector3(0, 0.15, 0), Vector3(0.49, 0.08, 0.49), Color("718e86"))
+	for x: float in [-0.22, 0.22]:
+		for z: float in [-0.22, 0.22]:
+			_box(body, Vector3(x, 0.12, z), Vector3(0.095, 0.18, 0.095), Color("36545b"))
+	_box(body, Vector3(0, 0.28, 0), Vector3(0.35, 0.19, 0.35), color.darkened(0.35))
+	_box(body, Vector3(0, 0.28, 0.185), Vector3(0.15, 0.07, 0.02), color, true)
+	var attachments: Array = tower.get("attachments", [])
+	for i: int in range(mini(5, attachments.size())):
+		var item: Dictionary = attachments[i]
+		_module(body, str(item.get("kind", "power")), 0.43 + float(i) * 0.16)
+	var head_y: float = 0.47 + float(mini(5, attachments.size())) * 0.16
+	var head: Node3D = Node3D.new()
+	body.add_child(head)
+	head.position.y = head_y
+	_box(head, Vector3.ZERO, Vector3(0.38, 0.2, 0.31), Color("759795"))
+	_box(head, Vector3(0, 0.125, 0), Vector3(0.25, 0.06, 0.23), color)
+	var barrel: Node3D = Node3D.new()
+	head.add_child(barrel)
+	barrel.position.z = 0.25
+	_box(barrel, Vector3.ZERO, Vector3(0.12, 0.12, 0.39), Color("304d5c"))
+	_box(barrel, Vector3(0, 0, 0.22), Vector3(0.16, 0.15, 0.055), color, true)
+	var level: int = int(tower.get("level", 1))
+	for j: int in range(mini(level - 1, 4)):
+		_box(body, Vector3(-0.25 + float(j) * 0.15, 0.20, 0.29), Vector3(0.065, 0.045, 0.04), Color("ffe6a3"), true)
+	return {"node":node, "body":body, "seed":seed_node, "head":head, "barrel":barrel, "signature":signature, "recoil":0.0}
+
+func _module(parent: Node3D, kind: String, y: float) -> void:
+	var color: Color = MODULE_COLORS.get(kind, Color("ffb5d5"))
+	_box(parent, Vector3(0, y, 0), Vector3(0.43, 0.11, 0.43), Color("2c4854"))
+	_box(parent, Vector3(0, y + 0.06, 0), Vector3(0.45, 0.035, 0.45), color)
+	match kind:
+		"electric":
+			for x: float in [-0.26, 0.26]:
+				_box(parent, Vector3(x, y + 0.07, 0), Vector3(0.08, 0.19, 0.12), color)
+				_box(parent, Vector3(x, y + 0.16, 0), Vector3(0.15, 0.045, 0.17), color.lightened(0.3), true)
+		"rapid":
+			for x: float in [-0.12, 0.12]:
+				_box(parent, Vector3(x, y, 0.27), Vector3(0.06, 0.06, 0.19), color, true)
+		"frost":
+			for z: float in [-0.25, 0.25]:
+				var crystal: MeshInstance3D = _box(parent, Vector3(0, y + 0.06, z), Vector3(0.10, 0.18, 0.10), color, true)
+				crystal.rotation.z = 0.45
+		"blast", "nova":
+			for x: float in [-0.25, 0.25]:
+				_box(parent, Vector3(x, y, 0), Vector3(0.12, 0.14, 0.25), color.darkened(0.1))
+				_box(parent, Vector3(x, y + 0.08, 0), Vector3(0.09, 0.04, 0.09), Color("ffe2a5"), true)
+		"range":
+			_box(parent, Vector3(0, y, -0.30), Vector3(0.35, 0.07, 0.08), color)
+		"gravity":
+			for x: float in [-0.28, 0.28]:
+				_box(parent, Vector3(x, y + 0.05, 0), Vector3(0.045, 0.12, 0.38), color)
+		"venom":
+			for x: float in [-0.23, 0.23]:
+				_box(parent, Vector3(x, y + 0.02, 0.17), Vector3(0.11, 0.16, 0.11), color, true)
+		_:
+			_box(parent, Vector3(0, y, 0.25), Vector3(0.19, 0.10, 0.055), color, true)
+
+func _sync_enemies(dt: float) -> void:
+	var enemies: Array = run.get("enemies")
+	var alive: Dictionary = {}
+	for raw: Variant in enemies:
+		var enemy: Dictionary = raw
+		var id: int = int(enemy.get("id", 0))
+		alive[id] = true
+		if not _enemy_nodes.has(id):
+			_enemy_nodes[id] = _build_enemy(enemy)
+		var entry: Dictionary = _enemy_nodes[id]
+		var node: Node3D = entry["node"]
+		var pos: Vector2 = enemy.get("pos", Vector2.ZERO)
+		var target: Vector3 = Vector3(pos.x - 4.0, 0.0, pos.y - 4.0)
+		var previous: Vector3 = node.position
+		node.position = target
+		node.position.y = 0.11 + (0.0 if reduced_motion else sin(_clock * 9.0 + float(id)) * 0.035)
+		var movement: Vector3 = target - previous
+		if movement.length_squared() > 0.000001:
+			node.rotation.y = lerp_angle(node.rotation.y, atan2(movement.x, movement.z), minf(1.0, dt * 12.0))
+		var ratio: float = clampf(float(enemy.get("hp", 1.0)) / maxf(1.0, float(enemy.get("max_hp", 1.0))), 0.0, 1.0)
+		var bar: Node3D = entry["bar"]
+		bar.scale.x = maxf(0.001, ratio)
+		bar.position.x = -(1.0 - ratio) * 0.19
+		var body: Node3D = entry["body"]
+		body.rotation.z = 0.0 if reduced_motion else sin(_clock * 11.0 + float(id)) * 0.035
+	for key: Variant in _enemy_nodes.keys():
+		if not alive.has(key):
+			(_enemy_nodes[key]["node"] as Node3D).queue_free()
+			_enemy_nodes.erase(key)
+
+func _build_enemy(enemy: Dictionary) -> Dictionary:
+	var node: Node3D = Node3D.new()
+	_world.add_child(node)
+	var kind: String = str(enemy.get("kind", "runner"))
+	var color: Color = Color("e97983")
+	if kind == "armored" or kind == "tank":
+		color = Color("d396bc")
+	elif kind == "swift" or kind == "runner":
+		color = Color("f6a56c")
+	elif kind == "boss":
+		color = Color("d06cdd")
+	var body: Node3D = Node3D.new()
+	node.add_child(body)
+	_box(body, Vector3(0, 0.16, 0), Vector3(0.34, 0.26, 0.38), color.darkened(0.35))
+	_box(body, Vector3(0, 0.33, 0), Vector3(0.28, 0.12, 0.27), color)
+	_box(body, Vector3(0, 0.21, 0.21), Vector3(0.22, 0.075, 0.035), Color("ffdaa6"), true)
+	for x: float in [-0.22, 0.22]:
+		_box(body, Vector3(x, 0.08, 0.10), Vector3(0.10, 0.12, 0.13), Color("513c4b"))
+		_box(body, Vector3(x, 0.08, -0.12), Vector3(0.10, 0.12, 0.13), Color("513c4b"))
+	if kind == "tank" or kind == "armored" or kind == "boss":
+		for x: float in [-0.23, 0.23]:
+			_box(body, Vector3(x, 0.26, 0), Vector3(0.12, 0.25, 0.43), color)
+	if kind == "boss":
+		body.scale = Vector3.ONE * 1.45
+		for x: float in [-0.16, 0.16]:
+			_box(body, Vector3(x, 0.5, 0), Vector3(0.09, 0.25, 0.09), Color("f6d5ff"), true)
+	var health: Node3D = Node3D.new()
+	node.add_child(health)
+	health.position.y = 0.68 if kind == "boss" else 0.53
+	_box(health, Vector3.ZERO, Vector3(0.43, 0.035, 0.075), Color("13252e"), true)
+	var bar: MeshInstance3D = _box(health, Vector3.ZERO, Vector3(0.38, 0.045, 0.055), color.lightened(0.25), true)
+	return {"node":node, "body":body, "bar":bar}
+
+func _build_route(route: Array) -> void:
+	_route_markers.clear()
+	for child: Node in _route_root.get_children():
+		child.queue_free()
+	if route.size() < 2:
+		return
+	for i: int in range(route.size() - 1):
+		var a2: Vector2 = route[i]
+		var b2: Vector2 = route[i + 1]
+		var a: Vector3 = Vector3(a2.x - 4.0, 0.035, a2.y - 4.0)
+		var b: Vector3 = Vector3(b2.x - 4.0, 0.035, b2.y - 4.0)
+		var line: MeshInstance3D = _line_box(_route_root, a, b, 0.055, Color("e3aa67"))
+		line.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		if i % 2 == 0:
+			var direction: Vector3 = (b - a).normalized()
+			var left: Vector3 = Vector3(direction.z, 0, -direction.x)
+			var center: Vector3 = a.lerp(b, 0.5)
+			_line_box(_route_root, center - direction * 0.10 + left * 0.09, center + direction * 0.04, 0.032, Color("ffdb9a"))
+			_line_box(_route_root, center - direction * 0.10 - left * 0.09, center + direction * 0.04, 0.032, Color("ffdb9a"))
+	var start: Vector2 = route[0]
+	var end: Vector2 = route[route.size() - 1]
+	_gate(Vector3(start.x - 4, 0, start.y - 4), Color("f18d85"), false)
+	_gate(Vector3(end.x - 4, 0, end.y - 4), Color("8ce0bb"), true)
+	for i: int in range(3):
+		var marker: MeshInstance3D = _box(_route_root, Vector3.ZERO, Vector3(0.11, 0.045, 0.11), Color("ffe3a6"), true)
+		_route_markers.append(marker)
+
+func _animate_route() -> void:
+	if run == null or _route_markers.is_empty():
+		return
+	var route: Array = run.get("route")
+	if route.size() < 2:
+		return
+	for i: int in range(_route_markers.size()):
+		var marker: MeshInstance3D = _route_markers[i]
+		marker.visible = not reduced_motion
+		var progress_value: float = fmod(_clock * 1.55 + float(i) * float(route.size() - 1) / 3.0, float(route.size() - 1))
+		var idx: int = int(progress_value)
+		var a: Vector2 = route[idx]
+		var b: Vector2 = route[mini(idx + 1, route.size() - 1)]
+		var pos: Vector2 = a.lerp(b, progress_value - float(idx))
+		marker.position = Vector3(pos.x - 4.0, 0.071, pos.y - 4.0)
+
+func _gate(pos: Vector3, color: Color, core: bool) -> void:
+	var gate: Node3D = Node3D.new()
+	_route_root.add_child(gate)
+	gate.position = pos
+	_box(gate, Vector3(0, 0.03, 0), Vector3(0.62, 0.10, 0.62), Color("203a45"))
+	if core:
+		_box(gate, Vector3(0, 0.25, 0), Vector3(0.37, 0.36, 0.37), color.darkened(0.25))
+		_box(gate, Vector3(0, 0.48, 0), Vector3(0.23, 0.16, 0.23), color, true)
+		_box(gate, Vector3(0, 0.60, 0), Vector3(0.10, 0.08, 0.10), Color("d9ffe0"), true)
+	else:
+		for x: float in [-0.25, 0.25]:
+			_box(gate, Vector3(x, 0.29, 0), Vector3(0.09, 0.50, 0.13), color)
+		_box(gate, Vector3(0, 0.54, 0), Vector3(0.59, 0.08, 0.13), color, true)
+
+func _refresh_range() -> void:
+	for child: Node in _range_root.get_children():
+		child.queue_free()
+	if run == null or selected_cell < 0:
+		return
+	var towers: Dictionary = run.get("towers")
+	if not towers.has(selected_cell):
+		return
+	var stats: Dictionary = run.call("tower_stats", selected_cell)
+	var radius: float = float(stats.get("range", 2.4))
+	var center: Vector3 = _cell_pos(selected_cell) + Vector3(0, 0.028, 0)
+	for i: int in range(48):
+		if i % 2 == 1:
+			continue
+		var a: float = float(i) * TAU / 48.0
+		var b: float = float(i + 1) * TAU / 48.0
+		_line_box(_range_root, center + Vector3(cos(a), 0, sin(a)) * radius, center + Vector3(cos(b), 0, sin(b)) * radius, 0.023, Color("6db49e"))
+
+func play_event(event: Dictionary) -> void:
+	if _fx_root == null:
+		return
+	var kind: String = str(event.get("type", ""))
+	var cell: int = int(event.get("cell", -1))
+	var pos: Vector3 = _cell_pos(cell) if cell >= 0 else Vector3.ZERO
+	if event.get("pos") is Vector2:
+		var p: Vector2 = event["pos"]
+		pos = Vector3(p.x - 4.0, 0.14, p.y - 4.0)
+	var color: Color = event.get("color", Color("8ee7ca")) if event.get("color") is Color else Color("8ee7ca")
+	match kind:
+		"plant":
+			_burst(pos + Vector3(0, 0.18, 0), color, 10, 0.7)
+			_ring(pos, color, 0.9, 0.45)
+		"upgrade", "equip":
+			_burst(pos + Vector3(0, 0.55, 0), Color("ffd694"), 15, 1.1)
+			_ring(pos, Color("ffd694"), 1.1, 0.65)
+			_refresh_range()
+		"shot":
+			var target: Vector2 = event.get("target", Vector2(4, 4))
+			var source: Vector3 = pos + Vector3(0, 0.5, 0)
+			if _tower_nodes.has(cell):
+				var entry: Dictionary = _tower_nodes[cell]
+				var head: Node3D = entry["head"]
+				source.y = head.position.y
+				entry["recoil"] = 1.0
+				color = _family(int((run.get("towers") as Dictionary)[cell].get("number", 1)))
+			var target3: Vector3 = Vector3(target.x - 4, 0.30, target.y - 4)
+			var beam: MeshInstance3D = _line_box(_fx_root, source, target3, 0.035, color.lightened(0.20))
+			_beams.append({"node":beam,"life":0.11,"max_life":0.11})
+			_burst(target3, color, 3, 0.30)
+		"hit":
+			_burst(pos + Vector3(0, 0.23, 0), color, 3, 0.3)
+		"kill":
+			_burst(pos + Vector3(0, 0.2, 0), Color("f3b883"), 8, 0.85)
+			_burst(pos + Vector3(0, 0.3, 0), Color("b89be8"), 3, 1.2)
+		"leak":
+			_shake = 0.45
+			_ring(pos, Color("ff7d7d"), 1.4, 0.4)
+		"loot", "chest_open":
+			_burst(pos + Vector3(0, 0.6, 0), Color("ffd48b"), 24, 2.0)
+			_ring(pos, Color("ffd48b"), 2.5, 0.8)
+		"phase":
+			_last_board = ""
+			if str(run.get("phase")) == "battle":
+				_ring(Vector3.ZERO, Color("78dcc3"), 6.0, 0.8)
+
+func _burst(pos: Vector3, color: Color, count: int, strength: float) -> void:
+	if reduced_motion:
+		count = mini(count, 3)
+	for i: int in range(count):
+		if _particles.size() >= 220:
+			return
+		var size: float = _rng.randf_range(0.035, 0.085)
+		var cube: MeshInstance3D = _box(_fx_root, pos, Vector3.ONE * size, color.lightened(float(_rng.randi_range(0, 3)) * 0.1 - 0.1), true)
+		cube.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var velocity: Vector3 = Vector3(_rng.randf_range(-1, 1), _rng.randf_range(0.6, 2.1), _rng.randf_range(-1, 1)) * strength
+		_particles.append({"node":cube, "velocity":velocity, "life":_rng.randf_range(0.35, 0.65), "size":size})
+
+func _ring(pos: Vector3, color: Color, radius: float, duration: float) -> void:
+	var node: Node3D = Node3D.new()
+	_fx_root.add_child(node)
+	node.position = pos + Vector3(0, 0.04, 0)
+	for i: int in range(24):
+		var a: float = float(i) * TAU / 24.0
+		var b: float = float(i + 1) * TAU / 24.0
+		_line_box(node, Vector3(cos(a), 0, sin(a)), Vector3(cos(b), 0, sin(b)), 0.026, color)
+	node.scale = Vector3.ONE * 0.15
+	_rings.append({"node":node, "life":duration,"duration":duration,"radius":radius})
+
+func _update_fx(dt: float) -> void:
+	for i: int in range(_particles.size() - 1, -1, -1):
+		var p: Dictionary = _particles[i]
+		p["life"] = float(p["life"]) - dt
+		var node: Node3D = p["node"]
+		if float(p["life"]) <= 0.0:
+			node.queue_free()
+			_particles.remove_at(i)
+			continue
+		var velocity: Vector3 = p["velocity"]
+		velocity.y -= dt * 3.6
+		p["velocity"] = velocity
+		node.position += velocity * dt
+		node.rotation += Vector3(2.3, 3.7, 1.7) * dt
+		node.scale = Vector3.ONE * float(p["size"]) * minf(1.0, float(p["life"]) * 5.0)
+	for i: int in range(_beams.size() - 1, -1, -1):
+		var beam: Dictionary = _beams[i]
+		beam["life"] = float(beam["life"]) - dt
+		var node: Node3D = beam["node"]
+		if float(beam["life"]) <= 0.0:
+			node.queue_free()
+			_beams.remove_at(i)
+	for i: int in range(_rings.size() - 1, -1, -1):
+		var ring: Dictionary = _rings[i]
+		ring["life"] = float(ring["life"]) - dt
+		var node: Node3D = ring["node"]
+		if float(ring["life"]) <= 0.0:
+			node.queue_free()
+			_rings.remove_at(i)
+			continue
+		var t: float = 1.0 - float(ring["life"]) / float(ring["duration"])
+		node.scale = Vector3(float(ring["radius"]) * t, maxf(0.1, 1.0 - t), float(ring["radius"]) * t)
+
+func _plant(pos: Vector3, index: int) -> Node3D:
+	var plant: Node3D = Node3D.new()
+	_world.add_child(plant)
+	plant.position = pos
+	_box(plant, Vector3(0, -0.1, 0), Vector3(0.34, 0.18, 0.34), Color("273d42"))
+	_box(plant, Vector3(0, 0.09, 0), Vector3(0.06, 0.24, 0.06), Color("4c7561"))
+	var color: Color = Color("5c9f87") if index % 3 != 0 else Color("a1b97d")
+	_box(plant, Vector3(-0.09, 0.13, 0), Vector3(0.21, 0.075, 0.12), color)
+	_box(plant, Vector3(0.07, 0.23, 0.015), Vector3(0.19, 0.075, 0.13), color.lightened(0.13))
+	if index % 4 == 0:
+		_box(plant, Vector3(0.015, 0.33, 0), Vector3(0.10, 0.10, 0.10), Color("f4c086"))
+	return plant
+
+func _square_frame(parent: Node3D, width: float, thickness: float, color: Color, y: float) -> void:
+	for sign_value: int in [-1, 1]:
+		_box(parent, Vector3(sign_value * width / 2, y, 0), Vector3(thickness, thickness, width), color, true)
+		_box(parent, Vector3(0, y, sign_value * width / 2), Vector3(width, thickness, thickness), color, true)
+
+func _box(parent: Node3D, pos: Vector3, dimensions: Vector3, color: Color, unshaded: bool = false) -> MeshInstance3D:
+	var instance: MeshInstance3D = MeshInstance3D.new()
+	instance.mesh = _box_mesh
+	instance.material_override = _material(color, unshaded)
+	instance.position = pos
+	instance.scale = dimensions
+	parent.add_child(instance)
+	return instance
+
+func _line_box(parent: Node3D, a: Vector3, b: Vector3, width: float, color: Color) -> MeshInstance3D:
+	var distance: float = a.distance_to(b)
+	var mesh: MeshInstance3D = _box(parent, a.lerp(b, 0.5), Vector3(width, width, maxf(distance, 0.001)), color, true)
+	if distance > 0.001:
+		mesh.rotation = Basis.looking_at((b - a).normalized(), Vector3.UP if absf((b - a).normalized().y) < 0.99 else Vector3.RIGHT).get_euler()
+	return mesh
+
+func _material(color: Color, unshaded: bool = false) -> StandardMaterial3D:
+	var key: String = color.to_html() + ("u" if unshaded else "s")
+	if not _materials.has(key):
+		var material: StandardMaterial3D = StandardMaterial3D.new()
+		material.albedo_color = color
+		material.roughness = 0.75
+		if unshaded:
+			material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_materials[key] = material
+	return _materials[key]
+
+func _cell_pos(cell: int) -> Vector3:
+	return Vector3(float(cell % 9) - 4.0, 0.0, float(cell / 9) - 4.0)
+
+func _family(number: int) -> Color:
+	return FAMILY_COLORS[clampi(number - 1, 0, 8)]

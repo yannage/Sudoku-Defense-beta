@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#07141c">
+<meta name="description" content="Download Sudoku Defense for Windows and Linux, or open the Godot project.">
+<title>Sudoku Defense · Desktop builds</title>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 20% 0,#173b42,transparent 65%),#07141c;color:#edf4eb;font-family:system-ui,-apple-system,sans-serif;min-height:100vh}main{max-width:1000px;padding:48px 28px 56px;margin:auto}a{color:#91dcc5;text-decoration:none}a:hover{text-decoration:underline}a:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid #d9fff2;outline-offset:5px}.back{font-size:13px;display:inline-block;margin-bottom:56px}.eyebrow{font-size:10px;letter-spacing:3px;color:#8ca9ac;font-weight:700}h1{font-size:clamp(34px,6vw,58px);letter-spacing:-2.5px;line-height:1.05;margin:14px 0 20px;max-width:700px}h1 span{color:#8be0c3}.intro{color:#a5bcbd;font-size:16px;line-height:1.7;max-width:640px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:36px}.card{background:linear-gradient(145deg,#162c35,#0c202a);border:1px solid #31505a;border-radius:16px;padding:26px 22px;min-width:0;display:flex;flex-direction:column;align-items:start;box-shadow:0 8px 26px #0002}.card.primary{border-color:#b58b5c}.icon{height:58px;margin-bottom:22px;position:relative;width:58px}.icon i{display:block;position:absolute;width:23px;height:23px;background:#86d9bc;box-shadow:4px 4px 0 #2b796e;transform:skewY(-9deg)}.icon i:nth-child(1){left:0;top:4px}.icon i:nth-child(2){left:29px;top:0}.icon i:nth-child(3){left:0;top:33px}.icon i:nth-child(4){left:29px;top:29px}.primary .icon i{background:#edaa6b;box-shadow:4px 4px 0 #956442}.card h2{font-size:21px;letter-spacing:-.5px;margin:0 0 6px}.meta{font-size:11px;color:#78a0a6;margin:0 0 18px;letter-spacing:.5px}.description{font-size:13px;color:#aac0c1;line-height:1.65;min-height:88px;margin:0 0 22px}.action{display:block;width:100%;text-align:center;background:#8bdfc1;border:0;border-radius:8px;color:#122d33;padding:14px 10px;font:inherit;font-weight:750;font-size:13px;cursor:pointer;margin-top:auto;min-height:46px}.action:hover{filter:brightness(1.1);text-decoration:none}.primary .action{background:#edaa6b}.action:disabled{cursor:wait;opacity:.65}.track{width:100%;height:3px;margin-top:17px;background:#29444e;border-radius:3px;overflow:hidden}.track i{height:100%;display:block;background:#8bdfc1;width:0;transition:width .15s}.status{font-size:11px;line-height:1.5;color:#96b4ba;min-height:35px;margin:10px 0 0}.note{color:#819fa5;line-height:1.7;font-size:12px;margin:28px 0 36px;max-width:790px}details{border-top:1px solid #29424d;padding-top:20px;color:#86a4aa;font-size:12px}summary{cursor:pointer;width:fit-content}dl{line-height:1.8}dt{margin-top:16px;color:#b6cbcb}dd{margin:0;font-family:ui-monospace,monospace;font-size:10px;overflow-wrap:anywhere}footer{font-size:9px;letter-spacing:3px;color:#597f88;margin-top:40px}@media(max-width:740px){main{padding:30px 20px}.back{margin-bottom:34px}.grid{grid-template-columns:1fr}.card{padding:24px}.description{min-height:0}.icon{margin-bottom:18px}.status{min-height:20px}h1{letter-spacing:-1.5px}}@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body><main>
+<a class="back" href="./">← Back to the grid</a>
+<p class="eyebrow">SUDOKU DEFENSE · GODOT EDITION</p>
+<h1>Your next defense.<br><span>On your own machine.</span></h1>
+<p class="intro">Download the game, extract the ZIP, and launch. These preview builds bring the same board, towers, and loot to your desktop.</p>
+<div id="packages" class="grid"></div>
+<p class="note">Windows runs <strong>SudokuDefense.exe</strong>. Linux runs <strong>sudoku-defense.x86_64</strong>. On Steam Deck, start with the Linux build in Desktop Mode. The Windows build can also be tested through Proton. Deck and Proton testing are still in progress.</p>
+<details><summary>Build details and SHA-256 checksums</summary><div id="details"></div></details>
+<footer>YAK STUDIOS · PLANT ANSWERS. HARVEST FIREPOWER.<br><br><a href="GODOT-LICENSE.txt">Godot license</a> · <a href="GODOT-THIRD-PARTY.txt">Third-party notices</a></footer>
+</main>
+<script>
+const DOWNLOADS=__DOWNLOAD_MANIFEST__;
+const descriptions={windows:'A standalone Windows game. Extract the ZIP and launch SudokuDefense.exe.',linux:'A native Linux game for your desktop or Steam Deck. Extract the ZIP and launch the executable.',source:'The complete Godot project. Open project.godot in Godot 4.7.2 to explore and build.'};
+const subtitles={windows:'WINDOWS 10 / 11 · 64-BIT',linux:'LINUX · 64-BIT',source:'GODOT 4.7.2 · SOURCE'};
+const mb=bytes=>(bytes/1048576).toFixed(1)+' MB';
+const digest=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
+let busy=false;
+async function assemblePackage(pkg,report){
+  const buffers=[];let total=0;
+  for(const part of pkg.parts){
+    const response=await fetch(part.url);
+    if(!response.ok)throw new Error('Download interrupted. Please try again.');
+    const bytes=await response.arrayBuffer();
+    if(bytes.byteLength!==part.bytes || await digest(bytes)!==part.sha256)throw new Error('A download part did not verify. Please try again.');
+    buffers.push(bytes);total+=bytes.byteLength;report(total/pkg.bytes,'Downloading '+mb(total)+' of '+mb(pkg.bytes));
+  }
+  const blob=new Blob(buffers,{type:'application/zip'});
+  if(blob.size!==pkg.bytes)throw new Error('The download was incomplete. Please try again.');
+  report(1,'Checking your download…');
+  if(await digest(await blob.arrayBuffer())!==pkg.sha256)throw new Error('The download did not verify. Please try again.');
+  return blob;
+}
+for(const pkg of DOWNLOADS.packages){
+  const card=document.createElement('article');card.className='card'+(pkg.id==='windows'?' primary':'');
+  card.innerHTML='<div class="icon" aria-hidden="true"><i></i><i></i><i></i><i></i></div><h2></h2><p class="meta"></p><p class="description"></p><button class="action"></button><div class="track" aria-hidden="true"><i></i></div><p class="status" role="status" aria-live="polite"></p>';
+  card.querySelector('h2').textContent=pkg.label;card.querySelector('.meta').textContent=subtitles[pkg.id];card.querySelector('.description').textContent=descriptions[pkg.id];
+  const button=card.querySelector('button');const status=card.querySelector('.status');const bar=card.querySelector('.track i');
+  button.textContent='Download · '+mb(pkg.bytes);
+  button.addEventListener('click',async()=>{
+    if(busy)return;
+    if(pkg.url){const a=document.createElement('a');a.href=pkg.url;a.download=pkg.filename;a.click();status.textContent='Your download is ready.';return;}
+    busy=true;document.querySelectorAll('button.action').forEach(b=>b.disabled=true);status.textContent='Preparing your download…';
+    try{
+      const blob=await assemblePackage(pkg,(fraction,text)=>{bar.style.width=Math.round(fraction*100)+'%';status.textContent=text;});
+      const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=pkg.filename;a.style.display='none';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);status.textContent='Verified. Your download is ready.';
+    }catch(error){status.textContent=error.message||'Download failed. Please try again.';bar.style.width='0';}
+    finally{busy=false;document.querySelectorAll('button.action').forEach(b=>b.disabled=false);}
+  });
+  document.getElementById('packages').append(card);
+}
+const details=document.getElementById('details');const intro=document.createElement('p');intro.textContent='Godot '+DOWNLOADS.godot_version+' · Built '+new Date(DOWNLOADS.built_at).toLocaleDateString();details.append(intro);const dl=document.createElement('dl');
+for(const pkg of DOWNLOADS.packages){const dt=document.createElement('dt');dt.textContent=pkg.filename;const dd=document.createElement('dd');dd.textContent=pkg.sha256;dl.append(dt,dd);}details.append(dl);
+</script>
+</body>
+</html>

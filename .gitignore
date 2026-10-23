@@ -3,3 +3,9 @@ release/
 .netlify/
 *.log
 .DS_Store
+
+godot/.godot/
+godot/build/
+godot/*.tmp
+
+__pycache__/

@@ -1,0 +1,73 @@
+name: Build Sudoku Defense Godot
+
+on:
+  push:
+    branches: [godot-deck-edition]
+    paths: ['godot/**', '.github/workflows/godot.yml']
+    tags: ['godot-v*']
+  pull_request:
+    paths: ['godot/**', '.github/workflows/godot.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  exports:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      GODOT_VERSION: '4.7.2'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install official Godot and export templates
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/godot"
+          cd "$RUNNER_TEMP/godot"
+          base="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-stable"
+          curl --fail --location --retry 3 -O "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          curl --fail --location --retry 3 -O "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          curl --fail --location --retry 3 -O "$base/SHA512-SUMS.txt"
+          grep -E "Godot_v${GODOT_VERSION}-stable_(linux.x86_64.zip|export_templates.tpz)$" SHA512-SUMS.txt | sha512sum --check -
+          unzip -q "Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          chmod +x "Godot_v${GODOT_VERSION}-stable_linux.x86_64"
+          echo "GODOT=$RUNNER_TEMP/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64" >> "$GITHUB_ENV"
+          unzip -q "Godot_v${GODOT_VERSION}-stable_export_templates.tpz" 'templates/web*' 'templates/linux*x86_64' 'templates/windows*x86_64*' 'templates/version.txt'
+          mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          mv templates/* "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
+      - name: Import, export, validate Linux boot, and package
+        run: python3 godot/scripts/build_exports.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Sudoku-Defense-Godot-Web
+          path: godot/build/web/
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Sudoku-Defense-Godot-Desktop-and-Source
+          path: godot/build/downloads/
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Sudoku-Defense-Godot-Build-Logs
+          path: godot/build/logs/
+          retention-days: 14
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/godot-v')
+    needs: exports
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Sudoku-Defense-Godot-Desktop-and-Source
+          path: packages
+      - name: Publish versioned game downloads
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" packages/* --repo "${{ github.repository }}" --title "Sudoku Defense ${{ github.ref_name }}" --generate-notes
