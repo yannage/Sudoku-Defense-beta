@@ -8,6 +8,7 @@ var pointer_id := -2 # -1 mouse, >=0 physical touch index, -2 inactive
 var origin := Vector2.ZERO
 var pointer_position := Vector2.ZERO
 var dragging := false
+var mouse_device := 0
 var hover_cell := -1
 var _source: Button
 var _card: PanelContainer
@@ -55,27 +56,34 @@ func _input(event: InputEvent) -> void:
 		if event.keycode == KEY_ESCAPE: get_viewport().set_input_as_handled()
 		return
 	if event is InputEventMouseButton or event is InputEventMouseMotion:
-		if event.device == InputEvent.DEVICE_ID_EMULATION:
-			# Physical touches are handled below. Do not let their synthetic click
-			# invoke Button.pressed and plant the same seed a second time.
-			if is_active() or (not host.menu_open and _number_at(event.position)>0):
-				get_viewport().set_input_as_handled()
+		# Only suppress a mouse copy while an actual finger owns this gesture.
+		# Some desktop touch integrations provide mouse events alone; their
+		# emulation device ID does not mean a raw touch event will follow.
+		if pointer_id >= 0:
+			get_viewport().set_input_as_handled()
 			return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:
 			if is_active(): get_viewport().set_input_as_handled(); return
 			var chosen: int = _number_at(event.position)
 			if chosen > 0 and host._number_input_allowed():
+				mouse_device = event.device
 				_begin(chosen,event.position,-1)
 				get_viewport().set_input_as_handled()
-		elif pointer_id == -1:
-			_finish(event.position,false)
+		elif pointer_id == -1 and event.device == mouse_device:
+			_finish(event.position,event.canceled)
 			get_viewport().set_input_as_handled()
-	elif event is InputEventMouseMotion and pointer_id == -1:
+	elif event is InputEventMouseMotion and pointer_id == -1 and event.device == mouse_device:
 		_move(event.position)
 		get_viewport().set_input_as_handled()
 	elif event is InputEventScreenTouch:
 		if event.pressed:
+			# Godot may dispatch the emulated mouse press before the raw touch.
+			# Transfer that same press to the finger, rather than start it twice.
+			if pointer_id == -1 and mouse_device == InputEvent.DEVICE_ID_EMULATION and origin.distance_to(event.position) < DRAG_DISTANCE:
+				pointer_id = event.index
+				get_viewport().set_input_as_handled()
+				return
 			if is_active(): get_viewport().set_input_as_handled(); return
 			var chosen: int = _number_at(event.position)
 			if chosen > 0 and host._number_input_allowed():
@@ -99,7 +107,7 @@ func _begin(chosen: int, point: Vector2, id: int) -> void:
 	hover_cell = -1
 	_source = host.number_buttons[chosen-1]
 	_source.self_modulate = Color(1.25,1.25,1.25,1)
-	host._pointer_activity()
+	host._pointer_activity(id)
 
 func _move(point: Vector2) -> void:
 	pointer_position = point
@@ -165,6 +173,7 @@ func _finish(point: Vector2, canceled: bool) -> void:
 		host._choose_number(chosen)
 
 func cancel() -> void:
+	if is_active() and host != null: host._finish_pointer_activity.call_deferred()
 	if is_instance_valid(_source): _source.self_modulate = Color.WHITE
 	_source = null
 	pointer_id = -2

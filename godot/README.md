@@ -4,7 +4,7 @@ A native Godot 4.7.2 version of the pre-Unity Sudoku Defense game. The same GDSc
 
 ## Play
 
-Open the published Godot edition in a current WebGL 2 browser. Version 0.3.4 adapts to portrait phones, wide landscape phones, and the Steam Deck screen. Portrait keeps the grid above a large number bar and four quick tabs; Tools reveals notes, hints, and reserve seeds. Gear, Chests, and Camp use voxel icons with short labels and counts. Management opens in a scrollable sheet, with the board still available for selecting towers. The launch page offers fullscreen and desktop downloads. For Windows, extract the ZIP and run `SudokuDefense.exe`. For Linux, extract the archive and run `sudoku-defense.x86_64`; the tar.gz also preserves execute permissions.
+Open the published Godot edition in a current WebGL 2 browser. Version 0.3.5 adapts to portrait phones, wide landscape phones, and the Steam Deck screen. Portrait keeps the grid above a large number bar and four quick tabs; Tools reveals notes, hints, and reserve seeds. Gear, Chests, and Camp use voxel icons with short labels and counts. Management opens in a scrollable sheet, with the board still available for selecting towers. The launch page offers fullscreen and desktop downloads. For Windows, extract the ZIP and run `SudokuDefense.exe`. For Linux, extract the archive and run `sudoku-defense.x86_64`; the tar.gz also preserves execute permissions.
 
 The browser export now projects the voxel board and animated chests with ordinary Godot CanvasItem polygons. This bypasses the entire spatial rendering pass that continued to show black on the affected phone, even with simpler materials. The same GDScript run drives tower growth, aiming, routes, equipment, combat, and loot. Desktop builds retain the native 3D scene; pass `--canvas-graphics` to use the browser's compatible voxel view on desktop. The older `--safe-graphics` option only simplifies desktop 3D materials and is no longer the web default. The exact phone still needs a retest; local framebuffer checks cannot establish its GPU behavior.
 
@@ -35,6 +35,8 @@ Campaign lets you choose puzzle and combat difficulty each round, for up to fift
 | Fullscreen | F | Use desktop/window controls |
 
 Native desktop builds read gamepad buttons and sticks directly through Godot. A mouse is not required for the main game loop. Menu and inventory focus stays visible as lists scroll; gameplay input is isolated from open panels. Selecting a number with the shoulders does not plant it until A confirms. Equipment supports selecting a module, choosing its target tower, then confirming with A. The seed entry offers an in-game number pad for controller-only replay setup. Losing the active controller pauses the run. Touch and mouse controls remain available alongside the controller.
+
+Version 0.3.5 accepts mouse-only touchscreen clicks, including emulated mouse events without a matching raw touch. Paired touch/mouse events share one gesture so a tap or drag acts once. Steamworks remains configured for **Left Mouse Click Emulation**; the project explicitly enables Godot mouse-from-touch emulation for menus. The automated input checks do not replace a physical Steam Deck test.
 
 Touching an empty square selects it without planting the previously chosen number. A number-bar tap commits to the selected empty square; dragging previews the destination and only places on release. Dropping outside the board cancels. The same interactions work with physical touchscreen events, mouse input, and Steam Deck's touchscreen mouse emulation.
 

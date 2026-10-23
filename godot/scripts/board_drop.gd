@@ -3,6 +3,7 @@ var host
 var pressed_at := Vector2.ZERO
 var mouse_down := false
 var mouse_moved := false
+var mouse_device := 0
 var touch_pressed_at := Vector2.ZERO
 var active_touch := -1
 var touch_moved := false
@@ -25,21 +26,27 @@ func _gui_input(event: InputEvent) -> void:
 		cancel_pointer()
 		return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		# The raw touchscreen gesture owns selection. Ignore its synthetic click.
-		if event.device == InputEvent.DEVICE_ID_EMULATION: return
+		# Accept mouse-only touchscreen input. A paired raw finger takes
+		# ownership below, so its synthetic mouse copy cannot select twice.
+		if active_touch >= 0: return
 		if event.pressed:
+			if mouse_down: return
 			pressed_at = event.position
 			mouse_down = true
 			mouse_moved = false
-		else:
-			if mouse_down and not mouse_moved and pressed_at.distance_to(event.position)<12:
+			mouse_device = event.device
+		elif mouse_down and event.device == mouse_device:
+			mouse_down = false
+			if not event.canceled and not mouse_moved and pressed_at.distance_to(event.position)<12:
 				var cell: int = host.world.cell_at_screen(_screen_point(event.position))
 				host._tap_board(cell)
-			mouse_down = false
-	if event is InputEventMouseMotion and mouse_down:
+	if event is InputEventMouseMotion and mouse_down and event.device == mouse_device:
 		mouse_moved = mouse_moved or pressed_at.distance_to(event.position) >= 12
 	if event is InputEventScreenTouch:
 		if event.pressed and active_touch < 0:
+			if mouse_down:
+				if mouse_device != InputEvent.DEVICE_ID_EMULATION or pressed_at.distance_to(event.position) >= 12: return
+				mouse_down = false
 			active_touch = event.index
 			touch_pressed_at = event.position
 			touch_moved = false

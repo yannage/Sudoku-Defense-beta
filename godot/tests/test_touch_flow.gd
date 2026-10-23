@@ -123,18 +123,20 @@ func exercise() -> void:
 	await tap(scene.world.cell_screen_position(cell))
 	check(scene.selected_cell == cell, "Touch selects the square under the finger")
 	check(scene.run.board[cell] == 0 and scene.run.towers.size() == before, "Touching an empty square only selects, even with a remembered number")
-	await tap(point_for_number(answer))
+	# Exercise a raw finger and its synthetic mouse copy as one gesture.
+	# A later standalone emulated mouse click is valid input, not a duplicate.
+	var solved_before: int = scene.run.round_solved
+	var number_point: Vector2 = point_for_number(answer)
+	touch(number_point, true)
+	mouse(number_point, true, InputEvent.DEVICE_ID_EMULATION)
+	await frames(1)
+	mouse(number_point, false, InputEvent.DEVICE_ID_EMULATION)
+	touch(number_point, false)
+	await frames()
 	check(scene.run.board[cell] == answer and scene.run.towers.size() == before + 1, "Tapping a number commits exactly one tower to the selected square")
 	check(not scene.dock.is_open(), "One placement does not also open the tower inspector")
-	var solved_once: int = scene.run.round_solved
-	var earned_once: int = scene.run.credits
-	# Some touch platforms send synthetic mouse input too. It cannot duplicate
-	# placement or interpret the synthetic release as a second tower inspection.
-	mouse(scene.world.cell_screen_position(cell), true, InputEvent.DEVICE_ID_EMULATION)
-	mouse(scene.world.cell_screen_position(cell), false, InputEvent.DEVICE_ID_EMULATION)
-	await frames()
-	check(scene.run.round_solved == solved_once and scene.run.credits == earned_once, "Synthetic touch mouse events do not award a duplicate answer")
-	check(not scene.dock.is_open(), "Synthetic mouse input cannot open the newly planted tower")
+	check(scene.run.round_solved == solved_before + 1, "Paired touch/mouse placement awards one answer")
+	check(not scene.dock.is_open(), "Paired mouse input cannot open the newly planted tower")
 	await tap(scene.world.cell_screen_position(cell))
 	check(scene.dock.is_open() and scene.dock.current_panel == "tower", "A separate tap on an existing tower opens its workshop")
 	scene.dock.close_panel()

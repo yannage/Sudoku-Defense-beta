@@ -160,6 +160,8 @@ def main() -> None:
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_controller_flow.gd", "--", "--canvas-graphics"], logs / "canvas-controller-tests.log", expected="CONTROLLER_FLOW_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_touch_flow.gd"], logs / "touch-tests.log", expected="TOUCH_FLOW_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_touch_flow.gd", "--", "--canvas-graphics"], logs / "canvas-touch-tests.log", expected="TOUCH_FLOW_PASS")
+    run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_pointer_dispatch.gd"], logs / "pointer-dispatch-tests.log", expected="POINTER_DISPATCH_PASS")
+    run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_pointer_dispatch.gd", "--", "--canvas-graphics"], logs / "canvas-pointer-dispatch-tests.log", expected="POINTER_DISPATCH_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_family_workshop.gd"], logs / "family-workshop-tests.log", expected="FAMILY_WORKSHOP_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_family_workshop.gd", "--", "--canvas-graphics"], logs / "canvas-family-workshop-tests.log", expected="FAMILY_WORKSHOP_PASS")
     if args.render_check:
