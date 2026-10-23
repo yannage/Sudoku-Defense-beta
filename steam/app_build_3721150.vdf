@@ -1,8 +1,8 @@
 "AppBuild"
 {
     "AppID" "3721150"
-    "Desc" "Sudoku Defense - Linux web/Electron build"
-    "ContentRoot" "../release/linux-unpacked"
+    "Desc" "Sudoku Defense - native Godot Linux build"
+    "ContentRoot" "../release/steam-godot-linux"
     "BuildOutput" "../release/steam-build-output"
     "Preview" "0"
     "SetLive" ""
