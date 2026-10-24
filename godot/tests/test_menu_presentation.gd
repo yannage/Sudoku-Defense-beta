@@ -99,7 +99,7 @@ func exercise() -> void:
 		scene.muted = true
 		scene.sound.set_muted(true)
 		check_modal("Expedition setup")
-		for prefix in ["Campaign","Free play","Locked in","Start expedition"]:
+		for prefix in ["Campaign","Free play","Locked in","Start run"]:
 			check(exposed(button_by_text(scene.overlay,prefix)),"Setup exposes "+prefix+" without scrolling")
 		var keypad: Button = button_by_text(scene.overlay,"Keypad")
 		check(is_instance_valid(keypad),"Setup exposes the replay seed keypad")
@@ -114,7 +114,7 @@ func exercise() -> void:
 			if scene.seed_input.is_visible_in_tree(): check(scene.seed_input.size.x >= 140,"Seed field has enough room to read a replay seed")
 			scene.seed_input.text = "784217"
 		await capture("setup")
-		await click(button_by_text(scene.overlay,"Start expedition"))
+		await click(button_by_text(scene.overlay,"Start run"))
 		check(scene.has_active_run and not scene.menu_open,"Visible Start action launches the run through GUI input")
 		if not scene.has_active_run:
 			scene.queue_free()

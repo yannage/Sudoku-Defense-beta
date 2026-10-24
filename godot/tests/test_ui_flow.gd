@@ -63,6 +63,26 @@ func exercise() -> void:
 	scene.dock.close_panel()
 	scene._advance()
 	check(scene.run.phase=="battle","Launch wave advances phase")
+	# A later round must not divide cumulative kills by this wave's total.
+	var saved_kills: int = scene.run.kills
+	var saved_spawned: int = scene.run.spawned
+	var saved_total: int = scene.run.spawn_total
+	var saved_enemies: Array = scene.run.enemies.duplicate(true)
+	scene.run.kills = 112
+	scene.run.spawned = 5
+	scene.run.spawn_total = 17
+	scene.run.enemies.assign([{},{}])
+	scene._refresh()
+	check(scene.phase_detail.text.contains("14 / 17 enemies left"),"Battle HUD counts active and unspawned enemies, not run kills")
+	check(absf(scene.progress.value-100.0*3.0/17.0)<=0.5,"Wave progress counts resolved enemies without overflowing on later rounds")
+	scene._refresh_portrait_text()
+	check(scene.phase_detail.text.contains("14 enemies left"),"Portrait battle HUD uses the same wave count")
+	scene.run.kills = saved_kills
+	scene.run.spawned = saved_spawned
+	scene.run.spawn_total = saved_total
+	scene.run.enemies.assign(saved_enemies)
+	scene._refresh()
+
 	scene._toggle_dock("bag")
 	var previous: float = scene.run.battle_time
 	scene._process(.1)

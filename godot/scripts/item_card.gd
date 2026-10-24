@@ -7,7 +7,7 @@ const DragIcon = preload("res://scripts/gear_drag_icon.gd")
 var item: Dictionary = {}
 var armed: bool = false
 
-const EFFECT_NAMES: Dictionary = {"rapid":"Rapid fire", "electric":"Chain lightning", "frost":"Frost bolts", "blast":"Explosive bolts", "venom":"Poison bolts", "range":"Long range", "power":"Heavy bolts", "gravity":"Gravity pull", "nova":"Nova pulse", "overclock":"Fire-rate boost", "overcharge":"Damage boost", "freeze":"Freeze field", "repair":"Core repair"}
+const EFFECT_NAMES: Dictionary = {"rapid":"Rapid fire", "electric":"Chain lightning", "frost":"Frost bolts", "blast":"Explosive bolts", "venom":"Poison bolts", "range":"Long range", "power":"Heavy bolts", "gravity":"Gravity pull", "nova":"Nova pulse", "overclock":"Fire-rate boost", "overcharge":"Damage boost", "freeze":"Slow field", "repair":"Core repair"}
 var tile_mode: bool = false
 
 func configure(data: Dictionary, is_armed: bool = false, controller_mode: bool = false, as_tile: bool = false, is_new: bool = false) -> void:
@@ -19,7 +19,7 @@ func configure(data: Dictionary, is_armed: bool = false, controller_mode: bool =
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	focus_mode = Control.FOCUS_ALL
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	tooltip_text = str(item.get("name", "")) + "\n" + str(item.get("description", ""))
+	tooltip_text = str(item.get("name", "")) + "\n" + Loot.description(item)
 	var rarity: String = str(item.get("rarity", "common"))
 	var color: Color = Loot.rarity_color(rarity)
 	for state in ["normal", "hover", "pressed", "focus"]:
@@ -117,14 +117,14 @@ static func _short_stat(data: Dictionary) -> String:
 		"rapid": return "+%d%% fire rate" % roundi(p * 20)
 		"electric": return "Chain to %d more targets" % mini(7, 1 + floori(p))
 		"frost": return "%d%% slow · 2 sec" % roundi(minf(70, p * 18))
-		"blast": return "+%d%% splash damage" % roundi(p * 35)
-		"venom": return "+%d%% poison / sec" % roundi(p * 30)
+		"blast": return "%d%% bolt damage as splash" % roundi(minf(300, p * 35))
+		"venom": return "%d%% bolt damage / sec · 3 sec" % roundi(p * 30)
 		"range": return "+%.2f cells of range" % (p * 0.28)
 		"power": return "+%d%% bolt damage" % roundi(p * 25)
 		"gravity": return "Pull back %.2f cells" % minf(0.8, p * 0.14)
-		"nova": return "+%d%% pulse damage" % roundi(p * 20)
-		"overclock": return "All towers: 2× fire · 20 sec"
-		"overcharge": return "All towers: +60% hit · 20 sec"
+		"nova": return "%d%% bolt damage as pulse" % roundi(minf(250, p * 20))
+		"overclock": return "All towers: 2× fire rate · 20 sec"
+		"overcharge": return "All towers: +60% damage · 20 sec"
 		"freeze": return "All enemies: 60% slow · 12 sec"
-		"repair": return "Restore 10 core health"
-	return "Stackable · 1 attachment slot"
+		"repair": return "Restore up to 10 core health"
+	return "Uses 1 module slot"

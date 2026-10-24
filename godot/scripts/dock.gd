@@ -238,7 +238,7 @@ func refresh(preserve_focus: bool = true) -> void:
 		child.queue_free()
 	var top: HBoxContainer = HBoxContainer.new()
 	_body.add_child(top)
-	var names: Dictionary = {"tower":"TOWER WORKSHOP", "bag":"MODULE BENCH", "loot":"THE LOOT TABLE", "camp":"BASE CAMP"}
+	var names: Dictionary = {"tower":"TOWER WORKSHOP", "bag":"GEAR", "loot":"CHESTS", "camp":"BASE CAMP"}
 	var captions: Dictionary = {"tower":"BUILD YOUR FIREPOWER", "bag":"FIND YOUR NEXT UPGRADE", "loot":"SALVAGE RECOVERED", "camp":"BETWEEN SIEGES"}
 	var heading := HBoxContainer.new()
 	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -264,7 +264,7 @@ func refresh(preserve_focus: bool = true) -> void:
 	tabs.visible = current_panel != "loot"
 	for tab in ["tower", "bag", "loot", "camp"]:
 		var tab_kind: String = str(tab)
-		var text_value: String = str({"tower":"Tower", "bag":"Bag", "loot":"Loot", "camp":"Camp"}[tab_kind])
+		var text_value: String = str({"tower":"Tower", "bag":"Gear", "loot":"Chests", "camp":"Camp"}[tab_kind])
 		var tab_button: Button = _button(text_value, func(): open_panel(tab_kind, selected_cell), tab_kind == current_panel, false, 32, "tab:" + tab_kind)
 		tab_button.add_theme_font_size_override("font_size", 11)
 		tab_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -369,7 +369,7 @@ func _apply_touch_sizes(node: Node) -> void:
 
 func _tower_panel(content: VBoxContainer) -> void:
 	if not run.towers.has(selected_cell):
-		_note(content, "Choose one of your growing towers on the board or the mini grid.")
+		_note(content, "Select a tower on the board or the mini grid to inspect it.")
 		_mini_grid(content)
 		return
 	var tower: Dictionary = run.towers[selected_cell]
@@ -397,22 +397,22 @@ func _tower_panel(content: VBoxContainer) -> void:
 	var attachments: Array = tower.get("attachments", [])
 	_section(content, "MODULE SOCKETS", "%d / 5 used" % attachments.size())
 	_socket_strip(content, selected_cell)
-	_note(content, "Tap to return a module. Drag onto an occupied socket to swap.")
+	_note(content, "Select a module to remove it. Drag another onto a filled slot to swap.")
 	content.add_child(_button("Fit a module", func(): open_panel("bag", selected_cell), false, false, 38, "gear:open"))
 	var cost: int = int(run.upgrade_cost(selected_cell))
 	var cell: int = selected_cell
 	content.add_child(_button("Upgrade this tower   ·   %d" % cost, func(): _act("upgrade_tower", [cell]), true, int(run.credits) < cost, 42, "upgrade:tower"))
 	var family_cost: int = int(run.family_upgrade_cost(number))
 	var family_count: int = _family_tower_count(number)
-	_section(content, "SEED %d FAMILY" % number, "LEVEL %d → %d" % [int(run.family_levels[number]), int(run.family_levels[number]) + 1])
+	_section(content, "NUMBER %d UPGRADE" % number, "LEVEL %d → %d" % [int(run.family_levels[number]), int(run.family_levels[number]) + 1])
 	var family_button: Button = _button("Upgrade all %ds · %d %s\n%d credits" % [number, family_count, "tower" if family_count == 1 else "towers", family_cost], func(): _act("upgrade_family", [number]), false, int(run.credits) < family_cost, 58, "upgrade:family")
-	family_button.tooltip_text = "Improves all %d planted seed %d towers and every %d you plant later. Printed Sudoku clues are not towers." % [family_count, number, number]
+	family_button.tooltip_text = "Upgrades your %d towers numbered %d and every %d tower you plant later in this run. Fixed clues are not towers." % [family_count, number, number]
 	family_button.mouse_entered.connect(func(): _preview_family(number, false, true))
 	family_button.mouse_exited.connect(func(): _preview_family(number, false, false))
 	family_button.focus_entered.connect(func(): _preview_family(number, true, true))
 	family_button.focus_exited.connect(func(): _preview_family(number, true, false))
 	content.add_child(family_button)
-	_note(content, "Highlighted: your %ds. Future %ds inherit this level." % [number, number], FAMILY_COLORS[number])
+	_note(content, "Highlighted: your %d towers. Future %ds get this upgrade too." % [number, number], FAMILY_COLORS[number])
 	_mini_grid(content)
 
 func _socket_strip(content: VBoxContainer, cell: int) -> void:
@@ -438,13 +438,13 @@ func _socket_strip(content: VBoxContainer, cell: int) -> void:
 			var visual: Control = _icon(str(module.kind),Color(str(module.color)),Vector2.ZERO)
 			visual.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 			socket.add_child(visual)
-			socket.tooltip_text = Card.effect_name(module) + "\n" + Card._short_stat(module) + "\nTap to return · drag a new module here to swap"
+			socket.tooltip_text = Card.effect_name(module) + "\n" + Card._short_stat(module) + "\nSelect to remove · drag another module here to swap"
 			socket.pressed.connect(func(): _act("unequip_item",[cell,slot]))
 		else:
 			socket.text = "+"
 			socket.add_theme_font_size_override("font_size",22)
 			socket.add_theme_color_override("font_color",MINT if not _armed_id.is_empty() else MUTED)
-			socket.tooltip_text = "Free socket %d / 5" % (slot+1)
+			socket.tooltip_text = "Empty slot %d / 5" % (slot+1)
 			socket.pressed.connect(func():
 				if not _armed_id.is_empty(): _act("equip_item",[cell,_armed_id])
 				else: open_panel("bag",cell)
@@ -504,22 +504,22 @@ func _bag_panel(content: VBoxContainer) -> void:
 		if run.towers.has(selected_cell):
 			var tower: Dictionary = run.towers[selected_cell]
 			var used: int = tower.attachments.size()
-			_note(box,"Tower %d · %d free sockets" % [int(tower.number),5-used],GOLD)
+			_note(box,"Tower %d · %d empty slots" % [int(tower.number),5-used],GOLD)
 			_socket_strip(box,selected_cell)
 			var id: String = _armed_id
 			var cell: int = selected_cell
 			box.add_child(_button("Fit to tower %d" % int(tower.number),func(): _act("equip_item",[cell,id]),true,used >= 5,42,"attach:selected"))
-			if used >= 5: _note(box,"This stack is full. Return a module or choose another tower.",GOLD)
+			if used >= 5: _note(box,"All five slots are full. Remove a module or choose another tower.",GOLD)
 			else: _note(box,_effect_preview(chosen,selected_cell),MINT)
 		else:
-			_note(box,"Tap a tower on the board to fit this module. Each tower has five sockets.")
+			_note(box,"Select a tower to equip this module. Each tower has five slots.")
 		box.add_child(_button("Cancel selection",func(): _armed_id = ""; item_armed.emit(""); refresh(),false,false,32,"gear:cancel"))
 	else:
-		_note(content,"Pick a module, then its tower. Or drag a module straight onto the board.")
+		_note(content,"Select a module, then a tower. You can also drag modules onto towers.")
 	var filters := HBoxContainer.new()
 	filters.add_theme_constant_override("separation",3)
 	content.add_child(filters)
-	for entry in [["all","All"],["attack","Attack"],["support","Support"],["items","Items"]]:
+	for entry in [["all","All"],["attack","Attack"],["support","Support"],["items","Boosts"]]:
 		var key: String = entry[0]
 		var filter := _button(entry[1],func(): _set_bag_filter(key),_bag_filter == key,false,32,"filter:"+key)
 		filter.add_theme_font_size_override("font_size",11)
@@ -527,8 +527,8 @@ func _bag_panel(content: VBoxContainer) -> void:
 		filter.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		filters.add_child(filter)
 	var visible_items: Array[Dictionary] = _visible_items()
-	_section(content,"MODULE TRAY" if _bag_filter != "items" else "SINGLE USE", "%d items" % visible_items.size())
-	if visible_items.is_empty(): _note(content,"Nothing in this tray yet. Other tabs may have gear, or open a chest for more.")
+	_section(content,"YOUR GEAR" if _bag_filter != "items" else "SINGLE-USE BOOSTS", "%d items" % visible_items.size())
+	if visible_items.is_empty(): _note(content,"No gear in this category. Try another filter or open a chest.")
 	var grid := GridContainer.new()
 	grid.columns = 2
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -552,7 +552,7 @@ func _bag_panel(content: VBoxContainer) -> void:
 		grid.add_child(card)
 	content.add_child(_button(("Hide" if _show_reserves else "Show") + " emergency seeds",func(): _show_reserves = not _show_reserves; refresh(),false,false,34,"bag:reserves"))
 	if _show_reserves:
-		_note(content,"Reserve seeds · 6 credits each. Plant during battle, even illegally.")
+		_note(content,"Reserve seeds cost 6 credits each. Use them to add towers during battle. Wrong numbers add corruption.")
 		var seed_grid := GridContainer.new()
 		seed_grid.columns = 3
 		seed_grid.add_theme_constant_override("h_separation",5)
@@ -578,16 +578,16 @@ func _effect_preview(item: Dictionary, cell: int) -> String:
 			var after: float = before * (1.0 + .20 * (float(effects.get("rapid",0))+power)) / (1.0 + .20 * float(effects.get("rapid",0)))
 			return "Shots / sec: %.1f → %.1f" % [before,after]
 		"range": return "Range: %.2f → %.2f cells" % [float(stats.range),minf(4.75,float(stats.range)+.28*power)]
-	return "Fits one socket · repeated effects stack."
+	return "Uses one slot. Matching module effects add together."
 
 
 func _camp_panel(content: VBoxContainer) -> void:
-	_note(content, "Permanent improvements last for this run. Equipment returns to your bag between maps.")
-	_section(content, "RUN UPGRADES", "Build your advantage")
+	_note(content, "These upgrades last for the rest of this run.")
+	_section(content, "RUN UPGRADES", "Lasts for this run")
 	var definitions: Array[Dictionary] = [
-		{"id":"power", "name":"Root reactor", "detail":"Stronger bolts across every tower", "icon":"power"},
-		{"id":"salvage", "name":"Salvage drone", "detail":"Improve rewards from defeated enemies", "icon":"rapid"},
-		{"id":"vitality", "name":"Living core", "detail":"More core health for future sieges", "icon":"repair"}
+		{"id":"power", "name":"Root reactor", "detail":"+9% base bolt damage per level, for every tower", "icon":"power"},
+		{"id":"salvage", "name":"Salvage drone", "detail":"Better chest rarity and a chance for extra fragments", "icon":"rapid"},
+		{"id":"vitality", "name":"Living core", "detail":"+4 maximum core health; repairs 4 health now", "icon":"repair"}
 	]
 	for entry in definitions:
 		var kind: String = str(entry.id)
@@ -637,17 +637,17 @@ func _camp_panel(content: VBoxContainer) -> void:
 			tween.tween_property(icon, "modulate:a", 1.0, 0.28)
 	if not _slot_result.is_empty():
 		_slot_animated = true
-		_note(slot_content, str(_slot_result.get("message", _slot_result.get("label", "Reward added to your bag."))), MINT)
+		_note(slot_content, str(_slot_result.get("message", _slot_result.get("label", "Reward added to Gear."))), MINT)
 	slot_content.add_child(_button("Spin for salvage   ·   10", _spin, true, int(run.credits) < 10 or str(run.phase) != "loot"))
-	_note(content, "Below-stake results always include a usable module. No empty spins.", GOLD)
-	content.add_child(_button("Hide odds" if _show_odds else "View the fixed odds", func(): _show_odds = not _show_odds; refresh(), false, false, 32, "slot:odds"))
+	_note(content, "Every spin gives a reward. If you get fewer than 10 credits back, you also get a common module.", GOLD)
+	content.add_child(_button("Hide odds" if _show_odds else "View odds", func(): _show_odds = not _show_odds; refresh(), false, false, 32, "slot:odds"))
 	if _show_odds:
-		_note(content, "25% module · 20% 5 credits + module\n25% stake back · 20% double · 5% triple\n5% cache + stake back\n\nAverage credit return: 95%. Gear and caches are extra. Credits stay inside this game.")
-	if str(run.phase) != "loot": _note(content, "The camp opens after you survive a siege.", GOLD)
+		_note(content, "25%: common module\n20%: 5 credits + common module\n25%: 10 credits\n20%: 20 credits\n5%: 30 credits\n5%: sealed chest + 10 credits\n\nAverage return: 9.5 credits per 10-credit spin, plus gear or chests. Chest rewards still need fragments to open.")
+	if str(run.phase) != "loot": _note(content, "Camp purchases and slots open after each wave.", GOLD)
 
 func _mini_grid(content: VBoxContainer, heading: bool = true) -> void:
 	var selected_family: int = int(run.towers[selected_cell].number) if run.towers.has(selected_cell) else 0
-	if heading: _section(content, "FAMILY TARGETS" if selected_family > 0 else "YOUR TOWERS", "Gold: selected" if selected_family > 0 else "A inspects" if controller_mode else "Tap to inspect")
+	if heading: _section(content, "MATCHING TOWERS" if selected_family > 0 else "YOUR TOWERS", "Gold: selected" if selected_family > 0 else "A inspects" if controller_mode else "Tap to inspect")
 	var center: CenterContainer = CenterContainer.new()
 	content.add_child(center)
 	var grid: GridContainer = GridContainer.new()
@@ -674,7 +674,7 @@ func _mini_grid(content: VBoxContainer, heading: bool = true) -> void:
 		var bg: Color = color.darkened(0.53 if affected else 0.83) if occupied else Color("0b1a24")
 		var border: Color = GOLD if selected else color if affected else LINE
 		if occupied:
-			button.tooltip_text += " · Seed %d%s" % [number, " · included in family upgrade" if affected else ""]
+			button.tooltip_text += " · Tower %d%s" % [number, " · included in this upgrade" if affected else ""]
 		elif number > 0:
 			button.tooltip_text += " · printed clue, not a tower"
 		for state in ["normal", "hover", "pressed", "disabled", "focus"]:

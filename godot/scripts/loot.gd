@@ -13,14 +13,14 @@ const SLOT_COST: int = 10
 const SLOT_TABLE: Array[Dictionary] = [
 	{"id":"salvage", "units":250, "credits":0, "gear":true, "chest":"", "label":"Common module"},
 	{"id":"recovery", "units":200, "credits":5, "gear":true, "chest":"", "label":"5 credits + common module"},
-	{"id":"refund", "units":250, "credits":10, "gear":false, "chest":"", "label":"Stake recovered"},
-	{"id":"double", "units":200, "credits":20, "gear":false, "chest":"", "label":"Double credits"},
-	{"id":"triple", "units":50, "credits":30, "gear":false, "chest":"", "label":"Triple credits"},
-	{"id":"chest-common", "units":20, "credits":10, "gear":false, "chest":"common", "label":"Common cache + stake back"},
-	{"id":"chest-uncommon", "units":15, "credits":10, "gear":false, "chest":"uncommon", "label":"Uncommon cache + stake back"},
-	{"id":"chest-rare", "units":10, "credits":10, "gear":false, "chest":"rare", "label":"Rare cache + stake back"},
-	{"id":"chest-epic", "units":4, "credits":10, "gear":false, "chest":"epic", "label":"Epic cache + stake back"},
-	{"id":"chest-legendary", "units":1, "credits":10, "gear":false, "chest":"legendary", "label":"Legendary cache + stake back"},
+	{"id":"refund", "units":250, "credits":10, "gear":false, "chest":"", "label":"10 credits"},
+	{"id":"double", "units":200, "credits":20, "gear":false, "chest":"", "label":"20 credits"},
+	{"id":"triple", "units":50, "credits":30, "gear":false, "chest":"", "label":"30 credits"},
+	{"id":"chest-common", "units":20, "credits":10, "gear":false, "chest":"common", "label":"Common chest + 10 credits"},
+	{"id":"chest-uncommon", "units":15, "credits":10, "gear":false, "chest":"uncommon", "label":"Uncommon chest + 10 credits"},
+	{"id":"chest-rare", "units":10, "credits":10, "gear":false, "chest":"rare", "label":"Rare chest + 10 credits"},
+	{"id":"chest-epic", "units":4, "credits":10, "gear":false, "chest":"epic", "label":"Epic chest + 10 credits"},
+	{"id":"chest-legendary", "units":1, "credits":10, "gear":false, "chest":"legendary", "label":"Legendary chest + 10 credits"},
 ]
 
 static func rarity_index(rarity: String) -> int:
@@ -63,19 +63,19 @@ static func make_item(rng: RandomNumberGenerator, rarity: String, round_no: int,
 static func description(item: Dictionary) -> String:
 	var power: float = float(item.get("power", 1.0))
 	match str(item.get("kind", "")):
-		"rapid": return "+%d%% fire rate. Stack for faster bolts." % roundi(20.0 * power)
+		"rapid": return "+%d%% fire rate. Matching module bonuses add together." % roundi(20.0 * power)
 		"electric": return "Lightning jumps to %d extra enemies." % mini(7, 1 + floori(power))
-		"frost": return "Slows targets %d%% for 2 seconds." % roundi(minf(70.0, 18.0 * power))
-		"blast": return "Explosive bolts deal %d%% splash damage." % roundi(minf(300.0, 35.0 * power))
-		"venom": return "Poison adds %d%% damage each second for 3 seconds." % roundi(30.0 * power)
+		"frost": return "Slows hit enemies by %d%% for 2 seconds." % roundi(minf(70.0, 18.0 * power))
+		"blast": return "Deals %d%% of bolt damage to enemies near the target." % roundi(minf(300.0, 35.0 * power))
+		"venom": return "Deals %d%% of bolt damage per second as poison for 3 seconds." % roundi(30.0 * power)
 		"range": return "+%.2f cells of targeting range." % (0.28 * power)
 		"power": return "+%d%% bolt damage." % roundi(25.0 * power)
-		"gravity": return "Pulls targets back %.2f cells per shot." % minf(0.8, 0.14 * power)
-		"nova": return "Adds a %d%% damage pulse around the tower." % roundi(minf(250.0, 20.0 * power))
+		"gravity": return "Pulls enemies near the target back %.2f cells per shot. Weaker against bosses." % minf(0.8, 0.14 * power)
+		"nova": return "Each shot also deals %d%% of bolt damage to enemies near the tower." % roundi(minf(250.0, 20.0 * power))
 		"overclock": return "Every tower fires 2× as fast for 20 seconds. Battle only."
 		"overcharge": return "Every tower deals 60% more damage for 20 seconds. Battle only."
 		"freeze": return "All enemies move 60% slower for 12 seconds. Battle only."
-		"repair": return "Restore 10 core health. Use during any active phase."
+		"repair": return "Restores up to 10 core health. Use at any point during a run."
 	return "Unknown equipment."
 
 static func roll_slots(rng: RandomNumberGenerator) -> Dictionary:

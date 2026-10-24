@@ -121,11 +121,11 @@ func exercise() -> void:
 	scene.sound.set_muted(true)
 	scene.seed_input.text = "12345"
 	check(Input.is_emulating_mouse_from_touch(),"Native touch must generate mouse input for ordinary GUI controls")
-	var start: Button = button_text("Start expedition")
+	var start: Button = button_text("Start run")
 	check(start != null,"Start button is discoverable in the actual menu")
 	await show_control(start)
 	await tap(point(start))
-	check(scene.has_active_run and not scene.menu_open,"Raw Input touch can activate Start expedition through real mouse emulation")
+	check(scene.has_active_run and not scene.menu_open,"Raw Input touch can activate Start run through real mouse emulation")
 	if scene.menu_open: scene._start_run()
 	await frames()
 	scene.set_process(false)

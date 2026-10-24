@@ -227,11 +227,11 @@ func _build_ui() -> void:
 	reserve_button.tooltip_text = "Buy one emergency seed of the selected number"
 	positioned(reserve_button,Rect2(30,617,174,44))
 	bag_button = button("Gear",func(): _toggle_dock("bag"))
-	bag_button.tooltip_text = "Manage attachments and upgrade towers (X)."
+	bag_button.tooltip_text = "Equip modules and use boosts (X)."
 	positioned(bag_button,Rect2(1092,94,164,46))
 	_add_quick_icon(bag_button,"gear")
 	loot_button = button("Chests",func(): _toggle_dock("loot"))
-	loot_button.tooltip_text = "Open earned chests with energy fragments."
+	loot_button.tooltip_text = "Open chests with fragments from defeated enemies."
 	positioned(loot_button,Rect2(1092,149,164,46))
 	_add_quick_icon(loot_button,"chest")
 	var camp: Button = hud("camp", button("Camp",func(): _toggle_dock("camp")))
@@ -497,8 +497,8 @@ func _refresh_portrait_text() -> void:
 	match run.phase:
 		"solve": phase_detail.text = "SOLVE  %02d:%02d" % [int(run.timer)/60,int(run.timer)%60]
 		"prep": phase_detail.text = "PREPARE  /  %d towers" % run.towers.size()
-		"battle": phase_detail.text = "DEFEND  %d / %d" % [run.kills,run.spawn_total]
-		"loot": phase_detail.text = "LOOT & GROW"
+		"battle": phase_detail.text = "DEFEND  ·  %d enemies left" % _wave_enemies_remaining()
+		"loot": phase_detail.text = "LOOT"
 		_: phase_detail.text = "RUN COMPLETE"
 	if selected_cell >= 0:
 		selected_label.text = "ROW %d / COL %d" % [selected_cell/9+1,selected_cell%9+1]
@@ -506,10 +506,10 @@ func _refresh_portrait_text() -> void:
 			var t: Dictionary = run.towers[selected_cell]
 			candidate_label.text = "Tower %d  /  Lv %d  /  %d of 5 modules" % [t.number,run.tower_stats(selected_cell).level,t.attachments.size()]
 		elif run.givens[selected_cell]: candidate_label.text = "Fixed clue. Choose an empty square."
-		elif board_notes: candidate_label.text = "Try  " + "  ".join(run.candidates(selected_cell).map(func(v): return str(v)))
+		elif board_notes: candidate_label.text = "Candidates  " + "  ".join(run.candidates(selected_cell).map(func(v): return str(v)))
 		else: candidate_label.text = "Tap a number to plant here."
 	else:
-		selected_label.text = "YOUR ANSWERS GROW TOWERS"
+		selected_label.text = "SELECT A SQUARE"
 		candidate_label.text = "Tap an empty square, then a number."
 	reserve_button.text = "Seed %d / 6" % (selected_number if selected_number>0 else 1)
 	pause_label.text = "TACTICAL PAUSE" if dock.is_open() else "PAUSED"
@@ -580,7 +580,7 @@ func _process(dt: float) -> void:
 		last_phase = run.phase
 		_save()
 		if run.phase == "loot" and not menu_open:
-			_toast("WAVE CLEAR  ·  Your garden held. Collect your rewards.")
+			_toast("WAVE CLEAR  ·  Open your chests and prepare for the next round.")
 			dock.open_panel("loot",selected_cell)
 		elif run.phase in ["won","lost"] and not menu_open:
 			_show_result()
@@ -606,20 +606,20 @@ func _refresh() -> void:
 			progress.value = 100.0*run.timer/maxf(1,run.solve_duration)
 			next_button.text = "Prepare defense"
 		"prep":
-			phase_detail.text = "MAKE IT YOURS\n\nAttach modules.\nUpgrade your favorites.\nThen hold the line."
+			phase_detail.text = "PREPARE YOUR TOWERS\n\nEquip modules.\nBuy upgrades.\nLaunch when ready."
 			progress.value = 100
 			next_button.text = "Launch wave"
 		"battle":
-			phase_detail.text = "HOLD THE LINE\n\n%d / %d defeated\n%d towers active\n%d corruption" % [run.kills,run.spawn_total,count,run.corruption]
-			progress.value = 100.0*run.kills/maxi(1,run.spawn_total)
+			phase_detail.text = "HOLD THE LINE\n\n%d / %d enemies left\n%d towers active\n%d corruption" % [_wave_enemies_remaining(),run.spawn_total,count,run.corruption]
+			progress.value = 100.0*(run.spawn_total-_wave_enemies_remaining())/maxi(1,run.spawn_total)
 			next_button.text = "Wave in progress"
 		"loot":
-			phase_detail.text = "A LITTLE STRONGER\n\nCollect your loot.\nRefine your loadout.\nChoose the next grid."
+			phase_detail.text = "WAVE CLEAR\n\nOpen your chests.\nVisit Camp for upgrades.\nStart the next round."
 			progress.value = 100
-			next_button.text = "Next garden"
+			next_button.text = "Next round"
 		_:
 			phase_detail.text = "RUN COMPLETE"
-			next_button.text = "New expedition"
+			next_button.text = "New run"
 	next_button.disabled = run.phase == "battle"
 	reserve_button.text = "Seed %d  +1  ·  6" % selected_number if selected_number>0 else "Buy seed 1  ·  6"
 	reserve_button.disabled = run.credits<6
@@ -631,16 +631,16 @@ func _refresh() -> void:
 		selected_label.text = "ROW %d  /  COLUMN %d" % [selected_cell/9+1,selected_cell%9+1]
 		if run.towers.has(selected_cell):
 			var t: Dictionary = run.towers[selected_cell]
-			candidate_label.text = "Seed %d · Lv %d\n%d / 5 modules\n%s" % [t.number,run.tower_stats(selected_cell).level,t.attachments.size(),"A customize" if controller_used else "Click to customize"]
+			candidate_label.text = "Tower %d · Level %d\n%d / 5 modules\n%s" % [t.number,run.tower_stats(selected_cell).level,t.attachments.size(),"A customize" if controller_used else "Click to customize"]
 		elif run.givens[selected_cell]:
-			candidate_label.text = "A fixed clue.\nGrow towers in\nthe empty squares."
+			candidate_label.text = "Fixed clue.\nPlant towers in\nempty squares."
 		elif board_notes:
 			var options: Array = run.candidates(selected_cell)
 			candidate_label.text = "Possible numbers\n" + "  ".join(options.map(func(v): return str(v)))
 		else: candidate_label.text = "Choose a number\nto plant here."
 	else:
-		selected_label.text = "GROW YOUR ADVANTAGE"
-		candidate_label.text = "Select a square.\nPlant a number.\nBuild your own weapon."
+		selected_label.text = "SELECT A SQUARE"
+		candidate_label.text = "Select a square.\nChoose a number.\nGrow a tower."
 	var correct_counts: PackedInt32Array = _number_correct_counts()
 	for i in range(9):
 		var b: Button = number_buttons[i]
@@ -660,6 +660,10 @@ func _refresh() -> void:
 	if controller_used and not armed_item.is_empty(): controls_label.text = "D-PAD / STICK choose tower     A attach module     B cancel"
 	if _controller_pointer_active(): controls_label.text = "RS cursor   R3 click   RT hold / drag   LT precision   Left stick / D-pad grid"
 	_update_family_focus()
+
+func _wave_enemies_remaining() -> int:
+	# Kills is a run total. Wave progress also includes enemies that hit the core.
+	return maxi(0,run.spawn_total-run.spawned+run.enemies.size())
 
 func _number_correct_counts() -> PackedInt32Array:
 	# Derive from this puzzle each refresh; illegal emergency duplicates do not
@@ -929,11 +933,13 @@ func _choice_row(box: VBoxContainer, title: String, values: Array, current: Stri
 	row.add_theme_constant_override("separation",8)
 	box.add_child(row)
 	var choices: Array[Button] = []
-	var descriptions := {"campaign":"50 rounds · your route", "freeplay":"One quick siege", "locked":"50 rounds · fixed rules"}
+	var descriptions := {"campaign":"50 rounds · choose", "freeplay":"One round", "locked":"50 rounds · fixed"}
 	for value in values:
 		var id: String = str(value[0])
 		var b: Button = MenuChoice.new()
 		b.configure(str(value[1]),str(descriptions.get(id,"")),id,current == id,not descriptions.has(id))
+		if descriptions.has(id):
+			b.tooltip_text = str({"campaign":"50 rounds. Choose Sudoku and siege difficulty before each round.", "freeplay":"One Sudoku board and one wave. Choose both difficulties at the start.", "locked":"50 rounds. Keep the same Sudoku and siege difficulties for the whole run."}[id])
 		row.add_child(b)
 		choices.append(b)
 		b.pressed.connect(func():
@@ -957,11 +963,11 @@ func _menu_art(parent: BoxContainer, caption: String = "FROM LOGIC TO FIREPOWER"
 	art.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	hero.add_child(art)
 	hero.add_child(label(caption,12,AMBER))
-	var lore := label("A quiet grid.
-A growing arsenal.
-One core to protect.",21,WHITE)
+	var lore := label("Solve the puzzle.
+Build your towers.
+Protect the core.",21,WHITE)
 	hero.add_child(lore)
-	var steps := label("01 SOLVE     02 BUILD
+	var steps := label("01 SOLVE     02 PREPARE
 03 DEFEND    04 LOOT",11,MUTED)
 	hero.add_child(steps)
 
@@ -980,13 +986,13 @@ func _show_menu(initial: bool = false) -> void:
 	setup.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	setup.add_theme_constant_override("separation",10)
 	columns.add_child(setup)
-	setup.add_child(label("DEPLOYMENT  /  NEW EXPEDITION",11,MINT))
+	setup.add_child(label("NEW RUN",11,MINT))
 	setup.add_child(label("SUDOKU DEFENSE",34,WHITE))
 	setup.add_child(label("Plant answers. Grow firepower.",17,AMBER))
-	_choice_row(setup,"01  CHOOSE YOUR EXPEDITION",[["campaign","Campaign / 50"],["freeplay","Free play / 1"],["locked","Locked in / 50"]],mode_choice,func(v): mode_choice=v)
+	_choice_row(setup,"01  GAME MODE",[["campaign","Campaign / 50"],["freeplay","Free play / 1"],["locked","Locked in / 50"]],mode_choice,func(v): mode_choice=v)
 	_choice_row(setup,"02  SUDOKU DIFFICULTY",[["easy","Easy"],["medium","Medium"],["hard","Hard"]],puzzle_choice,func(v): puzzle_choice=v)
 	_choice_row(setup,"03  SIEGE DIFFICULTY",[["easy","Easy"],["medium","Medium"],["hard","Hard"]],combat_choice,func(v): combat_choice=v)
-	setup.add_child(label("Harder grids leave more room to grow towers.",12,MUTED))
+	setup.add_child(label("Harder puzzles have fewer clues and more room for towers.",12,MUTED))
 	# A separate label and a bounded input row prevent the seed label from
 	# wrapping letter-by-letter when a controller keypad is present.
 	setup.add_child(label("RUN SEED  /  OPTIONAL",11,MUTED))
@@ -1010,7 +1016,7 @@ func _show_menu(initial: bool = false) -> void:
 	keypad.set_meta("menu_keypad",true)
 	keypad.custom_minimum_size.x = 88
 	seed_row.add_child(keypad)
-	var start := button("Start expedition",_start_run,true)
+	var start := button("Start run",_start_run,true)
 	start.set_meta("menu_height",52)
 	setup.add_child(start)
 	var row := HBoxContainer.new()
@@ -1026,8 +1032,8 @@ func _show_menu(initial: bool = false) -> void:
 				world.setup(run)
 				_close_overlay()
 				last_phase = run.phase
-				_toast("Welcome back. Your garden is waiting.")
-			else: _toast("Save could not be loaded. Start a new expedition.",false)
+				_toast("Saved run loaded.")
+			else: _toast("Could not load this save. Start a new run.",false)
 		)
 		resume.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(resume)
@@ -1043,31 +1049,31 @@ func _show_pause_menu() -> void:
 	var columns := HBoxContainer.new()
 	columns.add_theme_constant_override("separation",28)
 	box.add_child(columns)
-	_menu_art(columns,"YOUR GARDEN IS WAITING")
+	_menu_art(columns,"READY WHEN YOU ARE")
 	var actions := VBoxContainer.new()
 	actions.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	actions.add_theme_constant_override("separation",12)
 	columns.add_child(actions)
-	actions.add_child(label("EXPEDITION  /  PAUSED",11,MINT))
-	actions.add_child(label("Take a breath.",32,WHITE))
-	actions.add_child(label("ROUND %02d / %02d  ·  %s" % [run.round_no,run.max_rounds,str(run.phase).to_upper()],13,AMBER))
+	actions.add_child(label("RUN PAUSED",11,MINT))
+	actions.add_child(label("Paused",32,WHITE))
+	actions.add_child(label("ROUND %02d / %02d  ·  %s" % [run.round_no,run.max_rounds,str({"solve":"Solve", "prep":"Prepare", "battle":"Defend", "loot":"Loot", "won":"Victory", "lost":"Defeat"}.get(run.phase,run.phase)).to_upper()],13,AMBER))
 	actions.add_child(label("Your progress is saved on this device.",13,MUTED))
 	var resume := button("Resume run",_close_overlay,true)
 	resume.set_meta("menu_height",54)
 	actions.add_child(resume)
-	actions.add_child(button("Manage loadout",func(): _close_overlay(); _toggle_dock("bag")))
+	actions.add_child(button("Manage gear",func(): _close_overlay(); _toggle_dock("bag")))
 	actions.add_child(button("How to play",_help))
-	actions.add_child(button("New expedition",func(): _show_menu(true)))
+	actions.add_child(button("New run",func(): _show_menu(true)))
 	resume.grab_focus()
 
 func _help() -> void:
 	var box := _modal(720,652)
-	box.add_child(label("A LITTLE LOGIC. A LOT OF FIREPOWER.",26,MINT))
+	box.add_child(label("HOW TO PLAY",26,MINT))
 	for text in [
-		"01  SOLVE  ·  Tap an empty square, then a number — or drag a number onto its square. Every correct answer grows a tower and earns credits. Aim for 6–8 towers before your first wave.",
-		"02  PREPARE  ·  Click a tower to upgrade it. Open Gear to drag a module onto a tower, or select an item and then its target. Each tower holds five modules. Repeats stack.",
-		"03  DEFEND  ·  Your latest moves bend the enemy route. Need emergency firepower? Plant a number during battle—even an illegal one—at a credit and corruption cost.",
-		"04  LOOT  ·  Open Chests to visit your loot table. Tap a voxel chest to spend fragments and reveal its gear. Modules and family upgrades follow you to the next garden."
+		"01  SOLVE  ·  Fill each row, column and 3×3 box with 1–9, without repeats. Tap a square, then a number, or drag a number onto the board. Correct answers grow towers and earn credits. You can move on before finishing the puzzle.",
+		"02  PREPARE  ·  Select a tower to upgrade it, or upgrade every tower with that number. Open Gear to drag modules onto towers. Each tower has five slots; matching module effects add together. Opening Gear pauses the game.",
+		"03  DEFEND  ·  Your recent answers shape the route before battle. During the wave, use reserve seeds to add towers. Wrong numbers are allowed, but add corruption: later enemies have more health, and those towers disappear after the wave.",
+		"04  LOOT  ·  Defeated enemies drop fragments to open chests. Collect gear, buy upgrades in Camp, then start the next round. Credits, gear and number upgrades carry over. Equipped modules return to Gear when the board resets."
 	]:
 		var l := label(text,17,WHITE)
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1082,7 +1088,7 @@ func _help() -> void:
 	box.add_child(button("Battle speed: %dx" % int(game_speed),func(): _cycle_speed(); _help()))
 	if has_active_run and selected_cell >= 0 and not run.givens[selected_cell] and not run.towers.has(selected_cell):
 		box.add_child(button("Reveal selected square · 6 credits",func(): _action(run.hint(selected_cell)); _close_overlay()))
-	box.add_child(label("Godot edition " + str(ProjectSettings.get_setting("application/config/version")) + "  /  " + ("Compatible voxels" if RenderProfile.uses_canvas() else "3D voxels"),11,MUTED))
+	box.add_child(label("Version " + str(ProjectSettings.get_setting("application/config/version")),11,MUTED))
 	var back := button("Got it",_close_overlay,true)
 	box.add_child(back)
 	back.grab_focus()
@@ -1091,16 +1097,16 @@ func _show_next_round() -> void:
 	puzzle_choice = run.puzzle_difficulty
 	combat_choice = run.combat_difficulty
 	var box := _modal(610,450)
-	box.add_child(label("THE GARDEN GROWS",31,MINT))
+	box.add_child(label("NEXT ROUND",31,MINT))
 	box.add_child(label("Next up: round %02d / %02d" % [run.round_no+1,run.max_rounds],22))
 	if run.mode == "campaign":
-		_choice_row(box,"NEXT SUDOKU GRID",[["easy","Easy"],["medium","Medium"],["hard","Hard"]],run.puzzle_difficulty,func(v): puzzle_choice=v)
-		_choice_row(box,"NEXT ENEMY SIEGE",[["easy","Easy"],["medium","Medium"],["hard","Hard"]],run.combat_difficulty,func(v): combat_choice=v)
-	else: box.add_child(label("Locked in: your chosen difficulties carry forward.",17,MUTED))
-	var note := label("Your gear, credits, and family levels carry over. Equipped modules return safely to your bag.",16,MUTED)
+		_choice_row(box,"SUDOKU DIFFICULTY",[["easy","Easy"],["medium","Medium"],["hard","Hard"]],run.puzzle_difficulty,func(v): puzzle_choice=v)
+		_choice_row(box,"SIEGE DIFFICULTY",[["easy","Easy"],["medium","Medium"],["hard","Hard"]],run.combat_difficulty,func(v): combat_choice=v)
+	else: box.add_child(label("Locked in keeps your starting difficulties for all 50 rounds.",17,MUTED))
+	var note := label("Your credits, gear and number upgrades carry over. Towers reset; equipped modules return to Gear.",16,MUTED)
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(note)
-	var go := button("Plant the next garden",func():
+	var go := button("Start next round",func():
 		var next_result: Dictionary = run.next_round({"puzzle_difficulty":puzzle_choice,"combat_difficulty":combat_choice})
 		if not next_result.ok:
 			_toast(next_result.message,false)
@@ -1117,10 +1123,10 @@ func _show_next_round() -> void:
 
 func _show_result() -> void:
 	var box := _modal(600,440)
-	box.add_child(label("THE GARDEN ENDURES" if run.phase=="won" else "ROOTS REMAIN",31,MINT if run.phase=="won" else AMBER))
-	box.add_child(label("Victory." if run.phase=="won" else "A new garden awaits.",23))
-	box.add_child(label("ROUND %02d     /     SCORE %d\n\n%d towers grown  ·  %d credits collected\nSeed %d" % [run.round_no,run.score,run.towers.size(),run.credits,run.seed_value],18,MUTED))
-	var go := button("Another expedition",func(): _show_menu(true),true)
+	box.add_child(label("VICTORY" if run.phase=="won" else "CORE DESTROYED",31,MINT if run.phase=="won" else AMBER))
+	box.add_child(label("All rounds cleared." if run.phase=="won" else "Your run ends here.",23))
+	box.add_child(label("ROUND %02d     /     SCORE %d\n\n%d towers on this board  ·  %d credits left\nSeed %d" % [run.round_no,run.score,run.towers.size(),run.credits,run.seed_value],18,MUTED))
+	var go := button("New run",func(): _show_menu(true),true)
 	box.add_child(go)
 	box.add_child(button("Inspect the board",_close_overlay))
 	go.grab_focus()

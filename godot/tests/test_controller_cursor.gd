@@ -179,7 +179,7 @@ func movement_and_menu() -> void:
 	axis(JOY_AXIS_TRIGGER_LEFT,0.0)
 	var precise_distance: float = cursor().cursor_position.distance_to(start)
 	check(precise_distance > 0 and precise_distance < normal_distance*0.6,"Left trigger supplies slower fine positioning")
-	var start_button: Button = find_button(scene.overlay,"Start expedition")
+	var start_button: Button = find_button(scene.overlay,"Start run")
 	await click_control(start_button)
 	check(scene.has_active_run and not scene.menu_open,"R3 launches a run through the actual menu button")
 	if not scene.has_active_run:

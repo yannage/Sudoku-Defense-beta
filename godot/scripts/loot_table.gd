@@ -104,8 +104,8 @@ func refresh() -> void:
 	var owner: Control = get_viewport().gui_get_focus_owner()
 	_focused_id = str(owner.get_meta("focus_id", "")) if is_instance_valid(owner) and is_ancestor_of(owner) else ""
 	_clear_view()
-	_title = _label("THE SALVAGE TABLE",24,TEXT)
-	_subtitle = _label("Tap a chest to unlock it with enemy fragments.",14,MUTED)
+	_title = _label("YOUR CHESTS",24,TEXT)
+	_subtitle = _label("Select a chest to open it with fragments.",14,MUTED)
 	_footer = _label("FRAGMENTS COME FROM DEFEATED ENEMIES",11,Color("7f9aa5"))
 	_view.add_child(_title)
 	_view.add_child(_subtitle)
@@ -122,7 +122,7 @@ func refresh() -> void:
 		_view.add_child(stage)
 		stage.custom_minimum_size = Vector2.ZERO
 		_hero = stage
-		_empty = _label("A place for your next discovery.\nSurvive a siege to bring a chest back here.",18,MUTED)
+		_empty = _label("No chests yet.\nDefeat enemies and clear waves to collect them.",18,MUTED)
 		_empty.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_view.add_child(_empty)
 	if pages > 1:
@@ -139,11 +139,11 @@ func refresh() -> void:
 		var price: int = run.chest_price("common")
 		_buy = _button("Buy a chest · %d credits" % price,_buy_chest,"buy:chest")
 		_buy.disabled = int(run.credits) < price
-		_buy.tooltip_text = "Adds a sealed common chest. Opening still costs 5 enemy fragments."
+		_buy.tooltip_text = "Buy a common chest. Opening it costs another 5 fragments."
 		_view.add_child(_buy)
 	if not _message.is_empty(): _subtitle.text = _message
 	elif not str(run.phase) in ["solve","prep","loot","won"]:
-		_subtitle.text = "Your chests are safe. Open them before or after the siege."
+		_subtitle.text = "Open your chests before or after battle."
 	_layout()
 	if not reduced_motion:
 		for i in range(_cards.size()):
@@ -208,7 +208,7 @@ func _add_chest(data: Dictionary) -> void:
 	rarity_label.set_meta("part","rarity")
 	button.add_child(rarity_label)
 	var action: Label = _label("%d fragments · Open" % cost if unlocked else "%d / %d fragments" % [int(run.fragments),cost],16,TEXT if unlocked else MUTED)
-	if not allowed: action.text = "Sealed until the siege ends"
+	if not allowed: action.text = "Open after the wave"
 	action.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	action.set_meta("part","action")
 	button.add_child(action)
@@ -272,7 +272,7 @@ func _build_reveal() -> void:
 	var rarity: String = str(reward.get("rarity","common"))
 	var tint: Color = Loot.rarity_color(rarity)
 	var rewards: Array = reward.get("rewards",[])
-	_title = _label("LOOK WHAT YOU FOUND",26,TEXT)
+	_title = _label("CHEST OPENED",26,TEXT)
 	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_subtitle = _label("%s CHEST  ·  %d ITEM%s RECOVERED" % [rarity.to_upper(),rewards.size(),"S" if rewards.size()!=1 else ""],12,tint)
 	_subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -284,7 +284,7 @@ func _build_reveal() -> void:
 	_hero.show_opened()
 	for item in rewards:
 		if item is Dictionary: _add_reward_card(item)
-	_footer = _label("Already secured in your bag. Make something powerful.",13,MUTED)
+	_footer = _label("Added to Gear. Equip modules or use boosts.",13,MUTED)
 	_footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_view.add_child(_footer)
 	_continue = _button("Back to the table",dismiss_reward,"loot:continue")
@@ -322,7 +322,7 @@ func _add_reward_card(item: Dictionary) -> void:
 	icon.tint = Color(str(item.get("color","83e7c1")))
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	body.add_child(icon)
-	var name_label: Label = _label(str(Loot.NAMES.get(str(item.get("kind","")),"Module")),17,TEXT)
+	var name_label: Label = _label(ItemCard.effect_name(item),17,TEXT)
 	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	body.add_child(name_label)
 	var stat: Label = _label(ItemCard._short_stat(item),14,MINT)
@@ -330,7 +330,7 @@ func _add_reward_card(item: Dictionary) -> void:
 	body.add_child(stat)
 	var tag: Label = _label(str(item.get("rarity","common")).to_upper()+"  ·  "+("ONE USE" if str(item.get("type","")) == "consumable" else "TOWER MODULE"),10,color)
 	body.add_child(tag)
-	card.tooltip_text = str(item.get("name",""))+"\n"+str(item.get("description",""))
+	card.tooltip_text = str(item.get("name",""))+"\n"+Loot.description(item)
 
 func dismiss_reward() -> void:
 	if opening: return

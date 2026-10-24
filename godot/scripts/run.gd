@@ -161,7 +161,7 @@ func place(cell: int, number: int) -> Dictionary:
 	var illegal: bool = not correct or not Sudoku.legal(board, cell, number)
 	if phase == "solve" and illegal:
 		combo = 0
-		return _fail("That number does not solve this square. Try the candidate notes.", cell)
+		return _fail("That is not the answer for this square. Notes show numbers allowed by the current board.", cell)
 	if phase == "battle":
 		if inventory[number] <= 0: return _fail("Buy a reserve seed for 6 credits first.", cell)
 		inventory[number] -= 1
@@ -184,7 +184,7 @@ func place(cell: int, number: int) -> Dictionary:
 			combo = 0
 		_check_units(cell, not _hinting)
 		if phase == "solve": _build_route()
-	return _ok("Emergency tower planted. Corruption strengthens the remaining enemies." if illegal else "Seed planted. Select it to add modules or upgrade.", {"cell":cell,"illegal":illegal})
+	return _ok("Emergency tower planted. Corruption gives later enemies more health." if illegal else "Seed planted. Select it to add modules or upgrade.", {"cell":cell,"illegal":illegal})
 
 func _check_units(cell: int, award: bool) -> void:
 	var row: int = cell / 9
@@ -233,7 +233,7 @@ func advance_phase() -> Dictionary:
 		phase = "prep"
 		timer = 0.0
 		_build_route()
-		_emit("phase", {"phase":phase,"text":"War prep · stack your modules"})
+		_emit("phase", {"phase":phase,"text":"Prepare · equip your towers"})
 		return _ok("Equip modules and upgrade towers, then launch the wave.")
 	if phase == "prep":
 		phase = "battle"
@@ -244,24 +244,24 @@ func advance_phase() -> Dictionary:
 		battle_time = 0.0
 		enemies.clear()
 		_emit("phase", {"phase":phase,"text":"DEFEND THE GRID","color":Color("ffae68")})
-		return _ok("Wave launched. Emergency seeds can bend Sudoku rules.")
+		return _ok("Wave launched. Use reserve seeds for extra towers.")
 	if phase == "loot": return next_round()
 	return _fail("Finish the current wave first.")
 
 func next_round(options: Dictionary = {}) -> Dictionary:
-	if phase != "loot": return _fail("Clear the wave before starting another map.")
+	if phase != "loot": return _fail("Clear the wave before starting the next round.")
 	if round_no >= max_rounds: return _fail("This run is complete.")
 	var next_puzzle: String = _difficulty(str(options.get("puzzle_difficulty", options.get("sudokuDifficulty", puzzle_difficulty))))
 	var next_combat: String = _difficulty(str(options.get("combat_difficulty", options.get("combatDifficulty", combat_difficulty))))
 	if mode == "locked" and (next_puzzle != _locked_puzzle or next_combat != _locked_combat):
-		return _fail("Locked In keeps your starting difficulties for all 50 rounds.")
+		return _fail("Locked in keeps your starting difficulties for all 50 rounds.")
 	for tower: Dictionary in towers.values():
 		for item: Dictionary in tower.attachments: items.append(item)
 	puzzle_difficulty = next_puzzle
 	combat_difficulty = next_combat
 	round_no += 1
 	_new_board()
-	return _ok("Round %d. All equipped modules returned to your bag." % round_no)
+	return _ok("Round %d. Equipped modules returned to Gear." % round_no)
 
 func buy_seed(number: int) -> Dictionary:
 	if not ["solve","prep","battle","loot"].has(phase): return _fail("Start a new run to buy seeds.")
@@ -305,7 +305,7 @@ func upgrade_tower(cell: int) -> Dictionary:
 	return _ok("Tower upgraded. Damage increased by one level.",{"cost":cost})
 
 func upgrade_family(number: int) -> Dictionary:
-	if number < 1 or number > 9: return _fail("Choose a number family.")
+	if number < 1 or number > 9: return _fail("Choose a tower number.")
 	if not ["solve","prep","battle","loot"].has(phase): return _fail("Upgrade during an active run.")
 	var cost: int = family_upgrade_cost(number)
 	if credits < cost: return _fail("Need %d credits to upgrade every %d." % [cost,number])
@@ -321,7 +321,7 @@ func equip_item(cell: int, item_id: Variant) -> Dictionary:
 	if not _gear_phase(): return _fail("Equip modules during an active run.")
 	if not towers.has(cell): return _fail("Choose a planted tower.",cell)
 	var index: int = _item_index(item_id)
-	if index < 0 or str(items[index].type) != "attachment": return _fail("Choose an attachment from your bag.")
+	if index < 0 or str(items[index].type) != "attachment": return _fail("Choose a module from Gear.")
 	if towers[cell].attachments.size() >= 5: return _fail("All five slots are full. Remove a module first.",cell)
 	var item: Dictionary = items[index]
 	items.remove_at(index)
@@ -336,7 +336,7 @@ func unequip_item(cell: int, slot: int) -> Dictionary:
 	towers[cell].attachments.remove_at(slot)
 	items.append(item)
 	_emit("equip", {"cell":cell,"pos":cell_position(cell),"text":"Module returned","color":Color(str(item.color))})
-	return _ok("Module returned to your bag.",{"item":item})
+	return _ok("Module returned to Gear.",{"item":item})
 
 func move_attachment(source: int, slot: int, target: int) -> Dictionary:
 	if not _gear_phase(): return _fail("Move equipment during an active run.")
@@ -353,13 +353,13 @@ func swap_attachment(cell: int, slot: int, item_id: Variant) -> Dictionary:
 	if not _gear_phase(): return _fail("Swap equipment during an active run.")
 	if not towers.has(cell) or slot < 0 or slot >= towers[cell].attachments.size(): return _fail("Choose an occupied module slot.")
 	var index: int = _item_index(item_id)
-	if index < 0 or str(items[index].type) != "attachment": return _fail("Choose a bag attachment.")
+	if index < 0 or str(items[index].type) != "attachment": return _fail("Choose a module from Gear.")
 	var old: Dictionary = towers[cell].attachments[slot]
 	var item: Dictionary = items[index]
 	towers[cell].attachments[slot] = item
 	items[index] = old
 	_emit("equip", {"cell":cell,"slot":slot,"pos":cell_position(cell),"kind":item.kind,"color":Color(str(item.color)),"text":"Module swapped"})
-	return _ok("Module swapped. Previous equipment returned to your bag.")
+	return _ok("Module swapped. The previous module is back in Gear.")
 
 func _item_index(item_id: Variant) -> int:
 	for i in range(items.size()):
@@ -373,7 +373,7 @@ func _has_effect(kind: String) -> bool:
 
 func use_item(item_id: Variant) -> Dictionary:
 	var index: int = _item_index(item_id)
-	if index < 0 or str(items[index].type) != "consumable": return _fail("Choose a consumable from your bag.")
+	if index < 0 or str(items[index].type) != "consumable": return _fail("Choose a single-use boost from Gear.")
 	var item: Dictionary = items[index]
 	var kind: String = str(item.kind)
 	if kind == "repair":
@@ -405,17 +405,17 @@ func _add_chest(rarity: String, pos: Vector2 = Vector2(-99,-99)) -> Dictionary:
 	var tier: int = Loot.rarity_index(rarity)
 	var chest: Dictionary = {"id":_id(),"rarity":Loot.RARITIES[tier],"cost":Loot.FRAGMENT_COSTS[tier]}
 	chests.append(chest)
-	_emit("loot", {"pos":pos,"chest_id":chest.id,"rarity":chest.rarity,"color":Loot.rarity_color(rarity),"text":"%s cache recovered" % str(chest.rarity).capitalize()})
+	_emit("loot", {"pos":pos,"chest_id":chest.id,"rarity":chest.rarity,"color":Loot.rarity_color(rarity),"text":"%s chest collected" % str(chest.rarity).capitalize()})
 	return chest
 
 func open_chest(chest_id: Variant) -> Dictionary:
-	if not ["solve","prep","loot","won"].has(phase): return _fail("Open caches during solve, preparation, or loot camp.")
+	if not ["solve","prep","loot","won"].has(phase): return _fail("Open chests before or after battle.")
 	var index: int = -1
 	for i in range(chests.size()):
 		if int(chests[i].id) == int(chest_id): index = i
-	if index < 0: return _fail("That cache has already been opened.")
+	if index < 0: return _fail("That chest has already been opened.")
 	var chest: Dictionary = chests[index]
-	if fragments < int(chest.cost): return _fail("Need %d fragments. Defeat enemies to earn energy." % int(chest.cost))
+	if fragments < int(chest.cost): return _fail("Opening this chest costs %d fragments. Defeat enemies to collect more." % int(chest.cost))
 	fragments -= int(chest.cost)
 	chests.remove_at(index)
 	var count: int = 3 if str(chest.rarity) == "legendary" else (2 if ["rare","epic"].has(str(chest.rarity)) else 1)
@@ -428,13 +428,13 @@ func open_chest(chest_id: Variant) -> Dictionary:
 	return _ok("%d item%s recovered." % [count,"s" if count > 1 else ""],{"rewards":rewards,"rarity":chest.rarity})
 
 func buy_chest(rarity: String = "common") -> Dictionary:
-	if phase != "loot": return _fail("Buy caches between rounds.")
+	if phase != "loot": return _fail("Buy chests between rounds.")
 	var cost: int = chest_price(rarity)
-	if cost <= 0: return _fail("Choose a known cache rarity.")
-	if credits < cost: return _fail("Need %d credits for this cache." % cost)
+	if cost <= 0: return _fail("Choose a chest rarity.")
+	if credits < cost: return _fail("This chest costs %d credits." % cost)
 	credits -= cost
 	var chest: Dictionary = _add_chest(rarity)
-	return _ok("Sealed cache purchased. Fragments unlock the contents.",{"chest":chest})
+	return _ok("Chest purchased. Spend fragments to open it.",{"chest":chest})
 
 func passive_cost(kind: String) -> int:
 	var prices: Dictionary = {"power":60,"salvage":50,"vitality":55}
@@ -542,7 +542,7 @@ func _damage(enemy: Dictionary, amount: float, color: Color, quiet: bool = false
 	if rng.randf() < minf(0.75,0.05*int(passives.salvage)): energy += 1
 	fragments += energy
 	_emit("kill", {"pos":enemy.pos,"kind":enemy.kind,"text":"+%d" % earned,"color":color})
-	_emit("fragment", {"pos":enemy.pos,"amount":energy,"text":"+%d energy" % energy,"color":Color("75eab8")})
+	_emit("fragment", {"pos":enemy.pos,"amount":energy,"text":"+%d fragments" % energy,"color":Color("75eab8")})
 	var chance: float = 0.09 + (0.045 if puzzle_difficulty == "hard" else (0.015 if puzzle_difficulty == "medium" else 0.0))
 	if str(enemy.kind) == "boss" or rng.randf() < chance:
 		_add_chest(Loot.roll_rarity(rng,_luck()),enemy.pos)
