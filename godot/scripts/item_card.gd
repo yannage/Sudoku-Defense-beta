@@ -3,6 +3,7 @@ extends Button
 
 const Icon = preload("res://scripts/voxel_icon.gd")
 const Loot = preload("res://scripts/loot.gd")
+const DragIcon = preload("res://scripts/gear_drag_icon.gd")
 var item: Dictionary = {}
 var armed: bool = false
 
@@ -24,14 +25,16 @@ func configure(data: Dictionary, is_armed: bool = false, controller_mode: bool =
 	for state in ["normal", "hover", "pressed", "focus"]:
 		var style := StyleBoxFlat.new()
 		style.bg_color = Color("203d47") if armed else Color("102431")
-		if state == "hover": style.bg_color = Color("1c3543")
+		if state == "hover": style.bg_color = Color("233e4b")
+		if state == "pressed": style.bg_color = Color("0b1c27")
+		if state == "focus": style.bg_color = Color.TRANSPARENT
 		style.border_color = color if armed or state == "focus" else Color(color, 0.40)
 		style.set_border_width_all(2 if armed or state == "focus" else 1)
-		style.border_width_bottom = 4
-		style.set_corner_radius_all(9)
-		style.shadow_color = Color(0,0,0,0.25)
-		style.shadow_size = 3
-		style.shadow_offset = Vector2(0,3)
+		style.border_width_bottom = 2 if state == "pressed" else 4
+		style.set_corner_radius_all(5)
+		style.shadow_color = Color(0,0,0,0.30)
+		style.shadow_size = 1 if state in ["pressed","focus"] else 4
+		style.shadow_offset = Vector2(0,1 if state == "pressed" else 3)
 		add_theme_stylebox_override(state, style)
 	for child in get_children(): child.queue_free()
 	var layout: BoxContainer = VBoxContainer.new() if as_tile else HBoxContainer.new()
@@ -82,36 +85,31 @@ static func effect_name(data: Dictionary) -> String:
 
 func _get_drag_data(_at_position: Vector2) -> Variant:
 	if str(item.get("type", "")) != "attachment": return null
-	var preview := PanelContainer.new()
-	preview.custom_minimum_size = Vector2(160,166)
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color("163546ed")
-	style.border_color = Loot.rarity_color(str(item.get("rarity", "common")))
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(9)
-	style.shadow_color = Color(0,0,0,0.5)
-	style.shadow_size = 8
-	style.shadow_offset = Vector2(4,7)
-	style.content_margin_left = 12
-	style.content_margin_right = 12
-	style.content_margin_top = 8
-	style.content_margin_bottom = 10
-	preview.add_theme_stylebox_override("panel", style)
-	var box := VBoxContainer.new()
-	preview.add_child(box)
-	var icon: Control = Icon.new()
-	icon.kind = str(item.get("kind", "gear"))
-	icon.tint = Color(str(item.get("color", "6ce3c5")))
-	icon.custom_minimum_size = Vector2(100,90)
-	box.add_child(icon)
-	var title := _text(effect_name(item),16,Color("eef8f4"))
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(title)
-	var hint := _text("SNAP INTO A TOWER",10,Color("83e7c1"))
-	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(hint)
+	# Keep the cursor hotspot and destination tower uncovered. The root has no
+	# panel or text; its small child token is offset from the actual drop point.
+	var preview := Control.new()
+	preview.name = "CompactGearDrag"
+	preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	preview.focus_mode = Control.FOCUS_NONE
+	var icon: Control = DragIcon.new()
+	icon.configure(item)
+	var pointer: Vector2 = get_global_mouse_position()
+	var bounds: Vector2 = get_viewport_rect().size
+	icon.position = Vector2(-72 if pointer.x > bounds.x-76 else 16,14 if pointer.y < 68 else -62)
+	preview.add_child(icon)
 	set_drag_preview(preview)
 	return {"type":"attachment", "item_id":str(item.get("id", "")), "kind":str(item.get("kind", "")), "color":str(item.get("color", "6ce3c5"))}
+
+func _draw() -> void:
+	if item.is_empty(): return
+	var color: Color = Loot.rarity_color(str(item.get("rarity", "common")))
+	# Small lit rails and recessed contacts give modules a physical silhouette
+	# without moving their touch/drag hit areas during hover or selection.
+	draw_line(Vector2(12,3),Vector2(minf(40,size.x-12),3),Color(color,0.85),2.0,true)
+	draw_line(Vector2(44,3),Vector2(maxf(44,size.x-12),3),Color(color,0.15),1.0,true)
+	if armed:
+		var p := Vector2(size.x-12,12)
+		draw_colored_polygon(PackedVector2Array([p+Vector2(0,-4),p+Vector2(4,0),p+Vector2(0,4),p+Vector2(-4,0)]),color)
 
 static func _short_stat(data: Dictionary) -> String:
 	var p: float = float(data.get("power", 1.0))

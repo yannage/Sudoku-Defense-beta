@@ -156,6 +156,8 @@ def main() -> None:
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_sudoku.gd"], logs / "sudoku-tests.log", expected="SUDOKU_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_ui_flow.gd"], logs / "ui-flow-tests.log", expected="UI_FLOW_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_ui_flow.gd", "--", "--canvas-graphics"], logs / "canvas-ui-flow-tests.log", expected="UI_FLOW_PASS")
+    run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_menu_presentation.gd"], logs / "menu-presentation-tests.log", expected="MENU_PRESENTATION_PASS")
+    run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_menu_presentation.gd", "--", "--canvas-graphics"], logs / "canvas-menu-presentation-tests.log", expected="MENU_PRESENTATION_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_controller_flow.gd"], logs / "controller-tests.log", expected="CONTROLLER_FLOW_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_controller_flow.gd", "--", "--canvas-graphics"], logs / "canvas-controller-tests.log", expected="CONTROLLER_FLOW_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_controller_cursor.gd"], logs / "controller-cursor-tests.log", expected="CONTROLLER_CURSOR_PASS")
@@ -175,6 +177,8 @@ def main() -> None:
             ("test_rendering.gd", "--safe-graphics", "rendering-tests.log", "RENDER_PASS"),
             ("test_canvas_rendering.gd", "--canvas-graphics", "canvas-rendering-tests.log", "CANVAS_RENDER_PASS"),
             ("test_chest_canvas.gd", "--canvas-graphics", "canvas-chest-tests.log", "0 failures (real GLES pixels)"),
+            ("test_menu_presentation.gd", "--safe-graphics", "menu-presentation-render-tests.log", "MENU_PRESENTATION_PASS"),
+            ("test_menu_presentation.gd", "--canvas-graphics", "canvas-menu-presentation-render-tests.log", "MENU_PRESENTATION_PASS"),
             ("test_controller_cursor.gd", "--safe-graphics", "controller-cursor-render-tests.log", "CONTROLLER_CURSOR_PASS"),
             ("test_controller_cursor.gd", "--canvas-graphics", "canvas-controller-cursor-render-tests.log", "CONTROLLER_CURSOR_PASS"),
             ("test_loot_gear_flow.gd", "--safe-graphics", "loot-gear-render-tests.log", "LOOT_GEAR_FLOW_PASS"),

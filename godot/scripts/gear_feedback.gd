@@ -35,25 +35,39 @@ func _draw() -> void:
 		for i in range(17):
 			var t: float = float(i) / 16.0
 			points.append(pointer_point.lerp(bend,t).lerp(bend.lerp(target_point,t),t))
-		draw_polyline(points,Color(tint,0.58),2.0,true)
-	var text_value := "STACK FULL  ·  5 / 5"
+		draw_polyline(points,Color(tint,0.24),1.0,true)
+	# A light reticle and five physical sockets replace the old text banner.
+	# The module itself is already previewed on the tower by the board renderer.
+	for quadrant in range(4):
+		var angle: float = float(quadrant)*PI*0.5+0.22
+		draw_arc(target_point,25,angle,angle+0.64,8,Color(tint,0.68),1.5,true)
+	var pip_origin: Vector2 = target_point+Vector2(-21,34)
+	for i in range(5):
+		var rect := Rect2(pip_origin+Vector2(i*9,0),Vector2(6,6))
+		draw_rect(rect.grow(1),Color("081923e0"))
+		if i < slots_used:
+			draw_rect(rect,Color(tint,0.65))
+		elif allowed and i == slots_used:
+			draw_rect(rect,tint,false,1.5)
+		else:
+			draw_rect(rect,Color("526f78"),false,1.0)
+	var status: Vector2 = target_point+Vector2(34,37)
 	if allowed:
-		var action_hint := "RELEASE TO ATTACH" if dragging else "A TO ATTACH" if host.controller_used else "TAP TO ATTACH"
-		text_value = "SLOT %d / 5  ·  %s" % [slots_used+1,action_hint]
+		draw_polyline(PackedVector2Array([status+Vector2(-4,0),status+Vector2(-1,3),status+Vector2(5,-4)]),tint,2.0,true)
+	else:
+		draw_line(status+Vector2(-3,-3),status+Vector2(3,3),tint,2.0,true)
+		draw_line(status+Vector2(-3,3),status+Vector2(3,-3),tint,2.0,true)
+	if dragging: return
+	var text_value := "5 / 5 · full"
+	if allowed: text_value = "A · attach" if host.controller_used else "Tap tower"
 	var font: Font = ThemeDB.fallback_font
-	var font_size: int = 17 if host.portrait_layout else 13
-	var width: float = font.get_string_size(text_value,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size).x + 24
-	var location: Vector2 = target_point + Vector2(-width*0.5,34)
+	var font_size: int = 15 if host.portrait_layout else 12
+	var width: float = font.get_string_size(text_value,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size).x
+	var location: Vector2 = target_point + Vector2(-width*0.5,58)
 	location.x = clampf(location.x,8,maxf(8,size.x-width-8))
-	location.y = clampf(location.y,8,maxf(8,size.y-36))
-	var box := Rect2(location,Vector2(width,30))
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color("102632f2")
-	style.border_color = Color(tint,0.65)
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(8)
-	draw_style_box(style,box)
-	draw_string(font,location+Vector2(12,21),text_value,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size,tint)
+	location.y = clampf(location.y,16,maxf(16,size.y-8))
+	draw_string_outline(font,location,text_value,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size,3,Color("081923"))
+	draw_string(font,location,text_value,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size,tint)
 
 func chest_recovered(event: Dictionary) -> void:
 	if host == null or host.menu_open or _pickups.size() >= 4: return

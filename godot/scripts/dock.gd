@@ -10,13 +10,14 @@ signal family_preview_requested(number: int)
 const LootTable = preload("res://scripts/loot_table.gd")
 const Card = preload("res://scripts/item_card.gd")
 const Icon = preload("res://scripts/voxel_icon.gd")
+const QuickIcon = preload("res://scripts/quick_icon.gd")
 const Loot = preload("res://scripts/loot.gd")
 const ChestStage = preload("res://scripts/chest_stage.gd")
 const CanvasChestStage = preload("res://scripts/chest_canvas.gd")
 const RenderProfile = preload("res://scripts/render_profile.gd")
 const INK: Color = Color("081923")
-const PANEL: Color = Color("0d202c")
-const LINE: Color = Color("28434e")
+const PANEL: Color = Color("0b1923")
+const LINE: Color = Color("2b424c")
 const TEXT: Color = Color("e9f4ee")
 const MUTED: Color = Color("91aab4")
 const MINT: Color = Color("74e0c3")
@@ -156,7 +157,14 @@ func _build_shell() -> void:
 		_shell.queue_free()
 	_shell = PanelContainer.new()
 	_shell.mouse_filter = Control.MOUSE_FILTER_STOP
-	_shell.add_theme_stylebox_override("panel", _style(PANEL, LINE, 14, 1, 16))
+	var frame := _style(PANEL, LINE, 10, 1, 16)
+	frame.corner_detail = 1
+	frame.border_width_top = 3
+	frame.border_width_bottom = 4
+	frame.shadow_color = Color(0,0,0,0.42)
+	frame.shadow_size = 12
+	frame.shadow_offset = Vector2(0,5)
+	_shell.add_theme_stylebox_override("panel", frame)
 	add_child(_shell)
 	var outer: VBoxContainer = VBoxContainer.new()
 	outer.add_theme_constant_override("separation", 10)
@@ -230,10 +238,21 @@ func refresh(preserve_focus: bool = true) -> void:
 		child.queue_free()
 	var top: HBoxContainer = HBoxContainer.new()
 	_body.add_child(top)
-	var names: Dictionary = {"tower":"TOWER WORKSHOP", "bag":"MODULE BENCH", "loot":"THE LOOT TABLE", "camp":"BETWEEN SIEGES"}
-	var heading: Label = _label(str(names.get(current_panel, "LOADOUT")), 18, TEXT)
+	var names: Dictionary = {"tower":"TOWER WORKSHOP", "bag":"MODULE BENCH", "loot":"THE LOOT TABLE", "camp":"BASE CAMP"}
+	var captions: Dictionary = {"tower":"BUILD YOUR FIREPOWER", "bag":"FIND YOUR NEXT UPGRADE", "loot":"SALVAGE RECOVERED", "camp":"BETWEEN SIEGES"}
+	var heading := HBoxContainer.new()
 	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	heading.add_theme_constant_override("separation",8)
 	top.add_child(heading)
+	heading.add_child(_navigation_icon(current_panel,Vector2(34,38)))
+	var heading_text := VBoxContainer.new()
+	heading_text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	heading_text.add_theme_constant_override("separation",3)
+	heading.add_child(heading_text)
+	heading_text.add_child(_label(str(captions.get(current_panel,"LOADOUT")),9,MINT))
+	var title: Label = _label(str(names.get(current_panel, "LOADOUT")), 17, TEXT)
+	title.clip_text = true
+	heading_text.add_child(title)
 	var close_button: Button = _button("B" if controller_mode else "X", close_panel, false, false, 34, "close")
 	close_button.custom_minimum_size = Vector2(34, 34)
 	close_button.tooltip_text = "Close panel · B / Escape"
@@ -247,8 +266,15 @@ func refresh(preserve_focus: bool = true) -> void:
 		var tab_kind: String = str(tab)
 		var text_value: String = str({"tower":"Tower", "bag":"Bag", "loot":"Loot", "camp":"Camp"}[tab_kind])
 		var tab_button: Button = _button(text_value, func(): open_panel(tab_kind, selected_cell), tab_kind == current_panel, false, 32, "tab:" + tab_kind)
-		tab_button.add_theme_font_size_override("font_size", 12)
+		tab_button.add_theme_font_size_override("font_size", 11)
 		tab_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tab_button.custom_minimum_size.y = 38
+		_selection_style(tab_button,tab_kind == current_panel,26)
+		var tab_icon: Control = _navigation_icon(tab_kind,Vector2(20,20))
+		tab_button.add_child(tab_icon)
+		tab_icon.set_anchors_and_offsets_preset(Control.PRESET_CENTER_LEFT)
+		tab_icon.position = Vector2(4,-10)
+		tab_icon.size = Vector2(20,20)
 		tabs.add_child(tab_button)
 		if tab_kind == current_panel and current_panel != "loot": _focus_target = tab_button
 	var money: HBoxContainer = HBoxContainer.new()
@@ -287,6 +313,7 @@ func refresh(preserve_focus: bool = true) -> void:
 		_scroll = ScrollContainer.new()
 		_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 		_scroll.follow_focus = true
+		_style_scrollbar(_scroll.get_v_scroll_bar())
 		_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		_body.add_child(_scroll)
@@ -348,14 +375,19 @@ func _tower_panel(content: VBoxContainer) -> void:
 	var tower: Dictionary = run.towers[selected_cell]
 	var number: int = int(tower.number)
 	var stats: Dictionary = run.tower_stats(selected_cell)
-	var title_row: HBoxContainer = HBoxContainer.new()
-	content.add_child(title_row)
-	var icon: Control = _icon("power", FAMILY_COLORS[number], Vector2(46, 52))
+	var hero := _panel(FAMILY_COLORS[number].darkened(0.6))
+	content.add_child(hero)
+	var title_row := HBoxContainer.new()
+	title_row.add_theme_constant_override("separation",10)
+	hero.add_child(title_row)
+	var icon: Control = _icon("power", FAMILY_COLORS[number], Vector2(48,56))
 	title_row.add_child(icon)
-	var title_box: VBoxContainer = VBoxContainer.new()
+	var title_box := VBoxContainer.new()
+	title_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_box.add_theme_constant_override("separation",4)
 	title_row.add_child(title_box)
-	title_box.add_child(_label("Seed %d  ·  Level %d" % [number, int(stats.get("level", 1))], 23, TEXT))
-	title_box.add_child(_label("ROW %d / COLUMN %d" % [selected_cell / 9 + 1, selected_cell % 9 + 1], 11, MUTED))
+	title_box.add_child(_label("TOWER %d" % number,22,TEXT))
+	title_box.add_child(_label("LEVEL %d  /  R%d · C%d" % [int(stats.get("level",1)),selected_cell/9+1,selected_cell%9+1],11,FAMILY_COLORS[number]))
 	var stats_row: HBoxContainer = HBoxContainer.new()
 	stats_row.add_theme_constant_override("separation", 6)
 	content.add_child(stats_row)
@@ -366,7 +398,7 @@ func _tower_panel(content: VBoxContainer) -> void:
 	_section(content, "MODULE SOCKETS", "%d / 5 used" % attachments.size())
 	_socket_strip(content, selected_cell)
 	_note(content, "Tap to return a module. Drag onto an occupied socket to swap.")
-	content.add_child(_button("Fit a module", func(): open_panel("bag", selected_cell), true, false, 38, "gear:open"))
+	content.add_child(_button("Fit a module", func(): open_panel("bag", selected_cell), false, false, 38, "gear:open"))
 	var cost: int = int(run.upgrade_cost(selected_cell))
 	var cell: int = selected_cell
 	content.add_child(_button("Upgrade this tower   ·   %d" % cost, func(): _act("upgrade_tower", [cell]), true, int(run.credits) < cost, 42, "upgrade:tower"))
@@ -491,6 +523,7 @@ func _bag_panel(content: VBoxContainer) -> void:
 		var key: String = entry[0]
 		var filter := _button(entry[1],func(): _set_bag_filter(key),_bag_filter == key,false,32,"filter:"+key)
 		filter.add_theme_font_size_override("font_size",11)
+		_selection_style(filter,_bag_filter == key)
 		filter.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		filters.add_child(filter)
 	var visible_items: Array[Dictionary] = _visible_items()
@@ -565,7 +598,17 @@ func _camp_panel(content: VBoxContainer) -> void:
 		var box: VBoxContainer = VBoxContainer.new()
 		box.add_theme_constant_override("separation", 4)
 		row.add_child(box)
-		box.add_child(_label(str(entry.name) + "  ·  Lv %d" % level, 16, TEXT))
+		var title_row := HBoxContainer.new()
+		title_row.add_theme_constant_override("separation",8)
+		box.add_child(title_row)
+		title_row.add_child(_icon(str(entry.icon),MINT if kind != "vitality" else GOLD,Vector2(38,42)))
+		var titles := VBoxContainer.new()
+		titles.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		title_row.add_child(titles)
+		titles.add_child(_label("LEVEL %02d" % level,10,MINT))
+		var title := _label(str(entry.name),16,TEXT)
+		title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		titles.add_child(title)
 		_note(box, str(entry.detail))
 		box.add_child(_button("Improve   ·   %d" % cost, func(): _act("buy_passive", [kind]), false, int(run.credits) < cost or str(run.phase) != "loot", 34, "passive:" + kind))
 	_section(content, "THE SALVAGE REELS", "10 credits / spin")
@@ -667,7 +710,14 @@ func _act(method: String, args: Array = []) -> void:
 
 func _section(parent: VBoxContainer, title: String, detail: String = "") -> void:
 	var row: HBoxContainer = HBoxContainer.new()
+	row.add_theme_constant_override("separation",7)
 	parent.add_child(row)
+	var mark := ColorRect.new()
+	mark.color = MINT.darkened(0.28)
+	mark.custom_minimum_size = Vector2(3,11)
+	mark.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(mark)
 	var name_label: Label = _label(title, 11, MINT)
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(name_label)
@@ -698,13 +748,25 @@ func _button(text_value: String, action: Callable, primary: bool = false, disabl
 	button.add_theme_color_override("font_color", INK if primary else TEXT)
 	button.add_theme_color_override("font_hover_color", INK if primary else TEXT)
 	button.add_theme_color_override("font_pressed_color", INK if primary else TEXT)
-	button.add_theme_color_override("font_disabled_color", Color("607985"))
-	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
-		var bg: Color = MINT if primary else Color("18303c")
-		if state == "hover": bg = bg.lightened(0.10)
+	button.add_theme_color_override("font_focus_color", INK if primary else TEXT)
+	button.add_theme_color_override("font_disabled_color", Color("667b84"))
+	for state in ["normal", "hover", "pressed", "disabled"]:
+		var bg: Color = GOLD if primary else Color("152b36")
+		var border: Color = Color("9c724b") if primary else Color("304955")
+		if state == "hover":
+			bg = bg.lightened(0.08)
+			border = GOLD if primary else MINT.darkened(0.28)
 		if state == "pressed": bg = bg.darkened(0.12)
-		if state == "disabled": bg = Color("12232c")
-		button.add_theme_stylebox_override(state, _style(bg, TEXT if state == "focus" else LINE, 8, 2 if state == "focus" else 1, 6))
+		if state == "disabled":
+			bg = Color("101e27")
+			border = Color("21343e")
+		var skin := _style(bg,border,6,1,6)
+		skin.corner_detail = 1
+		skin.border_width_bottom = 1 if state == "pressed" else 3
+		button.add_theme_stylebox_override(state,skin)
+	var focus := _style(Color.TRANSPARENT,MINT,6,2,6)
+	focus.corner_detail = 1
+	button.add_theme_stylebox_override("focus",focus)
 	button.pressed.connect(action)
 	return button
 
@@ -722,7 +784,10 @@ func _style(bg: Color, border: Color, radius: int, width: int, margin: int) -> S
 
 func _panel(border: Color) -> PanelContainer:
 	var panel: PanelContainer = PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", _style(Color("102530"), border, 9, 1, 10))
+	var skin := _style(Color("101f29"),border,7,1,10)
+	skin.corner_detail = 1
+	skin.border_width_bottom = 3
+	panel.add_theme_stylebox_override("panel",skin)
 	return panel
 
 func _icon(kind: String, color: Color, minimum: Vector2) -> Control:
@@ -741,3 +806,36 @@ func _stat(parent: HBoxContainer, title: String, value: String) -> void:
 	panel.add_child(box)
 	box.add_child(_label(title, 9, MUTED))
 	box.add_child(_label(value, 19, TEXT))
+
+func _navigation_icon(kind: String, minimum: Vector2) -> Control:
+	if kind == "tower": return _icon("power",GOLD,minimum)
+	var icon := QuickIcon.new()
+	icon.icon_kind = {"bag":"gear","loot":"chest","camp":"camp"}.get(kind,"gear")
+	icon.custom_minimum_size = minimum
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return icon
+
+func _selection_style(control: Button, selected: bool, left_margin: int = 6) -> void:
+	for state in ["normal","hover","pressed"]:
+		var bg := Color("173a39") if selected else Color("101f2a")
+		if state == "hover": bg = bg.lightened(0.06)
+		if state == "pressed": bg = bg.darkened(0.08)
+		var skin := _style(bg,MINT.darkened(0.22) if selected else LINE,4,1,5)
+		skin.corner_detail = 1
+		skin.border_width_bottom = 3 if selected else 1
+		skin.content_margin_left = left_margin
+		skin.content_margin_right = 4
+		control.add_theme_stylebox_override(state,skin)
+	for state in ["font_color","font_hover_color","font_pressed_color","font_focus_color"]:
+		control.add_theme_color_override(state,MINT if selected else MUTED)
+
+func _style_scrollbar(bar: VScrollBar) -> void:
+	var track := _style(Color("0a151e"),Color.TRANSPARENT,2,0,0)
+	track.content_margin_left = 4
+	track.content_margin_right = 4
+	bar.add_theme_stylebox_override("scroll",track)
+	for state in ["grabber","grabber_highlight","grabber_pressed"]:
+		var handle := _style(Color("476569") if state == "grabber" else MINT.darkened(0.18),Color.TRANSPARENT,2,0,0)
+		handle.content_margin_left = 4
+		handle.content_margin_right = 4
+		bar.add_theme_stylebox_override(state,handle)

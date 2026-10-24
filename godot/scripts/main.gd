@@ -12,6 +12,9 @@ const ControllerCursorScript = preload("res://scripts/controller_cursor.gd")
 const SeedPointerScript = preload("res://scripts/seed_pointer.gd")
 const QuickIconScript = preload("res://scripts/quick_icon.gd")
 const GearFeedbackScript = preload("res://scripts/gear_feedback.gd")
+const UISkin = preload("res://scripts/ui_skin.gd")
+const MenuChoice = preload("res://scripts/menu_choice.gd")
+const MenuArt = preload("res://scripts/menu_diorama.gd")
 const INK := Color("0a1722")
 const PANEL := Color("112634")
 const MINT := Color("83e7c1")
@@ -119,17 +122,8 @@ func _notification(what: int) -> void:
 		_save()
 		get_tree().quit()
 
-func style(bg: Color, border: Color = Color.TRANSPARENT, radius: int = 12) -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
-	s.bg_color = bg
-	s.border_color = border
-	s.set_border_width_all(1 if border.a > 0 else 0)
-	s.set_corner_radius_all(radius)
-	s.content_margin_left = 14
-	s.content_margin_right = 14
-	s.content_margin_top = 10
-	s.content_margin_bottom = 10
-	return s
+func style(bg: Color, border: Color = Color.TRANSPARENT, radius: int = 8) -> StyleBoxFlat:
+	return UISkin.panel(bg,border,mini(radius,8),14,border.a > 0)
 
 func label(text: String, size_px: int, color: Color = WHITE) -> Label:
 	var l := Label.new()
@@ -143,15 +137,8 @@ func button(text: String, fn: Callable, accent: bool = false) -> Button:
 	var b := Button.new()
 	b.text = text
 	b.custom_minimum_size.y = 46
-	b.add_theme_font_size_override("font_size", 17)
-	b.add_theme_color_override("font_color", INK if accent else WHITE)
-	b.add_theme_color_override("font_hover_color", INK if accent else WHITE)
-	b.add_theme_color_override("font_pressed_color", INK if accent else WHITE)
-	b.add_theme_stylebox_override("normal", style(AMBER if accent else PANEL, Color("35505a")))
-	b.add_theme_stylebox_override("hover", style(Color("ffc891") if accent else Color("214252"), MINT))
-	b.add_theme_stylebox_override("pressed", style(MINT if accent else Color("305564"), MINT))
-	b.add_theme_stylebox_override("focus", style(Color(0,0,0,0), MINT))
-	b.add_theme_stylebox_override("disabled", style(Color("172631"), Color("253c48")))
+	b.add_theme_font_size_override("font_size",17)
+	UISkin.button(b,accent)
 	b.pressed.connect(func(): sound.click(); fn.call())
 	return b
 
@@ -532,11 +519,20 @@ func _layout_modal() -> void:
 	overlay.z_index = 20
 	for panel in overlay.get_children():
 		if not panel is PanelContainer: continue
-		var requested: Vector2 = panel.get_meta("requested_size",Vector2(650,640))
-		var wanted := Vector2(minf(requested.x,layout_size.x-32),minf(requested.y,layout_size.y-32))
-		if portrait_layout: wanted = Vector2(layout_size.x-32,minf(requested.y*1.7,layout_size.y-48))
-		_place(panel,Rect2((layout_size-wanted)/2,wanted))
+		for hero in panel.find_children("*","Control",true,false):
+			if hero.has_meta("menu_hero"): hero.visible = not portrait_layout and layout_size.x >= 1000
 		_style_modal_tree(panel)
+		_fit_modal_panel(panel)
+		# Hidden artwork and portrait fonts change container minima this frame.
+		# Fit again after that propagation so an old wide minimum cannot persist.
+		_fit_modal_panel.call_deferred(panel)
+
+func _fit_modal_panel(panel: PanelContainer) -> void:
+	if not is_instance_valid(panel) or panel.is_queued_for_deletion(): return
+	var requested: Vector2 = panel.get_meta("requested_size",Vector2(650,640))
+	var wanted := Vector2(minf(requested.x,layout_size.x-32),minf(requested.y,layout_size.y-32))
+	if portrait_layout: wanted = Vector2(layout_size.x-32,minf(float(panel.get_meta("portrait_height",requested.y*1.7)),layout_size.y-48))
+	_place(panel,Rect2((layout_size-wanted)/2,wanted))
 
 func _style_modal_tree(node: Node) -> void:
 	if node is Label or node is Button or node is LineEdit:
@@ -545,7 +541,9 @@ func _style_modal_tree(node: Node) -> void:
 		_font(node,maxi(21,int(base*1.35)) if portrait_layout else base)
 		if node is Label: node.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		if node is Button:
-			node.custom_minimum_size.y = 72 if portrait_layout else 46
+			var base_height: float = float(node.get_meta("menu_height",46))
+			node.custom_minimum_size.y = maxf(64,base_height) if portrait_layout else base_height
+			if node.has_meta("menu_keypad"): node.custom_minimum_size.x = 128 if portrait_layout else 88
 			node.clip_text = true
 		if node is LineEdit: node.custom_minimum_size.y = 60 if portrait_layout else 36
 	for child in node.get_children(): _style_modal_tree(child)
@@ -894,85 +892,132 @@ func _modal(width: float = 650, height: float = 640) -> VBoxContainer:
 	ui.add_child(overlay)
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var dim := ColorRect.new()
-	dim.color = Color(0.015,0.035,0.055,.86)
+	dim.color = Color(0.008,0.018,0.027,.76)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	overlay.add_child(dim)
 	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel",style(Color("102330"),Color("40636b"),22))
+	var surface := UISkin.panel(Color("0e2029"),Color("3b5e62"),12,12)
+	surface.border_width_top = 2
+	surface.shadow_size = 28
+	surface.shadow_offset = Vector2(0,14)
+	panel.add_theme_stylebox_override("panel",surface)
 	overlay.add_child(panel)
 	panel.set_meta("requested_size",Vector2(width,height))
 	panel.position = Vector2((1280-width)/2,(800-height)/2)
 	panel.size = Vector2(width,height)
 	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left",22)
-	margin.add_theme_constant_override("margin_right",22)
-	margin.add_theme_constant_override("margin_top",16)
-	margin.add_theme_constant_override("margin_bottom",16)
+	margin.add_theme_constant_override("margin_left",14)
+	margin.add_theme_constant_override("margin_right",14)
+	margin.add_theme_constant_override("margin_top",12)
+	margin.add_theme_constant_override("margin_bottom",12)
 	panel.add_child(margin)
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.follow_focus = true
+	UISkin.scroll(scroll)
 	margin.add_child(scroll)
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation",13)
+	box.add_theme_constant_override("separation",12)
 	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(box)
 	_layout_modal.call_deferred()
 	return box
 
 func _choice_row(box: VBoxContainer, title: String, values: Array, current: String, callback: Callable) -> void:
-	box.add_child(label(title,12,MUTED))
+	box.add_child(label(title,11,MUTED))
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation",8)
 	box.add_child(row)
 	var choices: Array[Button] = []
+	var descriptions := {"campaign":"50 rounds · your route", "freeplay":"One quick siege", "locked":"50 rounds · fixed rules"}
 	for value in values:
 		var id: String = str(value[0])
-		var b := button(str(value[1]),func(): callback.call(id))
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		b.add_theme_font_size_override("font_size",15)
-		b.add_theme_stylebox_override("normal",style(Color("315950") if current==id else PANEL,MINT if current==id else Color("35505a")))
+		var b: Button = MenuChoice.new()
+		b.configure(str(value[1]),str(descriptions.get(id,"")),id,current == id,not descriptions.has(id))
 		row.add_child(b)
 		choices.append(b)
 		b.pressed.connect(func():
-			for c in choices: c.add_theme_stylebox_override("normal",style(Color("315950") if c==b else PANEL,MINT if c==b else Color("35505a")))
+			sound.click()
+			callback.call(id)
+			for c in choices: c.set_chosen(c == b)
 		)
+
+func _menu_art(parent: BoxContainer, caption: String = "FROM LOGIC TO FIREPOWER") -> void:
+	var hero := VBoxContainer.new()
+	hero.set_meta("menu_hero",true)
+	hero.custom_minimum_size.x = 286
+	hero.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	hero.add_theme_constant_override("separation",12)
+	parent.add_child(hero)
+	var brand := label("Y A K   S T U D I O S",11,MINT)
+	hero.add_child(brand)
+	var art: Control = MenuArt.new()
+	art.reduced_motion = reduced_motion
+	art.custom_minimum_size = Vector2(280,232)
+	art.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	hero.add_child(art)
+	hero.add_child(label(caption,12,AMBER))
+	var lore := label("A quiet grid.
+A growing arsenal.
+One core to protect.",21,WHITE)
+	hero.add_child(lore)
+	var steps := label("01 SOLVE     02 BUILD
+03 DEFEND    04 LOOT",11,MUTED)
+	hero.add_child(steps)
 
 func _show_menu(initial: bool = false) -> void:
 	_seed_editing = false
 	_seed_return_initial = initial
-	var box := _modal(674,690)
-	box.add_child(label("Y A K   S T U D I O S     /     G O D O T   E D I T I O N",11,MINT))
-	box.add_child(label("SUDOKU DEFENSE",38,WHITE))
-	var subtitle := label("Plant answers. Grow firepower.",21,AMBER)
-	box.add_child(subtitle)
-	var desc := label("A quiet grid becomes a living battlefield. Solve, stack your towers with loot, and keep your core alive.",16,MUTED)
-	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	box.add_child(desc)
-	_choice_row(box,"EXPEDITION",[["campaign","Campaign / 50"],["freeplay","Free play / 1"],["locked","Locked in / 50"]],mode_choice,func(v): mode_choice=v)
-	_choice_row(box,"SUDOKU  ·  HARDER GRIDS LEAVE MORE ROOM TO GROW",[["easy","Easy"],["medium","Medium"],["hard","Hard"]],puzzle_choice,func(v): puzzle_choice=v)
-	_choice_row(box,"SIEGE DIFFICULTY",[["easy","Easy"],["medium","Medium"],["hard","Hard"]],combat_choice,func(v): combat_choice=v)
+	if not initial and has_active_run:
+		_show_pause_menu()
+		return
+	var box := _modal(1000,674)
+	var columns := HBoxContainer.new()
+	columns.add_theme_constant_override("separation",28)
+	box.add_child(columns)
+	_menu_art(columns)
+	var setup := VBoxContainer.new()
+	setup.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	setup.add_theme_constant_override("separation",10)
+	columns.add_child(setup)
+	setup.add_child(label("DEPLOYMENT  /  NEW EXPEDITION",11,MINT))
+	setup.add_child(label("SUDOKU DEFENSE",34,WHITE))
+	setup.add_child(label("Plant answers. Grow firepower.",17,AMBER))
+	_choice_row(setup,"01  CHOOSE YOUR EXPEDITION",[["campaign","Campaign / 50"],["freeplay","Free play / 1"],["locked","Locked in / 50"]],mode_choice,func(v): mode_choice=v)
+	_choice_row(setup,"02  SUDOKU DIFFICULTY",[["easy","Easy"],["medium","Medium"],["hard","Hard"]],puzzle_choice,func(v): puzzle_choice=v)
+	_choice_row(setup,"03  SIEGE DIFFICULTY",[["easy","Easy"],["medium","Medium"],["hard","Hard"]],combat_choice,func(v): combat_choice=v)
+	setup.add_child(label("Harder grids leave more room to grow towers.",12,MUTED))
+	# A separate label and a bounded input row prevent the seed label from
+	# wrapping letter-by-letter when a controller keypad is present.
+	setup.add_child(label("RUN SEED  /  OPTIONAL",11,MUTED))
 	var seed_row := HBoxContainer.new()
-	box.add_child(seed_row)
-	seed_row.add_child(label("RUN SEED  ",12,MUTED))
+	seed_row.add_theme_constant_override("separation",8)
+	setup.add_child(seed_row)
 	seed_input = LineEdit.new()
-	seed_input.placeholder_text = "Random — or enter a seed to replay"
+	seed_input.placeholder_text = "Random seed"
+	seed_input.expand_to_text_length = false
 	seed_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	seed_input.custom_minimum_size.y = 36
+	seed_input.custom_minimum_size = Vector2(140,42)
 	seed_input.add_theme_font_size_override("font_size",14)
+	seed_input.add_theme_color_override("font_color",WHITE)
+	seed_input.add_theme_color_override("font_placeholder_color",MUTED)
+	seed_input.add_theme_stylebox_override("normal",UISkin.panel(Color("081820"),Color("304b53"),5,12,false))
+	seed_input.add_theme_stylebox_override("focus",UISkin.panel(Color("102a31"),MINT,5,12,false))
 	seed_input.text = _seed_text
 	seed_input.text_changed.connect(func(value): _seed_text = value)
 	seed_row.add_child(seed_input)
-	seed_row.add_child(button("Keypad",_show_seed_pad))
-	var start := button("Start expedition ",_start_run,true)
-	box.add_child(start)
-	var initial_focus: Button = start
+	var keypad := button("Keypad",_show_seed_pad)
+	keypad.set_meta("menu_keypad",true)
+	keypad.custom_minimum_size.x = 88
+	seed_row.add_child(keypad)
+	var start := button("Start expedition",_start_run,true)
+	start.set_meta("menu_height",52)
+	setup.add_child(start)
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation",10)
-	box.add_child(row)
-	if not initial:
+	row.add_theme_constant_override("separation",8)
+	setup.add_child(row)
+	if has_active_run:
 		var resume := button("Resume run",_close_overlay)
-		initial_focus = resume
 		resume.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(resume)
 	elif FileAccess.file_exists("user://sudoku-defense-run.json"):
@@ -989,8 +1034,31 @@ func _show_menu(initial: bool = false) -> void:
 	var how := button("How to play",_help)
 	how.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(how)
-	box.add_child(label("CONTROLLER • MOUSE • TOUCH     /     Saves automatically on this device",11,MUTED))
-	initial_focus.grab_focus()
+	start.grab_focus()
+
+func _show_pause_menu() -> void:
+	var box := _modal(780,500)
+	for panel in overlay.get_children():
+		if panel is PanelContainer: panel.set_meta("portrait_height",620.0)
+	var columns := HBoxContainer.new()
+	columns.add_theme_constant_override("separation",28)
+	box.add_child(columns)
+	_menu_art(columns,"YOUR GARDEN IS WAITING")
+	var actions := VBoxContainer.new()
+	actions.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	actions.add_theme_constant_override("separation",12)
+	columns.add_child(actions)
+	actions.add_child(label("EXPEDITION  /  PAUSED",11,MINT))
+	actions.add_child(label("Take a breath.",32,WHITE))
+	actions.add_child(label("ROUND %02d / %02d  ·  %s" % [run.round_no,run.max_rounds,str(run.phase).to_upper()],13,AMBER))
+	actions.add_child(label("Your progress is saved on this device.",13,MUTED))
+	var resume := button("Resume run",_close_overlay,true)
+	resume.set_meta("menu_height",54)
+	actions.add_child(resume)
+	actions.add_child(button("Manage loadout",func(): _close_overlay(); _toggle_dock("bag")))
+	actions.add_child(button("How to play",_help))
+	actions.add_child(button("New expedition",func(): _show_menu(true)))
+	resume.grab_focus()
 
 func _help() -> void:
 	var box := _modal(720,652)
