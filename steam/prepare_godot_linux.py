@@ -62,7 +62,7 @@ def main() -> None:
     )
     boot_log = RELEASE / "steam-godot-linux-boot.log"
     boot_log.write_text(result.stdout)
-    if result.returncode or "ERROR:" in result.stdout or "SUDOKU_DEFENSE_READY" not in result.stdout:
+    if result.returncode or "ERROR:" in result.stdout or f"SUDOKU_DEFENSE_READY version={version}" not in result.stdout:
         raise SystemExit(f"Renamed executable failed startup; inspect {boot_log}")
     archive_path = RELEASE / f"Sudoku-Defense-Godot-Steam-Linux-{version}.zip"
     with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
@@ -87,7 +87,7 @@ def main() -> None:
     }
     manifest_path = RELEASE / "steam-godot-linux-manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
-    print(json.dumps({"stage": str(STAGE), "archive": str(archive_path), "sha256": manifest["archive_sha256"], "manifest": str(manifest_path), "boot": "SUDOKU_DEFENSE_READY", "upload_status": "pending"}, indent=2))
+    print(json.dumps({"stage": str(STAGE), "archive": str(archive_path), "sha256": manifest["archive_sha256"], "manifest": str(manifest_path), "boot": f"SUDOKU_DEFENSE_READY version={version}", "upload_status": "pending"}, indent=2))
 
 
 if __name__ == "__main__":

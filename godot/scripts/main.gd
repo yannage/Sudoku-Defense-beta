@@ -111,7 +111,7 @@ func _ready() -> void:
 	_layout_ui()
 	_show_menu(true)
 	_refresh()
-	if "--smoke-test" in OS.get_cmdline_user_args(): print("SUDOKU_DEFENSE_READY")
+	if "--smoke-test" in OS.get_cmdline_user_args(): print("SUDOKU_DEFENSE_READY version=" + str(ProjectSettings.get_setting("application/config/version")))
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT and seed_pointer != null:

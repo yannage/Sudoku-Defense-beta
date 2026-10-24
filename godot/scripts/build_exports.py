@@ -12,6 +12,7 @@ import re
 import shutil
 import subprocess
 import tarfile
+import tempfile
 import zipfile
 
 PROJECT = Path(__file__).resolve().parents[1]
@@ -191,6 +192,15 @@ def main() -> None:
                     raise SystemExit("The render check requires a display or xvfb-run; headless rendering cannot validate pixels.")
                 command = [xvfb, "-a", "-s", "-screen 0 1920x1600x24"] + command
             run(command, logs / logfile, expected=marker)
+    export_releases(args, build, downloads, logs)
+
+
+def export_releases(args: argparse.Namespace, build: Path, downloads: Path, logs: Path) -> None:
+    """Package the validated source; usable separately after packaging-only fixes."""
+    match = re.search(r'^config/version="([^"]+)"$', (PROJECT / "project.godot").read_text(), re.MULTILINE)
+    if not match:
+        raise RuntimeError("Project application version is required for package verification")
+    app_version = match.group(1)
     targets = {"web": ("Web", "index.html"), "linux": ("Linux", "sudoku-defense.x86_64"), "windows": ("Windows", "SudokuDefense.exe")}
     for name in args.targets:
         folder = build / name
@@ -198,17 +208,22 @@ def main() -> None:
             shutil.rmtree(folder)
         folder.mkdir()
         preset, executable = targets[name]
+        # Never accept a prior executable after an exporter fails to replace it.
+        # A unique directory starts empty and cannot contain a previous release.
+        with tempfile.TemporaryDirectory(prefix=f"sudoku-export-{name}-") as staging:
+            staged_output = Path(staging) / executable
+            run([args.godot, "--headless", "--path", str(PROJECT), "--export-release", preset, str(staged_output)], logs / f"export-{name}.log")
+            if not staged_output.exists() or staged_output.stat().st_size == 0:
+                raise RuntimeError(f"Missing fresh export: {staged_output}")
+            shutil.copytree(staging, folder, dirs_exist_ok=True)
         output = folder / executable
-        run([args.godot, "--headless", "--path", str(PROJECT), "--export-release", preset, str(output)], logs / f"export-{name}.log")
-        if not output.exists() or output.stat().st_size == 0:
-            raise RuntimeError(f"Missing export: {output}")
         copy_license_notices(folder)
         if name == "web":
             make_web_shell(folder)
         elif name == "linux":
             output.chmod(0o755)
             if not args.skip_smoke:
-                run([str(output), "--headless", "--audio-driver", "Dummy", "--quit-after", "120", "--", "--smoke-test"], logs / "native-linux-boot.log", expected="SUDOKU_DEFENSE_READY")
+                run([str(output), "--headless", "--audio-driver", "Dummy", "--quit-after", "120", "--", "--smoke-test"], logs / "native-linux-boot.log", expected=f"SUDOKU_DEFENSE_READY version={app_version}")
             with tarfile.open(downloads / "Sudoku-Defense-Godot-Linux-x86_64.tar.gz", "w:gz") as archive:
                 for path in sorted(folder.rglob("*")):
                     relative = path.relative_to(folder)
