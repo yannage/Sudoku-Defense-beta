@@ -1,8 +1,8 @@
 # Sudoku Defense: Steam release target
 
-## Current Steam testing build — Godot 0.3.6
+## Current Steam testing build — Godot 0.3.7
 
-On **October 24, 2026 (UTC)**, native **Godot 0.3.6** was uploaded to the existing Linux depot and build **26174861** was activated on **default** for the owner's Steam Deck testing. It adds a voxel loot table with animated reveals of all earned items, a visual module inventory and five-socket workshop with lossless attachment swaps, quieter tower badges, and a phone overlay input fix. The app remains an unreleased testing app; this activation did not submit a Valve review or release the game publicly.
+On **October 24, 2026 (America/New_York)**, native **Godot 0.3.7** was uploaded to the existing Linux depot and build **26176881** was activated on **default** for the owner's docked Steam Deck and Xbox-controller testing. It adds a free cursor controlled by the right stick, right-stick-click (R3) selection, right-trigger hold/drag, left-trigger precision movement, and safe handoff between pointer and focus navigation. The app remains an unreleased testing app; this activation did not submit a Valve review or release the game publicly.
 
 | Item | Value |
 | --- | --- |
@@ -11,22 +11,22 @@ On **October 24, 2026 (UTC)**, native **Godot 0.3.6** was uploaded to the existi
 | Developer Comp package | **1309911**; previously confirmed to include this app and depot |
 | Beta-testing package | **1309912** |
 | Store package | **1309913** |
-| Uploaded version | **0.3.6** |
+| Uploaded version | **0.3.7** |
 | Source branch | `godot-deck-edition` |
-| Gameplay GitHub source commit | `ee33012963a0fc5a549a85b746056d77787beddf` |
-| Source tree | `9010f9742e20eac4bb7756e7745df5c39b98bcf1` |
-| Steam BuildID | **26174861** |
-| Depot manifest | **2872677615394352674** |
+| Gameplay GitHub source commit | `1363fc3aac33b845e0a207c97875522fa22e7716` |
+| Source tree | `48a7438a2dd78226bce0298ce23d366935e8ab61` |
+| Steam BuildID | **26176881** |
+| Depot manifest | **6349129508851656728** |
 | Active branch | **default** |
 | Release state | **Unavailable (unreleased)** |
 | Upload mode | Standard replacement |
-| Uploaded ZIP | `Sudoku-Defense-Godot-Steam-Linux-0.3.6.zip` |
-| ZIP bytes | **28,840,189** |
-| ZIP SHA-256 | `491a6e0b87198dafbf30e8bb478f4aaacac09b6e6ac2f34e64d29ff50f08f2b6` |
+| Uploaded ZIP | `Sudoku-Defense-Godot-Steam-Linux-0.3.7.zip` |
+| ZIP bytes | **28,867,678** |
+| ZIP SHA-256 | `edce2fd3a12c042a396ddb1b396140d9ff1fd94a15624fa8e794ff45ca5457b6` |
 
-The uploaded manifest lists exactly three files: `sudoku-defense`, `GODOT-LICENSE.txt`, and `GODOT-THIRD-PARTY.txt`. Steam reports the binary as **74,072,824 bytes**, SHA-1 `8a23e51f617d3a4c926b163bbc7dc6379dd8aacf`; both match the local staging binary. Its SHA-256 is `0da15925cb4f99dfcf3cc59877138664f1d399d91b4fd464b9ee72ab8cd7f451`. Steam's activation preview reports a **530.9 KB** update from the previous default build. The local ZIP records mode **0755** for the executable. Steamworks' manifest table displays an empty Flags cell, so that view alone does not verify the installed executable permission. Confirm the installed file and actual launch on the Deck before marking this test complete.
+The uploaded manifest lists exactly three files: `sudoku-defense`, `GODOT-LICENSE.txt`, and `GODOT-THIRD-PARTY.txt`. Steam reports the binary as **74,101,352 bytes**, SHA-1 `d8e2dce639d0344612f5a8407ca57ee5e1905952`; both match the local staging binary. Its SHA-256 is `41c5c7ee23f6285552e37d66d0d3ffd23aaf2ef7419b5c3e4edf6b5100158509`. Steam's activation preview reports a **558.7 KB** update from the previous default build. The local ZIP records mode **0755** for the executable. Steamworks' manifest table displays an empty Flags cell, so that view alone does not verify the installed executable permission. Confirm the installed file and actual launch on the Deck before marking this test complete.
 
-The previous Godot **0.3.5** build **26173703**, manifest **5609986302346047713**, remains in build history as the rollback candidate. Its source commit was `e2c49d722cdbe9132738bcb5b6134201715a7964` and ZIP SHA-256 was `cec5dcb8f611e656f11788f4d1e41f0a440a1e770c8bc7ea2f937c9db3ef6f75`. No launch or controller settings changed for 0.3.6. The existing native Linux 64-bit launch, Generic Gamepad template, and **Left Mouse Click Emulation** touchscreen mode were preserved.
+The previous Godot **0.3.6** build **26174861**, manifest **2872677615394352674**, remains in build history as the rollback candidate. Its source commit was `ee33012963a0fc5a549a85b746056d77787beddf` and ZIP SHA-256 was `491a6e0b87198dafbf30e8bb478f4aaacac09b6e6ac2f34e64d29ff50f08f2b6`. No launch or controller settings changed for 0.3.7. The existing native Linux 64-bit launch, Generic Gamepad template, and **Left Mouse Click Emulation** touchscreen mode were preserved.
 
 Package 1309913 is an entitlement, not an upload destination. Do not create a new app for this update. A Windows export exists separately, but no Windows depot is documented or assumed here; do not put a Windows executable into the Linux-only depot.
 
@@ -35,7 +35,7 @@ Package 1309913 is an entitlement, not an upload destination. Do not create a ne
 Build the actual Godot releases and run the checks described in [GODOT-BUILDS.md](GODOT-BUILDS.md), then run from the repository root:
 
 ```sh
-python3 steam/prepare_godot_linux.py --source-commit ee33012963a0fc5a549a85b746056d77787beddf
+python3 steam/prepare_godot_linux.py --source-commit 1363fc3aac33b845e0a207c97875522fa22e7716
 ```
 
 For future releases, omit `--source-commit` when local HEAD is the canonical source commit, or supply the exact corresponding GitHub commit. Do not reuse this example SHA for new gameplay code.
@@ -86,7 +86,7 @@ The staged executable is the same Godot binary as the tested download; renaming 
 
 ## Validation and saves
 
-The 0.3.6 source build passes the simulation, independent Sudoku audit, UI flow, controller, touch/drag, family-upgrade, pointer-dispatch, loot-table, and gear-integration suites in both board renderers. Loot and gear checks cover exactly-once rewards, touch/mouse dragging, tap/controller equipment, ownership-preserving socket swaps, full stacks, and phone/Deck bounds. The required real GLES checks and native executable startup passed; the renamed Steam executable reaches its ready marker. ZIP CRC and executable permissions were verified before upload. These checks do not establish a successful Steam client installation or physical Deck hardware behavior.
+The 0.3.7 source build passes all required headless and actual GLES suites in the native and Canvas board renderers. The new controller-cursor suite passes **134 assertions per renderer**, covering cursor movement, click/drag, precision control, input ownership, and focus-safe handoff. Linux export startup and the renamed Steam staging executable reach the ready marker; ZIP CRC and executable permissions were verified before upload. These checks do not establish a successful Steam client installation or physical docked Deck/Xbox-controller behavior.
 
 Test the Steam-installed candidate for cold start offline, audio, solving, placement, upgrades, inventory, purchases, menus, save/resume, controller-only navigation, and Deck suspend/resume. Godot stores its run in `user://sudoku-defense-run.json`; saves from the older Electron/Gridfall version are not migrated into the Godot port. Existing legacy save files are not removed by this packaging step.
 
