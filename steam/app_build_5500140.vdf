@@ -1,0 +1,13 @@
+"AppBuild"
+{
+    "AppID" "5500140"
+    "Desc" "Sudoku Defense Playtest - native Godot Linux build"
+    "ContentRoot" "../release/steam-godot-linux"
+    "BuildOutput" "../release/steam-playtest-build-output"
+    "Preview" "0"
+    "SetLive" ""
+    "Depots"
+    {
+        "5500141" "depot_build_5500141.vdf"
+    }
+}
