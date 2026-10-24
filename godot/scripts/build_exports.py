@@ -68,14 +68,45 @@ def make_web_shell(web: Path) -> None:
     print(f"Web engine: {len(payload):,} bytes in {len(parts)} verified parts; every static asset is below 25 MiB")
 
 
-def archive_directory(source: Path, target: Path) -> None:
-    with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
-        for path in sorted(source.rglob("*")):
-            relative = path.relative_to(source)
-            # Godot may leave a hidden temporary executable while exporting.
-            # Only public output files belong in a downloadable distribution.
-            if path.is_file() and not any(part.startswith(".") for part in relative.parts):
-                archive.write(path, relative)
+def verify_archive(path: Path, expected: dict[str, str]) -> None:
+    """Validate the ZIP directory, CRCs, and exact uncompressed file content."""
+    with zipfile.ZipFile(path) as archive:
+        if set(archive.namelist()) != set(expected) or len(archive.namelist()) != len(expected):
+            raise RuntimeError(f"Unexpected or missing ZIP members: {path}")
+        damaged = archive.testzip()
+        if damaged is not None:
+            raise RuntimeError(f"ZIP CRC failed for {damaged}: {path}")
+        for name, digest in expected.items():
+            if hashlib.sha256(archive.read(name)).hexdigest() != digest:
+                raise RuntimeError(f"ZIP content changed for {name}: {path}")
+
+
+def archive_directory(source: Path, target: Path, *, prefix: str = "", exclude_parts: set[str] | None = None, include_hidden: bool = False) -> None:
+    # Build away from the public path so readers can never consume a partial
+    # ZIP. Validate the central directory and every file before replacing it.
+    target.parent.mkdir(parents=True, exist_ok=True)
+    entries: list[tuple[Path, str]] = []
+    expected: dict[str, str] = {}
+    for path in sorted(source.rglob("*")):
+        relative = path.relative_to(source)
+        if not path.is_file() or (exclude_parts and any(part in exclude_parts for part in relative.parts)):
+            continue
+        if not include_hidden and any(part.startswith(".") for part in relative.parts):
+            continue
+        name = (Path(prefix) / relative).as_posix()
+        entries.append((path, name))
+        expected[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+    with tempfile.NamedTemporaryFile(prefix=".sudoku-archive-", suffix=".zip", dir=target.parent, delete=False) as pending:
+        temporary = Path(pending.name)
+    try:
+        with zipfile.ZipFile(temporary, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+            for path, name in entries:
+                archive.write(path, name)
+        verify_archive(temporary, expected)
+        temporary.replace(target)
+        verify_archive(target, expected)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def copy_license_notices(destination: Path) -> None:
@@ -235,11 +266,10 @@ def export_releases(args: argparse.Namespace, build: Path, downloads: Path, logs
                         archive.add(path, arcname=str(relative), recursive=False)
         if name != "web":
             archive_directory(folder, downloads / f"Sudoku-Defense-Godot-{name.capitalize()}.zip")
-    with zipfile.ZipFile(downloads / "Sudoku-Defense-Godot-Source.zip", "w", zipfile.ZIP_DEFLATED) as archive:
-        for path in sorted(PROJECT.rglob("*")):
-            relative = path.relative_to(PROJECT)
-            if path.is_file() and not any(part in {"build", ".godot", "__pycache__", ".git"} for part in relative.parts):
-                archive.write(path, Path("Sudoku-Defense-Godot") / relative)
+    archive_directory(
+        PROJECT, downloads / "Sudoku-Defense-Godot-Source.zip",
+        prefix="Sudoku-Defense-Godot", exclude_parts={"build", ".godot", "__pycache__", ".git"}, include_hidden=True,
+    )
     stage_downloads(build)
     if (build / "web" / "index.html").exists():
         # The distributable browser ZIP also contains its desktop-download page.
