@@ -158,6 +158,8 @@ def main() -> None:
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_ui_flow.gd", "--", "--canvas-graphics"], logs / "canvas-ui-flow-tests.log", expected="UI_FLOW_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_controller_flow.gd"], logs / "controller-tests.log", expected="CONTROLLER_FLOW_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_controller_flow.gd", "--", "--canvas-graphics"], logs / "canvas-controller-tests.log", expected="CONTROLLER_FLOW_PASS")
+    run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_controller_cursor.gd"], logs / "controller-cursor-tests.log", expected="CONTROLLER_CURSOR_PASS")
+    run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_controller_cursor.gd", "--", "--canvas-graphics"], logs / "canvas-controller-cursor-tests.log", expected="CONTROLLER_CURSOR_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_touch_flow.gd"], logs / "touch-tests.log", expected="TOUCH_FLOW_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_touch_flow.gd", "--", "--canvas-graphics"], logs / "canvas-touch-tests.log", expected="TOUCH_FLOW_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_pointer_dispatch.gd"], logs / "pointer-dispatch-tests.log", expected="POINTER_DISPATCH_PASS")
@@ -173,6 +175,8 @@ def main() -> None:
             ("test_rendering.gd", "--safe-graphics", "rendering-tests.log", "RENDER_PASS"),
             ("test_canvas_rendering.gd", "--canvas-graphics", "canvas-rendering-tests.log", "CANVAS_RENDER_PASS"),
             ("test_chest_canvas.gd", "--canvas-graphics", "canvas-chest-tests.log", "0 failures (real GLES pixels)"),
+            ("test_controller_cursor.gd", "--safe-graphics", "controller-cursor-render-tests.log", "CONTROLLER_CURSOR_PASS"),
+            ("test_controller_cursor.gd", "--canvas-graphics", "canvas-controller-cursor-render-tests.log", "CONTROLLER_CURSOR_PASS"),
             ("test_loot_gear_flow.gd", "--safe-graphics", "loot-gear-render-tests.log", "LOOT_GEAR_FLOW_PASS"),
             ("test_loot_gear_flow.gd", "--canvas-graphics", "canvas-loot-gear-render-tests.log", "LOOT_GEAR_FLOW_PASS"),
         ]:
@@ -181,7 +185,7 @@ def main() -> None:
                 xvfb = shutil.which("xvfb-run")
                 if not xvfb:
                     raise SystemExit("The render check requires a display or xvfb-run; headless rendering cannot validate pixels.")
-                command = [xvfb, "-a", "-s", "-screen 0 1600x1200x24"] + command
+                command = [xvfb, "-a", "-s", "-screen 0 1920x1600x24"] + command
             run(command, logs / logfile, expected=marker)
     targets = {"web": ("Web", "index.html"), "linux": ("Linux", "sudoku-defense.x86_64"), "windows": ("Windows", "SudokuDefense.exe")}
     for name in args.targets:

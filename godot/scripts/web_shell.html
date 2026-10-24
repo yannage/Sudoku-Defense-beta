@@ -17,7 +17,7 @@ html,body{height:100dvh;overscroll-behavior:none}#game-frame{position:fixed;inse
 </head>
 <body>
 <div id="game-frame"><canvas id="canvas" tabindex="0" aria-label="Sudoku Defense game. Use arrow keys or a controller to select squares, and number keys to plant towers.">Your browser needs WebGL 2 to play Sudoku Defense.</canvas></div>
-<div id="launch"><div class="card"><div class="sigil" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><p class="eyebrow">Logic grows into firepower</p><h1>SUDOKU<br>DEFENSE</h1><p class="tagline">Plant your answers. Stack your towers.<br>Hold the grid.</p><button id="play">ENTER THE GRID ↗</button><button id="fullscreen-play" class="secondary">Play fullscreen</button><div class="progress" aria-hidden="true"><i id="bar"></i></div><div id="status" role="status" aria-live="polite"></div><div class="hint">Controller · keyboard · touch<br>Portrait or landscape. Your grid stays with you.</div><a class="desktop-link" href="downloads.html">Get desktop builds ↗</a><div class="build">Godot edition · 0.3.6</div></div><div id="brand">YAK STUDIOS</div></div>
+<div id="launch"><div class="card"><div class="sigil" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><p class="eyebrow">Logic grows into firepower</p><h1>SUDOKU<br>DEFENSE</h1><p class="tagline">Plant your answers. Stack your towers.<br>Hold the grid.</p><button id="play">ENTER THE GRID ↗</button><button id="fullscreen-play" class="secondary">Play fullscreen</button><div class="progress" aria-hidden="true"><i id="bar"></i></div><div id="status" role="status" aria-live="polite"></div><div class="hint">Controller · keyboard · touch<br>Portrait or landscape. Your grid stays with you.</div><a class="desktop-link" href="downloads.html">Get desktop builds ↗</a><div class="build">Godot edition · 0.3.7</div></div><div id="brand">YAK STUDIOS</div></div>
 <aside id="graphics-message" role="status" hidden><p id="graphics-summary"></p><details><summary>Technical details</summary><pre id="diagnostics"></pre><button id="copy-error">Copy details</button></details><button id="dismiss-error">Dismiss</button><button id="reload-game" hidden>Reload game</button></aside>
 <script>
 const WASM_PARTS=__WASM_PARTS__;
@@ -72,7 +72,7 @@ function recordEngineError(...parts){
   const message=parts.map(String).join(' ');
   console.error(...parts);
   diagnostics.push(message);if(diagnostics.length>30)diagnostics.shift();
-  document.getElementById('diagnostics').textContent='Sudoku Defense 0.3.6\n'+navigator.userAgent+'\nCanvas '+canvas.width+' x '+canvas.height+'\n'+diagnostics.join('\n');
+  document.getElementById('diagnostics').textContent='Sudoku Defense 0.3.7\n'+navigator.userAgent+'\nCanvas '+canvas.width+' x '+canvas.height+'\n'+diagnostics.join('\n');
   if(/shader.*(error|fail)|framebuffer.*(incomplete|error)|webgl.*(error|lost)|out of memory|SCRIPT ERROR/i.test(message)&&!dismissedGraphicsMessage){
     document.getElementById('graphics-summary').textContent='The game hit a display problem. Technical details below can help us fix it.';
     graphicsMessage.hidden=false;

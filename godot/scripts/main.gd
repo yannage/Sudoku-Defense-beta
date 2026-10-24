@@ -8,6 +8,7 @@ const DockScript = preload("res://scripts/dock.gd")
 const SoundScript = preload("res://scripts/sound.gd")
 const DropScript = preload("res://scripts/board_drop.gd")
 const ControllerScript = preload("res://scripts/controller_input.gd")
+const ControllerCursorScript = preload("res://scripts/controller_cursor.gd")
 const SeedPointerScript = preload("res://scripts/seed_pointer.gd")
 const QuickIconScript = preload("res://scripts/quick_icon.gd")
 const GearFeedbackScript = preload("res://scripts/gear_feedback.gd")
@@ -42,6 +43,8 @@ var ui_elapsed := 0.0
 var controller_used := false
 var _pointer_hint_owner := -2 # -1 mouse, >=0 native touch, -2 no pending handoff
 var controller
+var controller_cursor
+var _cursor_gesture_canceled := false
 var seed_pointer
 var board_input
 var gear_feedback
@@ -92,6 +95,11 @@ func _ready() -> void:
 	controller.action_pressed.connect(_controller_action)
 	controller.navigated.connect(_controller_navigate)
 	controller.controller_lost.connect(_controller_disconnected)
+	controller.pointer_activity.connect(_controller_pointer_activity)
+	controller.pointer_axis_changed.connect(controller_cursor.set_axis)
+	controller.pointer_button_changed.connect(controller_cursor.set_button)
+	controller.pointer_precision_changed.connect(controller_cursor.set_precision)
+	controller.pointer_reset.connect(controller_cursor.deactivate)
 	add_child(controller)
 	controller_used = not Input.get_connected_joypads().is_empty()
 	dock.set_controller_mode(controller_used)
@@ -104,6 +112,7 @@ func _ready() -> void:
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT and seed_pointer != null:
+		if controller_cursor != null: controller_cursor.deactivate()
 		seed_pointer.cancel()
 		_finish_pointer_activity.call_deferred()
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
@@ -284,7 +293,7 @@ func _build_ui() -> void:
 			_update_attachment_preview()
 			_refresh()
 			return
-		if controller_used:
+		if controller_used and not _controller_pointer_active():
 			dock.close_panel(true)
 			armed_item = str(item_id)
 			_toast("Choose a tower · A attach · B cancel")
@@ -308,6 +317,9 @@ func _build_ui() -> void:
 	gear_feedback.host = self
 	gear_feedback.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.add_child(gear_feedback)
+	controller_cursor = ControllerCursorScript.new()
+	ui.add_child(controller_cursor)
+	controller_cursor.setup(self)
 
 func _add_quick_icon(quick: Button, kind: String) -> void:
 	var icon := QuickIconScript.new()
@@ -539,6 +551,10 @@ func _style_modal_tree(node: Node) -> void:
 	for child in node.get_children(): _style_modal_tree(child)
 
 func _process(dt: float) -> void:
+	# Switching hint styles rebuilds the dock. Defer it until a cursor click or
+	# drag has finished so its pressed Control survives through release.
+	if _controller_pointer_active() and not controller_cursor.button_down and not get_viewport().gui_is_dragging():
+		if dock.controller_mode != controller_used: dock.set_controller_mode(controller_used)
 	if dock.is_open() != _dock_was_open:
 		_dock_was_open = dock.is_open()
 		_layout_ui()
@@ -642,8 +658,9 @@ func _refresh() -> void:
 		var selected_bg: Color = Color("253740") if complete else Color("315950")
 		b.add_theme_stylebox_override("normal",style(selected_bg if selected_number==i+1 else PANEL, tint if selected_number==i+1 else Color("35505a")))
 	if portrait_layout: _refresh_portrait_text()
-	controls_label.text = "D-PAD move   LB/RB number   A plant   X gear   Y advance   B back" if controller_used else "TAP square + number   DRAG number to plant   TAB gear   ESC menu"
+	controls_label.text = "D-PAD grid   RS cursor   R3 click   LB/RB number   A plant   X gear   Y advance" if controller_used else "TAP square + number   DRAG number to plant   TAB gear   ESC menu"
 	if controller_used and not armed_item.is_empty(): controls_label.text = "D-PAD / STICK choose tower     A attach module     B cancel"
+	if _controller_pointer_active(): controls_label.text = "RS cursor   R3 click   RT hold / drag   LT precision   Left stick / D-pad grid"
 	_update_family_focus()
 
 func _number_correct_counts() -> PackedInt32Array:
@@ -666,6 +683,8 @@ func _number_placement_allowed() -> bool:
 	return _number_input_allowed() and not dock.is_open() and run.phase in ["solve","battle"]
 
 func _pointer_activity(pointer_owner: int = -2) -> void:
+	if controller_cursor != null and controller_cursor.is_dispatching(): return
+	if _controller_pointer_active(): controller_cursor.deactivate()
 	if pointer_owner == -2 and _pointer_hint_owner != -2: _finish_pointer_activity.call_deferred()
 	if controller_used:
 		controller_used = false
@@ -729,9 +748,9 @@ func _update_attachment_preview() -> void:
 	var active: bool = not item.is_empty() and not menu_open and not manual_pause and not (dock.is_open() and dock.current_panel == "loot")
 	if world.has_method("set_attachment_targets"): world.set_attachment_targets(active)
 	var cell: int = -1
-	var pointer: Vector2 = get_viewport().get_mouse_position()
+	var pointer: Vector2 = controller_cursor.cursor_position if _controller_pointer_active() else get_viewport().get_mouse_position()
 	if active:
-		if controller_used and not dragging: cell = selected_cell
+		if controller_used and not _controller_pointer_active() and not dragging: cell = selected_cell
 		elif not (dock.is_open() and dock._shell.get_global_rect().has_point(pointer)): cell = world.cell_at_screen(pointer)
 	if not run.towers.has(cell): cell = -1
 	var allowed: bool = cell >= 0 and _can_attach_module(cell,item_id)
@@ -986,7 +1005,7 @@ func _help() -> void:
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		box.add_child(l)
 	box.add_child(label("CONTROLLER",12,MINT))
-	var input_label := label("D-pad / left stick: move  ·  LB / RB: number / inventory tab\nA: confirm / plant / attach  ·  X: gear  ·  Y: next phase  ·  B: back\nStart: pause / resume  ·  View: help / options",15,MUTED)
+	var input_label := label("Left stick / D-pad: grid or menu focus  ·  LB / RB: number / tab\nRight stick: free cursor  ·  R3: click  ·  Hold RT: click / drag\nHold LT: precise cursor  ·  Hover at list edges to scroll\nA: confirm / plant  ·  X: gear  ·  Y: next phase  ·  B: back\nStart: pause menu  ·  View: help",15,MUTED)
 	box.add_child(input_label)
 	var reduce := button("Reduced motion: " + ("ON" if reduced_motion else "OFF"),func(): reduced_motion=not reduced_motion; world.set_reduced_motion(reduced_motion); dock.set_reduced_motion(reduced_motion); _help())
 	box.add_child(reduce)
@@ -1063,6 +1082,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif event.keycode == KEY_DOWN: _move_selection(Vector2i.DOWN)
 
 func _input(event: InputEvent) -> void:
+	if controller_cursor != null and controller_cursor.owns_event(event): return
 	if event is InputEventKey and event.pressed:
 		_pointer_activity()
 	elif event is InputEventMouseButton:
@@ -1072,7 +1092,21 @@ func _input(event: InputEvent) -> void:
 		if event.pressed: _pointer_activity(event.index)
 		elif _pointer_hint_owner == event.index: _finish_pointer_activity.call_deferred()
 
+func _controller_pointer_active() -> bool:
+	return controller_cursor != null and controller_cursor.is_active()
+
+func _controller_pointer_activity() -> void:
+	_pointer_hint_owner = -2
+	var changed_mode: bool = not controller_used or not _controller_pointer_active()
+	if not _controller_pointer_active():
+		if board_input != null: board_input.cancel_pointer()
+		if seed_pointer != null: seed_pointer.cancel()
+		controller_cursor.activate()
+	controller_used = true
+	if changed_mode: _refresh()
+
 func _controller_activity() -> void:
+	_cursor_gesture_canceled = controller_cursor.deactivate() if controller_cursor != null else false
 	_pointer_hint_owner = -2
 	if board_input != null: board_input.cancel_pointer()
 	if seed_pointer != null and seed_pointer.is_active(): seed_pointer.cancel()
@@ -1131,6 +1165,11 @@ func _controller_confirm_ui() -> void:
 		focused.pressed.emit()
 
 func _controller_action(action: String) -> void:
+	var canceled_gesture: bool = _cursor_gesture_canceled
+	_cursor_gesture_canceled = false
+	if action == "cancel" and canceled_gesture:
+		_refresh()
+		return
 	if action == "pause":
 		controller.reset_navigation()
 		if _seed_editing: _show_menu(_seed_return_initial)
@@ -1175,6 +1214,7 @@ func _controller_action(action: String) -> void:
 		"advance": _advance()
 
 func _controller_disconnected() -> void:
+	if controller_cursor != null: controller_cursor.deactivate()
 	if has_active_run:
 		if not menu_open: _show_menu(false)
 		_toast("Controller disconnected. Game paused; reconnect or use touch / mouse.",false)

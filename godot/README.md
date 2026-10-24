@@ -4,7 +4,7 @@ A native Godot 4.7.2 version of the pre-Unity Sudoku Defense game. The same GDSc
 
 ## Play
 
-Open the published Godot edition in a current WebGL 2 browser. Version 0.3.6 adapts to portrait phones, wide landscape phones, and the Steam Deck screen. Portrait keeps the grid above a large number bar and four quick tabs; Tools reveals notes, hints, and reserve seeds. Gear, Chests, and Camp use voxel icons with short labels and counts. Gear and the workshop open beside the board; Chests opens a dedicated loot table. The launch page offers fullscreen and desktop downloads. For Windows, extract the ZIP and run `SudokuDefense.exe`. For Linux, extract the archive and run `sudoku-defense.x86_64`; the tar.gz also preserves execute permissions.
+Open the published Godot edition in a current WebGL 2 browser. Version 0.3.7 adapts to portrait phones, wide landscape phones, and the Steam Deck screen. Portrait keeps the grid above a large number bar and four quick tabs; Tools reveals notes, hints, and reserve seeds. Gear, Chests, and Camp use voxel icons with short labels and counts. Gear and the workshop open beside the board; Chests opens a dedicated loot table. The launch page offers fullscreen and desktop downloads. For Windows, extract the ZIP and run `SudokuDefense.exe`. For Linux, extract the archive and run `sudoku-defense.x86_64`; the tar.gz also preserves execute permissions.
 
 The browser export now projects the voxel board and animated chests with ordinary Godot CanvasItem polygons. This bypasses the entire spatial rendering pass that continued to show black on the affected phone, even with simpler materials. The same GDScript run drives tower growth, aiming, routes, equipment, combat, and loot. Desktop builds retain the native 3D scene; pass `--canvas-graphics` to use the browser's compatible voxel view on desktop. The older `--safe-graphics` option only simplifies desktop 3D materials and is no longer the web default. The exact phone still needs a retest; local framebuffer checks cannot establish its GPU behavior.
 
@@ -27,6 +27,10 @@ Campaign lets you choose puzzle and combat difficulty each round, for up to fift
 | Choose number / highlight matches | Number bar / 1–9 | LB / RB; A plants |
 | Plant / inspect / confirm | Tap square then number; drag number to square; tap tower to inspect | A |
 | Open gear | Tab / Gear | X |
+| Move a free cursor anywhere on screen | Mouse / touch | Right stick |
+| Cursor click / drag | Click / hold and drag | R3 or hold RT; release to drop |
+| Precise cursor movement | Move slowly | Hold LT while moving right stick |
+| Scroll a management list | Wheel / swipe | Hover cursor near the list's top or bottom edge |
 | Switch management tabs | Click Tower / Bag / Loot / Camp | LB / RB |
 | Advance phase from board | Enter / phase button | Y |
 | Back / cancel selection | Escape | B |
@@ -34,7 +38,9 @@ Campaign lets you choose puzzle and combat difficulty each round, for up to fift
 | Help | ? | View / Back |
 | Fullscreen | F | Use desktop/window controls |
 
-Native desktop builds read gamepad buttons and sticks directly through Godot. A mouse is not required for the main game loop. Menu and inventory focus stays visible as lists scroll; gameplay input is isolated from open panels. Selecting a number with the shoulders does not plant it until A confirms. Equipment supports selecting a module, choosing its target tower, then confirming with A. The seed entry offers an in-game number pad for controller-only replay setup. Losing the active controller pauses the run. Touch and mouse controls remain available alongside the controller.
+Native desktop builds read gamepad buttons and sticks directly through Godot. Version 0.3.7 adds a visible right-stick cursor for docked Deck play with an Xbox or other standard gamepad. Click with R3, or hold RT to drag numbers and modules; LT slows the cursor for precision. Hover near a scrollable list's top or bottom edge to scroll. Moving the left stick or D-pad returns to grid/menu navigation. Losing focus or disconnecting cancels any held drag safely. Touch and mouse can take over immediately.
+
+Menu and inventory focus stays visible as lists scroll; gameplay input is isolated from open panels. Selecting a number with the shoulders does not plant it until A confirms. Equipment also supports selecting a module, choosing its target tower, then confirming with A. The seed entry offers an in-game number pad for controller-only replay setup. Losing the active controller pauses the run.
 
 Since version 0.3.5, mouse-only touchscreen clicks are accepted, including emulated mouse events without a matching raw touch. Paired touch/mouse events share one gesture so a tap or drag acts once. Steamworks remains configured for **Left Mouse Click Emulation**; the project explicitly enables Godot mouse-from-touch emulation for menus. The automated input checks do not replace a physical Steam Deck test.
 
@@ -62,6 +68,8 @@ godot --headless --path godot --script res://tests/test_family_workshop.gd -- --
 godot --headless --path godot --script res://tests/test_loot_table.gd
 godot --headless --path godot --script res://tests/test_loot_gear_flow.gd
 godot --headless --path godot --script res://tests/test_loot_gear_flow.gd -- --canvas-graphics
+godot --headless --path godot --script res://tests/test_controller_cursor.gd
+godot --headless --path godot --script res://tests/test_controller_cursor.gd -- --canvas-graphics
 python3 godot/scripts/build_exports.py --godot /path/to/godot
 # On Linux with Xvfb/Mesa installed, require actual framebuffer validation too:
 python3 godot/scripts/build_exports.py --godot /path/to/godot --render-check
