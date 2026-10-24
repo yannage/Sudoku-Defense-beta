@@ -94,15 +94,15 @@ func _build_world() -> void:
 	_environment.background_color = Color("09151d")
 	_environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	_environment.ambient_light_color = Color("91b7c1")
-	_environment.ambient_light_energy = 0.75
-	_environment.tonemap_mode = Environment.TONE_MAPPER_LINEAR if VoxelMaterial.safe_profile() else Environment.TONE_MAPPER_FILMIC
+	_environment.ambient_light_energy = 0.22
+	_environment.tonemap_mode = Environment.TONE_MAPPER_LINEAR
 	var environment_node: WorldEnvironment = WorldEnvironment.new()
 	environment_node.environment = _environment
 	add_child(environment_node)
 	var sun: DirectionalLight3D = DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-55, -35, 0)
 	sun.light_color = Color("fff0d6")
-	sun.light_energy = 1.7
+	sun.light_energy = 0.65
 	sun.shadow_enabled = not VoxelMaterial.safe_profile()
 	sun.directional_shadow_max_distance = 28.0
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
@@ -110,7 +110,7 @@ func _build_world() -> void:
 	var rim: DirectionalLight3D = DirectionalLight3D.new()
 	rim.rotation_degrees = Vector3(-30, 135, 0)
 	rim.light_color = Color("70c9d0")
-	rim.light_energy = 0.55
+	rim.light_energy = 0.12
 	add_child(rim)
 	camera = Camera3D.new()
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
@@ -130,14 +130,19 @@ func _build_world() -> void:
 		_box(_world, Vector3(side * 4.76, -0.07, 0), Vector3(0.12, 0.13, 9.57), Color("608b86"))
 		_box(_world, Vector3(0, -0.07, side * 4.76), Vector3(9.57, 0.13, 0.12), Color("608b86"))
 		for q: int in range(-4, 5):
-			_box(_world, Vector3(side * 4.84, -0.43, q), Vector3(0.045, 0.09, 0.42), Color("52c9ba"), true)
-			_box(_world, Vector3(q, -0.43, side * 4.84), Vector3(0.42, 0.09, 0.045), Color("52c9ba"), true)
+			_box(_world, Vector3(side * 4.84, -0.43, q), Vector3(0.045, 0.09, 0.42), Color("367d73"), true)
+			_box(_world, Vector3(q, -0.43, side * 4.84), Vector3(0.42, 0.09, 0.045), Color("367d73"), true)
 	_match_accent = VoxelMaterial.create(Color("357991"), true)
 	for i: int in range(81):
 		var pos: Vector3 = _cell_pos(i)
-		var material: Material = VoxelMaterial.create(Color("f4f3e9"), true)
+		var material: Material = VoxelMaterial.create(Color("a8b8a6"))
+		if material is StandardMaterial3D:
+			(material as StandardMaterial3D).roughness = 0.96
+			(material as StandardMaterial3D).metallic_specular = 0.12
 		_tile_mats.append(material)
-		var tile: MeshInstance3D = _box(_world, pos + Vector3(0, -0.075, 0), Vector3(0.97, 0.12, 0.97), Color.WHITE)
+		# A recessed dark plinth gives each matte tile a readable edge in battle.
+		_box(_world, pos + Vector3(0, -0.125, 0), Vector3(0.97, 0.035, 0.97), Color("243b3f"))
+		var tile: MeshInstance3D = _box(_world, pos + Vector3(0, -0.065, 0), Vector3(0.95, 0.10, 0.95), Color.WHITE)
 		tile.material_override = material
 		_tiles.append(tile)
 		var label: Label3D = Label3D.new()
@@ -181,7 +186,7 @@ func _build_world() -> void:
 	for edge: MeshInstance3D in selection_trim.get_children(): edge.material_override = _selection_accent
 	for x: float in [-0.415, 0.415]:
 		for z: float in [-0.415, 0.415]:
-			_box(_selection, Vector3(x, 0.14, z), Vector3(0.095, 0.08, 0.095), Color("ffe6a6"), true)
+			_box(_selection, Vector3(x, 0.14, z), Vector3(0.095, 0.08, 0.095), Color("d3b277"), true)
 	_selection.visible = false
 	_drop_preview = Node3D.new()
 	_world.add_child(_drop_preview)
@@ -212,7 +217,7 @@ func _build_world() -> void:
 	for x: float in [-4.65, 4.65]:
 		for z: float in [-4.65, 4.65]:
 			_box(_world, Vector3(x, -0.03, z), Vector3(0.38, 0.26, 0.38), Color("203c44"))
-			_box(_world, Vector3(x, 0.12, z), Vector3(0.2, 0.05, 0.2), Color("ffbf78"), true)
+			_box(_world, Vector3(x, 0.12, z), Vector3(0.2, 0.05, 0.2), Color("b68c55"), true)
 	# Small star-like cubes suggest a suspended island, without a noisy texture.
 	for i: int in range(36):
 		var p: Vector3 = Vector3(_rng.randf_range(-15, 15), _rng.randf_range(-3.5, -1.4), _rng.randf_range(-13, 13))
@@ -448,12 +453,12 @@ func _update_palette(blend: float) -> void:
 		var row: int = i / 9
 		var col: int = i % 9
 		var block_even: bool = (row / 3 + col / 3) % 2 == 0
-		var flat: Color = Color("f4f3e9") if block_even else Color("e4eee8")
-		var dark: Color = Color("153940") if block_even else Color("1b4449")
+		var flat: Color = Color("a8b8a6") if block_even else Color("99aca0")
+		var dark: Color = Color("142b30") if block_even else Color("193439")
 		if i < givens.size() and bool(givens[i]):
 			dark = dark.lightened(0.025)
 		if selected_cell >= 0 and (row == selected_cell / 9 or col == selected_cell % 9):
-			flat = flat.lerp(Color("97cebc"), 0.32)
+			flat = flat.lerp(Color("729e8c"), 0.25)
 			dark = dark.lightened(0.045)
 		# Matching digits share a blue fill and border, including clues and towers.
 		# The active square remains gold so scanning does not hide the cursor.
@@ -461,16 +466,16 @@ func _update_palette(blend: float) -> void:
 		if _family_focus > 0: matching = towers.has(i) and int(towers[i].number) == _family_focus
 		_match_frames[i].visible = matching
 		if matching:
-			flat = Color("c3e3ed")
-			dark = Color("285b6e")
+			flat = Color("8fb6bf")
+			dark = Color("244451")
 		if i == selected_cell:
-			flat = Color("ffe6a6")
-			dark = Color("326b65")
+			flat = Color("c7b27c")
+			dark = Color("28534e")
 		VoxelMaterial.set_color(_tile_mats[i], flat.lerp(dark, blend))
-		var number_color: Color = Color("17343f").lerp(Color("c2d8d1"), blend)
+		var number_color: Color = Color("132e35").lerp(Color("839e95"), blend)
 		if towers.has(i):
 			var tower: Dictionary = towers[i]
-			number_color = _family(int(tower.get("number", 1))).darkened(0.55).lerp(_family(int(tower.get("number", 1))).lightened(0.15), blend)
+			number_color = _family(int(tower.get("number", 1))).darkened(0.72).lerp(_family(int(tower.get("number", 1))).lightened(0.15), blend)
 			if bool(tower.get("illegal", false)):
 				number_color = Color("9d2440").lerp(Color("ff9c9c"), blend)
 		_labels[i].modulate = number_color
@@ -497,9 +502,9 @@ func _update_palette(blend: float) -> void:
 	var match_color: Color = _family(_family_focus).lightened(0.18) if _family_focus > 0 else Color("77d8ee")
 	VoxelMaterial.set_color(_match_accent, Color("357991").lerp(match_color, blend))
 	for material: Material in _grid_mats:
-		VoxelMaterial.set_color(material, Color("193b46").lerp(Color("6ca69c"), blend))
+		VoxelMaterial.set_color(material, Color("29453f").lerp(Color("426b66"), blend))
 	for material: Material in _fine_grid_mats:
-		VoxelMaterial.set_color(material, Color("83989a").lerp(Color("355b61"), blend))
+		VoxelMaterial.set_color(material, Color("6a8078").lerp(Color("29474c"), blend))
 	if _selection_accent != null:
 		VoxelMaterial.set_color(_selection_accent, Color("187568").lerp(Color("8dffce"), blend))
 
@@ -567,8 +572,10 @@ func _build_tower(cell: int, tower: Dictionary, signature: String) -> Dictionary
 	_box(seed_node, Vector3(0.05, 0.15, 0), Vector3(0.10, 0.04, 0.06), color.lightened(0.2))
 	var body: Node3D = Node3D.new()
 	node.add_child(body)
+	# Stable contact shading anchors the stack even when real-time shadows are off.
+	_box(body, Vector3(0.025, 0.002, 0.025), Vector3(0.76, 0.012, 0.76), Color("0c1e23"), true)
 	_box(body, Vector3(0, 0.07, 0), Vector3(0.64, 0.12, 0.64), Color("3b6264"))
-	_box(body, Vector3(0, 0.15, 0), Vector3(0.49, 0.08, 0.49), Color("718e86"))
+	_box(body, Vector3(0, 0.15, 0), Vector3(0.49, 0.08, 0.49), Color("566f65"))
 	for x: float in [-0.22, 0.22]:
 		for z: float in [-0.22, 0.22]:
 			_box(body, Vector3(x, 0.12, z), Vector3(0.095, 0.18, 0.095), Color("36545b"))
@@ -586,8 +593,8 @@ func _build_tower(cell: int, tower: Dictionary, signature: String) -> Dictionary
 	var head: Node3D = Node3D.new()
 	body.add_child(head)
 	head.position.y = head_y
-	_box(head, Vector3.ZERO, Vector3(0.38, 0.2, 0.31), Color("759795"))
-	_box(head, Vector3(0, 0.125, 0), Vector3(0.25, 0.06, 0.23), color)
+	_box(head, Vector3.ZERO, Vector3(0.38, 0.2, 0.31), Color("526f71"))
+	_box(head, Vector3(0, 0.125, 0), Vector3(0.25, 0.06, 0.23), color.darkened(0.12))
 	var barrel: Node3D = Node3D.new()
 	head.add_child(barrel)
 	barrel.position.z = 0.25
@@ -833,19 +840,38 @@ func _start_seed_planting(cell: int, number: int) -> void:
 	var node := Node3D.new()
 	_fx_root.add_child(node)
 	node.position = _cell_pos(cell)
+	var shadow := Node3D.new()
+	node.add_child(shadow)
+	_box(shadow, Vector3.ZERO, Vector3(1.0,0.008,0.72), Color("38483d"), true)
+	_box(shadow, Vector3.ZERO, Vector3(0.72,0.009,1.0), Color("38483d"), true)
+	var socket := Node3D.new()
+	node.add_child(socket)
+	_box(socket, Vector3(0,0.004,0), Vector3(0.48,0.012,0.34), Color("705539"), true)
+	_box(socket, Vector3(0,0.005,0), Vector3(0.34,0.012,0.48), Color("705539"), true)
+	_box(socket, Vector3(0,0.012,0), Vector3(0.34,0.012,0.28), Color("2b241e"), true)
 	var seed := Node3D.new()
 	node.add_child(seed)
-	_box(seed, Vector3.ZERO, Vector3(0.24,0.20,0.29), Color("8c633d"))
-	_box(seed, Vector3(0.0,0.108,0.0), Vector3(0.09,0.028,0.26), Color("edc581"))
-	_box(seed, Vector3(0.035,0.14,-0.07), Vector3(0.10,0.07,0.11), _family(number).darkened(0.10), true)
+	# A stepped walnut silhouette, pale seam, and colored bud remain distinct
+	# from both the muted square and the dark planting socket.
+	_box(seed, Vector3.ZERO, Vector3(0.32,0.25,0.36), Color("634327"))
+	_box(seed, Vector3(0,0.045,0), Vector3(0.25,0.22,0.40), Color("a3733e"))
+	_box(seed, Vector3(0,0.165,0), Vector3(0.065,0.035,0.32), Color("d4ab66"))
+	_box(seed, Vector3(0.05,0.19,-0.09), Vector3(0.10,0.07,0.11), _family(number).darkened(0.30))
 	var soil := Node3D.new()
 	node.add_child(soil)
-	for offset: Vector3 in [Vector3(-0.095,0.025,-0.05),Vector3(0.09,0.023,0.035),Vector3(-0.015,0.024,0.10),Vector3(0.025,0.026,-0.105)]:
-		_box(soil,offset,Vector3(0.105,0.04,0.09),Color("827257"))
+	for index: int in range(6):
+		_box(soil,Vector3.ZERO,Vector3.ONE,Color("765536") if index % 2 == 0 else Color("443527"))
+	var sprout := Node3D.new()
+	node.add_child(sprout)
+	sprout.position = Vector3(0.29,0.05,-0.30)
+	_box(sprout, Vector3.ZERO, Vector3(0.14,0.08,0.14), Color("997f53"))
+	_box(sprout, Vector3(0,0.07,0), Vector3(0.035,0.12,0.035), Color("4c8d65"))
+	_box(sprout, Vector3(-0.05,0.12,0), Vector3(0.12,0.04,0.06), _family(number))
+	_box(sprout, Vector3(0.05,0.15,0), Vector3(0.10,0.04,0.06), _family(number).lightened(0.2))
 	var pulse := Node3D.new()
 	node.add_child(pulse)
-	_square_frame(pulse,1.0,0.022,_family(number).darkened(0.25),0.026)
-	_seed_plantings[cell] = {"age":0.0,"number":number,"node":node,"seed":seed,"soil":soil,"pulse":pulse}
+	_square_frame(pulse,1.0,0.022,_family(number).darkened(0.40),0.026)
+	_seed_plantings[cell] = {"age":0.0,"number":number,"node":node,"seed":seed,"soil":soil,"pulse":pulse,"shadow":shadow,"socket":socket,"sprout":sprout}
 	_animate_seed_planting(cell)
 	if _tower_nodes.has(cell): (_tower_nodes[cell].seed as Node3D).visible = false
 
@@ -854,12 +880,29 @@ func _animate_seed_planting(cell: int) -> void:
 	var age: float = float(entry.age)
 	var seed: Node3D = entry.seed
 	seed.position = SeedPlanting.seed_offset(age)
-	seed.scale = Vector3.ONE * maxf(0.001,SeedPlanting.seed_scale(age))
+	seed.scale = SeedPlanting.seed_stretch(age) * maxf(0.001,SeedPlanting.seed_scale(age))
 	seed.visible = age < SeedPlanting.REVEAL_AT
-	seed.rotation = Vector3(0.0,lerpf(-0.75,0.2,clampf(age/SeedPlanting.LAND_AT,0.0,1.0)),0.0)
+	seed.rotation = SeedPlanting.seed_rotation(age)
+	var shadow: Node3D = entry.shadow
+	var shadow_width: float = SeedPlanting.shadow_scale(age)
+	shadow.visible = shadow_width > 0.005
+	shadow.position = Vector3(seed.position.x * 0.45 + 0.045,0.001,seed.position.z * 0.45 + 0.055)
+	shadow.scale = Vector3(maxf(0.001,shadow_width),1.0,maxf(0.001,shadow_width))
+	var socket: Node3D = entry.socket
+	var socket_width: float = SeedPlanting.socket_scale(age)
+	socket.visible = socket_width > 0.005
+	socket.scale = Vector3(maxf(0.001,socket_width),1.0,maxf(0.001,socket_width))
 	var soil: Node3D = entry.soil
-	soil.visible = age >= SeedPlanting.LAND_AT and age < SeedPlanting.REVEAL_END
-	soil.scale = Vector3.ONE * maxf(0.001,SeedPlanting.soil_scale(age))
+	soil.visible = age >= SeedPlanting.LAND_AT and age < 0.52
+	for index: int in range(soil.get_child_count()):
+		var chunk: Node3D = soil.get_child(index)
+		chunk.position = SeedPlanting.soil_offset(age,index)
+		chunk.scale = Vector3(0.09,0.065,0.08) * maxf(0.001,SeedPlanting.soil_scale(age))
+		chunk.rotation = Vector3(float(index) * 0.4 + age * 4.0, float(index), age * 3.0)
+	var sprout: Node3D = entry.sprout
+	var growth: float = SeedPlanting.sprout_scale(age)
+	sprout.visible = growth > 0.005
+	sprout.scale = Vector3(maxf(0.001,sqrt(growth)),maxf(0.001,growth),maxf(0.001,sqrt(growth)))
 	var pulse: Node3D = entry.pulse
 	var width: float = SeedPlanting.impact_scale(age)
 	var weight: float = maxf(0.001,SeedPlanting.impact_alpha(age))
@@ -997,7 +1040,11 @@ func _line_box(parent: Node3D, a: Vector3, b: Vector3, width: float, color: Colo
 func _material(color: Color, unshaded: bool = false) -> Material:
 	var key: String = color.to_html() + ("u" if unshaded else "s")
 	if not _materials.has(key):
-		_materials[key] = VoxelMaterial.create(color, unshaded)
+		var material: Material = VoxelMaterial.create(color, unshaded)
+		if material is StandardMaterial3D:
+			(material as StandardMaterial3D).roughness = 0.96
+			(material as StandardMaterial3D).metallic_specular = 0.12
+		_materials[key] = material
 	return _materials[key]
 
 func _cell_pos(cell: int) -> Vector3:

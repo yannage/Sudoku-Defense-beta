@@ -255,23 +255,30 @@ func _draw_island() -> void:
 func _draw_tiles() -> void:
 	for cell: int in range(81):
 		var alternate: bool = ((cell%9)/3 + (cell/9)/3)%2 == 0
-		var paper: Color = Color("f4f3e9") if alternate else Color("e4eee8")
-		var tactical: Color = Color("20474c") if alternate else Color("193e44")
+		var paper: Color = Color("a8b8a6") if alternate else Color("99aca0")
+		var tactical: Color = Color("142b30") if alternate else Color("193439")
 		if run.givens[cell]: tactical = tactical.lightened(0.025)
 		if selected_cell >= 0 and (cell%9 == selected_cell%9 or cell/9 == selected_cell/9):
-			paper = paper.lerp(Color("97cebc"),0.32)
-			tactical = tactical.lightened(0.045)
+			paper = paper.lerp(Color("729e8c"),0.25)
+			tactical = tactical.lightened(0.025)
 		var matching: bool = selected_number > 0 and int(run.board[cell]) == selected_number
 		if _family_focus > 0: matching = run.towers.has(cell) and int(run.towers[cell].number) == _family_focus
 		if matching:
-			paper = Color("c3e3ed")
-			tactical = Color("285b6e")
+			paper = Color("8fb6bf")
+			tactical = Color("244451")
 		if cell == selected_cell:
-			paper = Color("ffe6a6")
-			tactical = Color("326b65")
+			paper = Color("c7b27c")
+			tactical = Color("28534e")
 		var pos: Vector3 = _cell_pos(cell)
 		var color: Color = paper.lerp(tactical,_blend)
 		draw_colored_polygon(_quad(pos,0.492,0.0),color)
+		# A restrained bevel anchors each tile; avoid a white luminous tabletop.
+		var bevel: PackedVector2Array = _quad(pos,0.465,0.008)
+		var edge_width: float = maxf(1.0,_scale*0.018)
+		draw_line(bevel[0],bevel[1],color.lightened(0.055),edge_width)
+		draw_line(bevel[0],bevel[3],color.lightened(0.035),edge_width)
+		draw_line(bevel[1],bevel[2],color.darkened(0.12),edge_width)
+		draw_line(bevel[2],bevel[3],color.darkened(0.16),edge_width)
 		if _attachment_targets and run.towers.has(cell):
 			var full: bool = run.towers[cell].attachments.size() >= 5
 			_polyline_closed(_quad(pos,0.385,0.045),Color("44615f") if full else Color("5b9d88"),maxf(1.0,_scale*0.02))
@@ -283,7 +290,7 @@ func _draw_tiles() -> void:
 	for line: int in range(10):
 		var boundary: float = float(line)-4.5
 		var major: bool = line%3 == 0
-		var grid: Color = Color("193b46").lerp(Color("6ca69c"),_blend) if major else Color("83989a").lerp(Color("355b61"),_blend)
+		var grid: Color = Color("29453f").lerp(Color("426b66"),_blend) if major else Color("6a8078").lerp(Color("29474c"),_blend)
 		var width: float = maxf(2.6,_scale*0.075) if major else maxf(1.0,_scale*0.026)
 		draw_line(project_point(Vector3(boundary,0.01,-4.5)),project_point(Vector3(boundary,0.01,4.5)),grid,width,true)
 		draw_line(project_point(Vector3(-4.5,0.01,boundary)),project_point(Vector3(4.5,0.01,boundary)),grid,width,true)
@@ -296,7 +303,7 @@ func _draw_digits() -> void:
 		if planted and _blend > 0.60: continue
 		var color: Color = Color("17343f").lerp(Color("c2d8d1"),_blend)
 		if planted:
-			color = FAMILY_COLORS[number-1].darkened(0.55).lerp(FAMILY_COLORS[number-1],_blend)
+			color = FAMILY_COLORS[number-1].darkened(0.72).lerp(FAMILY_COLORS[number-1],_blend)
 			if bool(run.towers[cell].illegal): color = Color("9d2440").lerp(Color("ff9c9c"),_blend)
 		var reveal_scale: float = 1.0
 		if _seed_plantings.has(cell):
@@ -313,30 +320,64 @@ func _draw_seed_ground() -> void:
 	for key: Variant in _seed_plantings:
 		var planting: Dictionary = _seed_plantings[key]
 		var age: float = float(planting.age)
-		var alpha: float = SeedPlanting.impact_alpha(age)
-		if alpha <= 0.001: continue
 		var pos: Vector3 = _cell_pos(int(key))
-		var family: Color = FAMILY_COLORS[clampi(int(planting.number)-1,0,8)]
-		var radius: float = 0.12 + 0.25 * SeedPlanting.impact_scale(age)
-		_polyline_closed(_quad(pos,radius,0.025),Color(family.darkened(0.18),alpha*0.78),maxf(1.2,_scale*0.025))
-		# Four tiny soil blocks stay inside the square, behind the revealed digit.
-		for side: Vector2 in [Vector2(-1,-1),Vector2(1,-1),Vector2(-1,1),Vector2(1,1)]:
-			var offset: Vector3 = Vector3(side.x,0,side.y)*(0.09+0.11*SeedPlanting.impact_scale(age))
-			draw_colored_polygon(_quad(pos+offset,0.035,0.018),Color(Color("896c4b"),alpha*0.72))
+		var opening: float = SeedPlanting.socket_scale(age)
+		if opening * _scale * 0.165 >= 0.5:
+			# Skip the subpixel start/end of the socket: tiny translated polygons
+			# lose area at screen coordinates and cannot be triangulated reliably.
+			# A dark cut in the tile gives the seed a destination and visible depth.
+			draw_colored_polygon(_quad(pos,0.225*opening,0.015),Color("685540"))
+			draw_colored_polygon(_quad(pos+Vector3(0,0,-0.018),0.165*opening,0.018),Color("26342d"))
+		var shadow: float = SeedPlanting.shadow_scale(age)
+		if shadow * _scale * 0.50 >= 0.5 and age < SeedPlanting.REVEAL_AT:
+			var offset: Vector3 = SeedPlanting.seed_offset(age)
+			# The cast shadow contracts into the socket as the seed approaches.
+			var shadow_pos: Vector3 = pos+Vector3(offset.x*0.45+0.045,0,offset.z*0.45+0.055)
+			draw_colored_polygon(_quad(shadow_pos,0.50*shadow,0.022),Color(0.045,0.065,0.055,0.32+0.25*clampf(age/SeedPlanting.LAND_AT,0.0,1.0)))
+		var alpha: float = SeedPlanting.impact_alpha(age)
+		if alpha > 0.001:
+			var radius: float = 0.12 + 0.25 * SeedPlanting.impact_scale(age)
+			_polyline_closed(_quad(pos,radius,0.025),Color(Color("4e725b"),alpha*0.60),maxf(1.0,_scale*0.020))
 
 func _draw_planting_seeds() -> void:
 	for key: Variant in _seed_plantings:
 		var planting: Dictionary = _seed_plantings[key]
 		var age: float = float(planting.age)
+		var origin: Vector3 = _cell_pos(int(key))
 		var amount: float = SeedPlanting.seed_scale(age)
-		if amount <= 0.001: continue
-		var pos: Vector3 = _cell_pos(int(key)) + SeedPlanting.seed_offset(age)
 		var family: Color = FAMILY_COLORS[clampi(int(planting.number)-1,0,8)]
-		# Offset and yaw remain visible in the straight-down solve view.
-		var angle: float = lerpf(-0.75,0.2,clampf(age/SeedPlanting.LAND_AT,0.0,1.0))
-		_cube(pos,Vector3(0.24,0.20,0.29)*amount,Color("8c633d"),angle)
-		_cube(pos+Vector3(0,0.108,0)*amount,Vector3(0.09,0.028,0.26)*amount,Color("edc581"),angle)
-		_cube(pos+Vector3(0.035,0.14,-0.07)*amount,Vector3(0.10,0.07,0.11)*amount,family.darkened(0.10),angle)
+		if amount > 0.001:
+			var pos: Vector3 = origin + SeedPlanting.seed_offset(age)
+			var rotation: Vector3 = SeedPlanting.seed_rotation(age)
+			var tilt: Basis = Basis.from_euler(rotation)
+			var stretch: Vector3 = SeedPlanting.seed_stretch(age)*amount
+			# Pitch exposes the chunky side faces even in the straight-down solve view.
+			_planting_cube(pos,Vector3(0.32,0.25,0.36)*stretch,Color("634327"),tilt)
+			_planting_cube(pos+tilt*(Vector3(0,0.045,0)*stretch),Vector3(0.25,0.22,0.40)*stretch,Color("a3733e"),tilt)
+			_planting_cube(pos+tilt*(Vector3(0,0.165,0)*stretch),Vector3(0.065,0.035,0.32)*stretch,Color("d4ab66"),tilt)
+			_planting_cube(pos+tilt*(Vector3(0.05,0.19,-0.09)*stretch),Vector3(0.10,0.07,0.11)*stretch,family.darkened(0.30),tilt)
+		var soil: float = SeedPlanting.soil_scale(age)
+		if soil > 0.001:
+			for index: int in range(6):
+				var piece: Vector3 = origin+SeedPlanting.soil_offset(age,index)
+				var spin: Basis = Basis.from_euler(Vector3(age*3.0,index*0.8,age*2.0))
+				_planting_cube(piece,Vector3(0.095,0.065,0.085)*soil,Color("765536") if index%2 == 0 else Color("443527"),spin)
+
+func _planting_cube(center: Vector3, size: Vector3, color: Color, tilt: Basis) -> void:
+	if size.x <= 0.0001 or size.y <= 0.0001 or size.z <= 0.0001: return
+	var half: Vector3 = size*0.5
+	var faces: Array = [
+		[Vector3.UP,[Vector3(-half.x,half.y,-half.z),Vector3(half.x,half.y,-half.z),Vector3(half.x,half.y,half.z),Vector3(-half.x,half.y,half.z)],color.lightened(0.055)],
+		[Vector3.DOWN,[Vector3(-half.x,-half.y,-half.z),Vector3(-half.x,-half.y,half.z),Vector3(half.x,-half.y,half.z),Vector3(half.x,-half.y,-half.z)],color.darkened(0.40)],
+		[Vector3(0,0,1),[Vector3(-half.x,-half.y,half.z),Vector3(-half.x,half.y,half.z),Vector3(half.x,half.y,half.z),Vector3(half.x,-half.y,half.z)],color.darkened(0.19)],
+		[Vector3(0,0,-1),[Vector3(half.x,-half.y,-half.z),Vector3(half.x,half.y,-half.z),Vector3(-half.x,half.y,-half.z),Vector3(-half.x,-half.y,-half.z)],color.darkened(0.29)],
+		[Vector3(1,0,0),[Vector3(half.x,-half.y,half.z),Vector3(half.x,half.y,half.z),Vector3(half.x,half.y,-half.z),Vector3(half.x,-half.y,-half.z)],color.darkened(0.34)],
+		[Vector3(-1,0,0),[Vector3(-half.x,-half.y,-half.z),Vector3(-half.x,half.y,-half.z),Vector3(-half.x,half.y,half.z),Vector3(-half.x,-half.y,half.z)],color.darkened(0.24)]
+	]
+	for face: Array in faces:
+		var corners: Array = []
+		for corner: Vector3 in face[1]: corners.append(tilt*corner)
+		_face(center,corners,tilt*Vector3(face[0]),Color(face[2]),0.0)
 
 func _draw_tower_badges() -> void:
 	if _blend <= 0.60: return
@@ -459,18 +500,19 @@ func _draw_tower(cell: int, tower: Dictionary) -> void:
 	if growth < 0.75:
 		var seed: Vector3 = pos+Vector3(0.28,0.025,-0.30)
 		var size: float = 1.0-growth
-		if _seed_plantings.has(cell): size *= SeedPlanting.number_alpha(float(_seed_plantings[cell].age))
-		_cube(seed,Vector3(0.15,0.07,0.15)*size,Color("896c4b"))
-		_cube(seed+Vector3(0,0.07,0),Vector3(0.035,0.13,0.035)*size,Color("438b70"))
-		_cube(seed+Vector3(-0.06,0.11,0),Vector3(0.13,0.04,0.06)*size,family.darkened(0.16),-0.5)
-		_cube(seed+Vector3(0.055,0.14,0),Vector3(0.11,0.04,0.06)*size,family,0.5)
+		var sprout: float = SeedPlanting.sprout_scale(float(_seed_plantings[cell].age)) if _seed_plantings.has(cell) else 1.0
+		var sprout_size: Vector3 = Vector3(sqrt(sprout),sprout,sqrt(sprout))*size
+		_cube(seed,Vector3(0.15,0.07,0.15)*sprout_size,Color("896c4b"))
+		_cube(seed+Vector3(0,0.07,0)*sprout_size,Vector3(0.035,0.13,0.035)*sprout_size,Color("438b70"))
+		_cube(seed+Vector3(-0.06,0.11,0)*sprout_size,Vector3(0.13,0.04,0.06)*sprout_size,family.darkened(0.16),-0.5)
+		_cube(seed+Vector3(0.055,0.14,0)*sprout_size,Vector3(0.11,0.04,0.06)*sprout_size,family,0.5)
 	if growth < 0.015: return
 	var width: float = lerpf(0.45,1.0,growth)
 	var scale3: Vector3 = Vector3(width,growth,width)
 	var shade: PackedVector2Array = _quad(pos+Vector3(0.05,0,0.07),0.35*width,0.022)
-	draw_colored_polygon(shade,Color(0.01,0.035,0.04,0.30*_blend))
+	draw_colored_polygon(shade,Color(0.01,0.025,0.03,0.48*_blend))
 	_tower_box(pos,Vector3(0,0.07,0),Vector3(0.64,0.12,0.64),Color("3b6566"),scale3)
-	_tower_box(pos,Vector3(0,0.15,0),Vector3(0.49,0.08,0.49),Color("8da39a"),scale3)
+	_tower_box(pos,Vector3(0,0.15,0),Vector3(0.49,0.08,0.49),Color("718e86"),scale3)
 	for x: float in [-0.22,0.22]:
 		for z: float in [-0.22,0.22]:
 			_tower_box(pos,Vector3(x,0.10,z),Vector3(0.12,0.18,0.12),Color("315056"),scale3)
@@ -501,7 +543,7 @@ func _draw_tower(cell: int, tower: Dictionary) -> void:
 	var angle: float = atan2(aim.x,aim.y) if aim.length_squared() > 0.00001 else 0.0
 	var head: Vector3 = pos+Vector3(0,height*growth,0)
 	var kick: float = float(_recoil.get(cell,0.0))*0.14
-	_cube(head,Vector3(0.38,0.20,0.31)*scale3,Color("8a9f99"),angle)
+	_cube(head,Vector3(0.38,0.20,0.31)*scale3,Color("759795"),angle)
 	_cube(head+Vector3(0,0.12*growth,0),Vector3(0.25,0.06,0.23)*scale3,family,angle)
 	var barrel: Vector3 = _rotate(Vector3(0,0.015,(0.25-kick)*width),angle)
 	_cube(head+barrel,Vector3(0.12,0.12,0.39)*scale3,Color("334f5c"),angle)
@@ -686,11 +728,11 @@ func _cube(center: Vector3, size: Vector3, color: Color, yaw: float = 0.0) -> vo
 	var half: Vector3 = size*0.5
 	# Top plus camera-facing sides. Fixed face lighting preserves the voxel look
 	# without asking a mobile browser to compile or execute spatial materials.
-	_face(center,[Vector3(-half.x,half.y,-half.z),Vector3(half.x,half.y,-half.z),Vector3(half.x,half.y,half.z),Vector3(-half.x,half.y,half.z)],Vector3.UP,color.lightened(0.12),yaw)
-	_face(center,[Vector3(-half.x,-half.y,half.z),Vector3(-half.x,half.y,half.z),Vector3(half.x,half.y,half.z),Vector3(half.x,-half.y,half.z)],Vector3(0,0,1),color.darkened(0.12),yaw)
-	_face(center,[Vector3(half.x,-half.y,-half.z),Vector3(half.x,half.y,-half.z),Vector3(-half.x,half.y,-half.z),Vector3(-half.x,-half.y,-half.z)],Vector3(0,0,-1),color.darkened(0.23),yaw)
-	_face(center,[Vector3(half.x,-half.y,half.z),Vector3(half.x,half.y,half.z),Vector3(half.x,half.y,-half.z),Vector3(half.x,-half.y,-half.z)],Vector3(1,0,0),color.darkened(0.24),yaw)
-	_face(center,[Vector3(-half.x,-half.y,-half.z),Vector3(-half.x,half.y,-half.z),Vector3(-half.x,half.y,half.z),Vector3(-half.x,-half.y,half.z)],Vector3(-1,0,0),color.darkened(0.18),yaw)
+	_face(center,[Vector3(-half.x,half.y,-half.z),Vector3(half.x,half.y,-half.z),Vector3(half.x,half.y,half.z),Vector3(-half.x,half.y,half.z)],Vector3.UP,color.lightened(0.045),yaw)
+	_face(center,[Vector3(-half.x,-half.y,half.z),Vector3(-half.x,half.y,half.z),Vector3(half.x,half.y,half.z),Vector3(half.x,-half.y,half.z)],Vector3(0,0,1),color.darkened(0.20),yaw)
+	_face(center,[Vector3(half.x,-half.y,-half.z),Vector3(half.x,half.y,-half.z),Vector3(-half.x,half.y,-half.z),Vector3(-half.x,-half.y,-half.z)],Vector3(0,0,-1),color.darkened(0.30),yaw)
+	_face(center,[Vector3(half.x,-half.y,half.z),Vector3(half.x,half.y,half.z),Vector3(half.x,half.y,-half.z),Vector3(half.x,-half.y,-half.z)],Vector3(1,0,0),color.darkened(0.34),yaw)
+	_face(center,[Vector3(-half.x,-half.y,-half.z),Vector3(-half.x,half.y,-half.z),Vector3(-half.x,half.y,half.z),Vector3(-half.x,-half.y,half.z)],Vector3(-1,0,0),color.darkened(0.25),yaw)
 
 func _face(center: Vector3, corners: Array, normal: Vector3, color: Color, yaw: float) -> void:
 	var facing: Vector3 = _rotate(normal,yaw)
