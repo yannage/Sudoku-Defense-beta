@@ -21,7 +21,7 @@ Campaign lets you choose puzzle and combat difficulty each round, for up to fift
 
 Version 0.3.8 gives deployment a voxel diorama and illustrated mode tiles, separates pause actions from new-run setup, and replaces large equipment drag cards with compact voxel icons and socket pips. Management panels share beveled frames, icon tabs, and warm upgrade actions.
 
-Version 0.3.9 revises the player-facing instructions, item descriptions, upgrade explanations, and run summaries. Run, round, Gear, modules, and chests now use consistent names. Slot rewards and corruption describe the actual simulation.
+Version 0.3.9 revises the player-facing instructions, item descriptions, upgrade explanations, and run summaries. Run, round, Gear, modules, and chests now use consistent names. Slot rewards and corruption describe the actual simulation. Correct solve placements now drop a voxel seed into the tile before revealing the number. The 0.64-second effect is cosmetic, supports overlapping placements, clears when the board changes, and shows numbers immediately in reduced-motion mode.
 
 ## Controls
 

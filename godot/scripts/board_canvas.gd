@@ -6,6 +6,7 @@ extends Node2D
 
 const FAMILY_COLORS: Array[Color] = [Color("6de8ff"), Color("a4c7ff"), Color("c6a0ff"), Color("ffae68"), Color("fb86c3"), Color("9be878"), Color("ffe188"), Color("bb9bff"), Color("dec3ed")]
 const MODULE_COLORS: Dictionary = {"rapid":Color("6de8ff"), "electric":Color("c6a0ff"), "frost":Color("a4c7ff"), "blast":Color("ffae68"), "venom":Color("9be878"), "range":Color("ffe188"), "power":Color("fb86c3"), "gravity":Color("bb9bff"), "nova":Color("ff7289")}
+const SeedPlanting = preload("res://scripts/seed_planting.gd")
 
 var run: RefCounted
 var selected_cell: int = -1
@@ -38,12 +39,14 @@ var _attachment_allowed: bool = false
 var _attachment_targets: bool = false
 var _equip_landings: Dictionary = {}
 var _equip_slots: Dictionary = {}
+var _seed_plantings: Dictionary = {}
 
 func setup(model: RefCounted) -> void:
 	run = model
 	_rng.seed = 44219
 	_font = ThemeDB.fallback_font
 	_effects.clear()
+	_seed_plantings.clear()
 	_equip_landings.clear()
 	_equip_slots.clear()
 	set_attachment_preview(-1,"",false)
@@ -61,6 +64,7 @@ func tick(dt: float) -> void:
 	var target: float = 0.0 if str(run.phase) == "solve" else 1.0
 	_morph = move_toward(_morph, target, dt * (4.0 if reduced_motion else 1.35))
 	_update_projection()
+	_tick_seed_plantings(dt)
 	for cell: Variant in _equip_landings.keys():
 		_equip_landings[cell] = float(_equip_landings[cell]) + dt
 		if float(_equip_landings[cell]) >= 0.48:
@@ -126,6 +130,20 @@ func set_board_rect(value: Rect2) -> void:
 
 func set_reduced_motion(value: bool) -> void:
 	reduced_motion = value
+	if value: _seed_plantings.clear()
+	queue_redraw()
+
+func _tick_seed_plantings(dt: float) -> void:
+	# Presentation never delays the answer or blocks the next placement.
+	if reduced_motion or str(run.phase) != "solve":
+		_seed_plantings.clear()
+		return
+	for key: Variant in _seed_plantings.keys():
+		var cell: int = int(key)
+		var planting: Dictionary = _seed_plantings[key]
+		planting.age = float(planting.age) + maxf(0.0,dt)
+		if float(planting.age) >= SeedPlanting.DURATION or not run.towers.has(cell) or int(run.board[cell]) != int(planting.number):
+			_seed_plantings.erase(key)
 
 func _update_projection() -> void:
 	_blend = smoothstep(0.0,1.0,_morph)
@@ -201,12 +219,14 @@ func _draw() -> void:
 	_draw_tiles()
 	if _blend > 0.08: _draw_route()
 	_draw_selection()
+	_draw_seed_ground()
 	_draw_digits()
 	_draw_drop_preview()
 	_faces.clear()
 	if _blend > 0.05: _draw_gates()
 	for key: Variant in run.towers:
 		_draw_tower(int(key),run.towers[key])
+	_draw_planting_seeds()
 	for enemy: Dictionary in run.enemies: _draw_enemy(enemy)
 	_draw_attachment_preview()
 	_flush_faces()
@@ -278,10 +298,45 @@ func _draw_digits() -> void:
 		if planted:
 			color = FAMILY_COLORS[number-1].darkened(0.55).lerp(FAMILY_COLORS[number-1],_blend)
 			if bool(run.towers[cell].illegal): color = Color("9d2440").lerp(Color("ff9c9c"),_blend)
+		var reveal_scale: float = 1.0
+		if _seed_plantings.has(cell):
+			var age: float = float(_seed_plantings[cell].age)
+			color.a *= SeedPlanting.number_alpha(age)
+			if color.a <= 0.001: continue
+			reveal_scale = SeedPlanting.number_scale(age)
 		var pos: Vector3 = _cell_pos(cell)
 		if planted: pos.z += _blend*0.32
-		var font_size: int = maxi(10,roundi(_scale*lerpf(0.58,0.34 if planted else 0.40,_blend)))
+		var font_size: int = maxi(10,roundi(_scale*lerpf(0.58,0.34 if planted else 0.40,_blend)*reveal_scale))
 		_text_center(str(number),project_point(pos),font_size,color)
+
+func _draw_seed_ground() -> void:
+	for key: Variant in _seed_plantings:
+		var planting: Dictionary = _seed_plantings[key]
+		var age: float = float(planting.age)
+		var alpha: float = SeedPlanting.impact_alpha(age)
+		if alpha <= 0.001: continue
+		var pos: Vector3 = _cell_pos(int(key))
+		var family: Color = FAMILY_COLORS[clampi(int(planting.number)-1,0,8)]
+		var radius: float = 0.12 + 0.25 * SeedPlanting.impact_scale(age)
+		_polyline_closed(_quad(pos,radius,0.025),Color(family.darkened(0.18),alpha*0.78),maxf(1.2,_scale*0.025))
+		# Four tiny soil blocks stay inside the square, behind the revealed digit.
+		for side: Vector2 in [Vector2(-1,-1),Vector2(1,-1),Vector2(-1,1),Vector2(1,1)]:
+			var offset: Vector3 = Vector3(side.x,0,side.y)*(0.09+0.11*SeedPlanting.impact_scale(age))
+			draw_colored_polygon(_quad(pos+offset,0.035,0.018),Color(Color("896c4b"),alpha*0.72))
+
+func _draw_planting_seeds() -> void:
+	for key: Variant in _seed_plantings:
+		var planting: Dictionary = _seed_plantings[key]
+		var age: float = float(planting.age)
+		var amount: float = SeedPlanting.seed_scale(age)
+		if amount <= 0.001: continue
+		var pos: Vector3 = _cell_pos(int(key)) + SeedPlanting.seed_offset(age)
+		var family: Color = FAMILY_COLORS[clampi(int(planting.number)-1,0,8)]
+		# Offset and yaw remain visible in the straight-down solve view.
+		var angle: float = lerpf(-0.75,0.2,clampf(age/SeedPlanting.LAND_AT,0.0,1.0))
+		_cube(pos,Vector3(0.24,0.20,0.29)*amount,Color("8c633d"),angle)
+		_cube(pos+Vector3(0,0.108,0)*amount,Vector3(0.09,0.028,0.26)*amount,Color("edc581"),angle)
+		_cube(pos+Vector3(0.035,0.14,-0.07)*amount,Vector3(0.10,0.07,0.11)*amount,family.darkened(0.10),angle)
 
 func _draw_tower_badges() -> void:
 	if _blend <= 0.60: return
@@ -404,6 +459,7 @@ func _draw_tower(cell: int, tower: Dictionary) -> void:
 	if growth < 0.75:
 		var seed: Vector3 = pos+Vector3(0.28,0.025,-0.30)
 		var size: float = 1.0-growth
+		if _seed_plantings.has(cell): size *= SeedPlanting.number_alpha(float(_seed_plantings[cell].age))
 		_cube(seed,Vector3(0.15,0.07,0.15)*size,Color("896c4b"))
 		_cube(seed+Vector3(0,0.07,0),Vector3(0.035,0.13,0.035)*size,Color("438b70"))
 		_cube(seed+Vector3(-0.06,0.11,0),Vector3(0.13,0.04,0.06)*size,family.darkened(0.16),-0.5)
@@ -530,6 +586,8 @@ func play_event(event: Dictionary) -> void:
 		if pos.x > -90:
 			_burst(pos,color,6,0.45)
 			_add_effect({"kind":"ring","pos":pos,"color":color,"radius":0.65,"life":0.45})
+	elif type == "plant" and _begin_seed_planting(event):
+		pass # The impact pulse belongs to the seed landing, not to the click.
 	elif type == "plant" or type == "upgrade":
 		if pos.x > -90:
 			_burst(pos,color,9,0.7)
@@ -553,6 +611,15 @@ func play_event(event: Dictionary) -> void:
 			_add_effect({"kind":"text","pos":pos,"color":color,"text":str(event.get("text","+")),"life":1.05})
 			if type == "loot": _burst(pos,color,12,0.85)
 	queue_redraw()
+
+func _begin_seed_planting(event: Dictionary) -> bool:
+	var cell: int = int(event.get("cell",-1))
+	if reduced_motion or run == null or str(run.phase) != "solve" or cell < 0 or cell >= 81: return false
+	if bool(event.get("illegal",false)) or run.givens[cell] or not run.towers.has(cell): return false
+	var number: int = int(event.get("number",run.board[cell]))
+	if number <= 0 or int(run.board[cell]) != number: return false
+	_seed_plantings[cell] = {"age":0.0,"number":number}
+	return true
 
 func _add_effect(data: Dictionary) -> void:
 	data.age = 0.0
@@ -600,6 +667,9 @@ func _draw_effects() -> void:
 				draw_polyline(points,Color(color,0.7*(1.0-t)),maxf(1.0,_scale*0.045*(1.0-t)),true)
 			"text":
 				var pixel: Vector2 = project_point(_world_pos(pos,0.45+age*0.65))
+				# A top-down camera collapses height: keep solve rewards off the seed
+				# and answer instead of covering the square's center for a second.
+				if str(run.phase) == "solve": pixel.y -= _scale*(0.36 + (0.0 if reduced_motion else age*0.12))
 				if _inside_art(pixel):
 					var size: int = clampi(roundi(_scale*0.24),10,17)
 					_text_center(str(effect.text),pixel+Vector2(1,1),size,Color(0.025,0.06,0.08,1.0-t))

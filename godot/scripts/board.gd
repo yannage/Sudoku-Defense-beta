@@ -5,6 +5,7 @@ extends Node3D
 const FAMILY_COLORS: Array[Color] = [Color("6de8ff"), Color("a4c7ff"), Color("c6a0ff"), Color("ffae68"), Color("fb86c3"), Color("9be878"), Color("ffe188"), Color("bb9bff"), Color("dec3ed")]
 const MODULE_COLORS: Dictionary = {"rapid":Color("6de8ff"), "electric":Color("c6a0ff"), "frost":Color("a4c7ff"), "blast":Color("ffae68"), "venom":Color("9be878"), "range":Color("ffe188"), "power":Color("fb86c3"), "gravity":Color("bb9bff"), "nova":Color("ff7289")}
 const VoxelMaterial = preload("res://scripts/voxel_material.gd")
+const SeedPlanting = preload("res://scripts/seed_planting.gd")
 
 var run: RefCounted
 var selected_cell: int = -1
@@ -59,6 +60,7 @@ var _attachment_targets: bool = false
 var _target_frames: Dictionary = {}
 var _equip_landings: Dictionary = {}
 var _equip_slots: Dictionary = {}
+var _seed_plantings: Dictionary = {}
 var _environment: Environment
 var _board_rect: Rect2 = Rect2()
 
@@ -67,6 +69,7 @@ func setup(model: RefCounted) -> void:
 	_rng.seed = 44219
 	if camera == null:
 		_build_world()
+	_clear_seed_plantings()
 	_last_board = ""
 	_route_signature = ""
 	_equip_landings.clear()
@@ -262,6 +265,7 @@ func tick(dt: float) -> void:
 		var d: Node3D = _decor[i]
 		d.rotation.z = 0.0 if reduced_motion else sin(_clock * 0.8 + float(i)) * 0.025
 	_range_root.visible = _morph > 0.65 and selected_cell >= 0 and phase != "solve"
+	_update_seed_plantings(dt)
 
 func set_selected(cell: int, number: int = 0) -> void:
 	selected_cell = cell
@@ -380,6 +384,7 @@ func set_reduced_motion(value: bool) -> void:
 	reduced_motion = value
 	if value:
 		_shake = 0.0
+		_clear_seed_plantings()
 
 func cell_at_screen(screen_pos: Vector2) -> int:
 	if camera == null:
@@ -488,6 +493,7 @@ func _update_palette(blend: float) -> void:
 			if bool(towers[i].illegal): badge_color = Color("e6aaa6")
 			_labels[i].modulate = Color(badge_color,0.88 if emphasized else 0.58)
 			_labels[i].outline_modulate = Color(Color("0a202a"),0.78 if emphasized else 0.48)
+		_apply_seed_number(i)
 	var match_color: Color = _family(_family_focus).lightened(0.18) if _family_focus > 0 else Color("77d8ee")
 	VoxelMaterial.set_color(_match_accent, Color("357991").lerp(match_color, blend))
 	for material: Material in _grid_mats:
@@ -534,7 +540,7 @@ func _sync_towers(dt: float) -> void:
 		var growth: float = clampf(float(tower.get("growth", 1.0)), 0.0, 1.0)
 		var show_amount: float = smoothstep(0.12, 0.8, _morph) * maxf(0.1, growth)
 		body.scale = Vector3(lerpf(0.45, 1.0, show_amount), maxf(0.015, show_amount), lerpf(0.45, 1.0, show_amount))
-		seed_node.visible = _morph < 0.7
+		seed_node.visible = _morph < 0.7 and not _seed_plantings.has(key)
 		seed_node.scale = Vector3.ONE * lerpf(1.0, 0.2, smoothstep(0.2, 0.72, _morph))
 		body.visible = show_amount > 0.01
 		node.position = _cell_pos(int(key))
@@ -773,8 +779,11 @@ func play_event(event: Dictionary) -> void:
 	var color: Color = event.get("color", Color("8ee7ca")) if event.get("color") is Color else Color("8ee7ca")
 	match kind:
 		"plant":
-			_burst(pos + Vector3(0, 0.18, 0), color, 10, 0.7)
-			_ring(pos, color, 0.9, 0.45)
+			if run != null and str(run.get("phase")) == "solve" and not bool(event.get("illegal",false)):
+				_start_seed_planting(cell, int(event.get("number",0)))
+			else:
+				_burst(pos + Vector3(0, 0.18, 0), color, 10, 0.7)
+				_ring(pos, color, 0.9, 0.45)
 		"equip":
 			if cell >= 0 and not str(event.get("kind","")).is_empty():
 				_equip_landings[cell] = 0.0
@@ -813,8 +822,87 @@ func play_event(event: Dictionary) -> void:
 			_ring(pos, Color("ffd48b"), 2.5, 0.8)
 		"phase":
 			_last_board = ""
+			if str(run.get("phase")) != "solve": _clear_seed_plantings()
 			if str(run.get("phase")) == "battle":
 				_ring(Vector3.ZERO, Color("78dcc3"), 6.0, 0.8)
+
+func _start_seed_planting(cell: int, number: int) -> void:
+	if reduced_motion or cell < 0 or cell >= 81 or number < 1 or number > 9: return
+	if bool(run.givens[cell]) or int(run.board[cell]) != number or not run.towers.has(cell): return
+	if _seed_plantings.has(cell): return
+	var node := Node3D.new()
+	_fx_root.add_child(node)
+	node.position = _cell_pos(cell)
+	var seed := Node3D.new()
+	node.add_child(seed)
+	_box(seed, Vector3.ZERO, Vector3(0.24,0.20,0.29), Color("8c633d"))
+	_box(seed, Vector3(0.0,0.108,0.0), Vector3(0.09,0.028,0.26), Color("edc581"))
+	_box(seed, Vector3(0.035,0.14,-0.07), Vector3(0.10,0.07,0.11), _family(number).darkened(0.10), true)
+	var soil := Node3D.new()
+	node.add_child(soil)
+	for offset: Vector3 in [Vector3(-0.095,0.025,-0.05),Vector3(0.09,0.023,0.035),Vector3(-0.015,0.024,0.10),Vector3(0.025,0.026,-0.105)]:
+		_box(soil,offset,Vector3(0.105,0.04,0.09),Color("827257"))
+	var pulse := Node3D.new()
+	node.add_child(pulse)
+	_square_frame(pulse,1.0,0.022,_family(number).darkened(0.25),0.026)
+	_seed_plantings[cell] = {"age":0.0,"number":number,"node":node,"seed":seed,"soil":soil,"pulse":pulse}
+	_animate_seed_planting(cell)
+	if _tower_nodes.has(cell): (_tower_nodes[cell].seed as Node3D).visible = false
+
+func _animate_seed_planting(cell: int) -> void:
+	var entry: Dictionary = _seed_plantings[cell]
+	var age: float = float(entry.age)
+	var seed: Node3D = entry.seed
+	seed.position = SeedPlanting.seed_offset(age)
+	seed.scale = Vector3.ONE * maxf(0.001,SeedPlanting.seed_scale(age))
+	seed.visible = age < SeedPlanting.REVEAL_AT
+	seed.rotation = Vector3(0.0,lerpf(-0.75,0.2,clampf(age/SeedPlanting.LAND_AT,0.0,1.0)),0.0)
+	var soil: Node3D = entry.soil
+	soil.visible = age >= SeedPlanting.LAND_AT and age < SeedPlanting.REVEAL_END
+	soil.scale = Vector3.ONE * maxf(0.001,SeedPlanting.soil_scale(age))
+	var pulse: Node3D = entry.pulse
+	var width: float = SeedPlanting.impact_scale(age)
+	var weight: float = maxf(0.001,SeedPlanting.impact_alpha(age))
+	pulse.visible = age >= SeedPlanting.LAND_AT
+	pulse.scale = Vector3(width,1.0,width)
+	for index: int in range(pulse.get_child_count()):
+		var edge: Node3D = pulse.get_child(index)
+		edge.scale = Vector3(0.022*weight,0.022,1.0) if index%2 == 0 else Vector3(1.0,0.022,0.022*weight)
+	_apply_seed_number(cell)
+
+func _apply_seed_number(cell: int) -> void:
+	if not _seed_plantings.has(cell) or run == null or str(run.phase) != "solve": return
+	var age: float = float(_seed_plantings[cell].age)
+	_labels[cell].modulate.a = SeedPlanting.number_alpha(age)
+	_labels[cell].scale = Vector3.ONE * SeedPlanting.number_scale(age)
+
+func _update_seed_plantings(dt: float) -> void:
+	if _seed_plantings.is_empty(): return
+	if reduced_motion or str(run.phase) != "solve":
+		_clear_seed_plantings()
+		return
+	var completed: bool = false
+	for cell: Variant in _seed_plantings.keys():
+		var entry: Dictionary = _seed_plantings[cell]
+		entry.age = float(entry.age) + maxf(0.0,dt)
+		if float(entry.age) >= SeedPlanting.DURATION or int(run.board[cell]) != int(entry.number) or bool(run.givens[cell]):
+			(entry.node as Node3D).visible = false
+			(entry.node as Node3D).queue_free()
+			_labels[cell].scale = Vector3.ONE
+			_seed_plantings.erase(cell)
+			completed = true
+		else:
+			_animate_seed_planting(int(cell))
+	if completed: _update_palette(smoothstep(0.0,1.0,_morph))
+
+func _clear_seed_plantings() -> void:
+	for cell: Variant in _seed_plantings:
+		var entry: Dictionary = _seed_plantings[cell]
+		(entry.node as Node3D).visible = false
+		(entry.node as Node3D).queue_free()
+		_labels[cell].scale = Vector3.ONE
+	_seed_plantings.clear()
+	if not _labels.is_empty(): _update_palette(smoothstep(0.0,1.0,_morph))
 
 func _burst(pos: Vector3, color: Color, count: int, strength: float) -> void:
 	if reduced_motion:

@@ -165,6 +165,8 @@ def main() -> None:
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_controller_cursor.gd", "--", "--canvas-graphics"], logs / "canvas-controller-cursor-tests.log", expected="CONTROLLER_CURSOR_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_touch_flow.gd"], logs / "touch-tests.log", expected="TOUCH_FLOW_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_touch_flow.gd", "--", "--canvas-graphics"], logs / "canvas-touch-tests.log", expected="TOUCH_FLOW_PASS")
+    run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_seed_planting.gd"], logs / "seed-planting-tests.log", expected="SEED_PLANTING_PASS")
+    run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_seed_planting.gd", "--", "--canvas-graphics"], logs / "canvas-seed-planting-tests.log", expected="SEED_PLANTING_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_pointer_dispatch.gd"], logs / "pointer-dispatch-tests.log", expected="POINTER_DISPATCH_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_pointer_dispatch.gd", "--", "--canvas-graphics"], logs / "canvas-pointer-dispatch-tests.log", expected="POINTER_DISPATCH_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_family_workshop.gd"], logs / "family-workshop-tests.log", expected="FAMILY_WORKSHOP_PASS")
@@ -178,6 +180,8 @@ def main() -> None:
             ("test_rendering.gd", "--safe-graphics", "rendering-tests.log", "RENDER_PASS"),
             ("test_canvas_rendering.gd", "--canvas-graphics", "canvas-rendering-tests.log", "CANVAS_RENDER_PASS"),
             ("test_chest_canvas.gd", "--canvas-graphics", "canvas-chest-tests.log", "0 failures (real GLES pixels)"),
+            ("test_seed_planting.gd", "--safe-graphics", "seed-planting-render-tests.log", "SEED_PLANTING_PASS"),
+            ("test_seed_planting.gd", "--canvas-graphics", "canvas-seed-planting-render-tests.log", "SEED_PLANTING_PASS"),
             ("test_menu_presentation.gd", "--safe-graphics", "menu-presentation-render-tests.log", "MENU_PRESENTATION_PASS"),
             ("test_menu_presentation.gd", "--canvas-graphics", "canvas-menu-presentation-render-tests.log", "MENU_PRESENTATION_PASS"),
             ("test_controller_cursor.gd", "--safe-graphics", "controller-cursor-render-tests.log", "CONTROLLER_CURSOR_PASS"),
