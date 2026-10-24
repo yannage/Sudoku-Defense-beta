@@ -34,7 +34,14 @@ func _draw() -> void:
 		for i in range(3):
 			_cube(c + Vector2(0, -i * 5) * u, 11 * u, 4 * u, Color("ffc780"))
 	else:
-		_cube(c + Vector2(0, 6) * u, 13 * u, 5 * u, Color("2b4053"))
+		# Every module sits on the same physical plug-in chassis: dark socket,
+		# metal riser, glowing contact pins, then its distinct weapon geometry.
+		draw_colored_polygon(PackedVector2Array([c+Vector2(-18,8)*u,c+Vector2(0,17)*u,c+Vector2(18,8)*u,c+Vector2(0,-1)*u]),Color(0,0,0,.28))
+		_cube(c + Vector2(0, 9) * u, 14 * u, 5 * u, Color("1c3040"))
+		_cube(c + Vector2(0, 5) * u, 12 * u, 4 * u, Color("647c87"))
+		_cube(c + Vector2(0, 1) * u, 10 * u, 3 * u, Color("2c4b59"))
+		for pin in [-1,0,1]:
+			_cube(c + Vector2(pin*6,9+abs(pin)*-2)*u,1.6*u,3*u,tint.lightened(.2))
 		match kind:
 			"electric":
 				for i in range(3):
@@ -45,6 +52,25 @@ func _draw() -> void:
 			"rapid", "overclock":
 				for i in range(3):
 					_cube(c + Vector2((i - 1) * 8, -3) * u, 3 * u, (8 + i * 3) * u, tint)
+			"blast":
+				for x in [-1,1]:
+					_cube(c + Vector2(x*5,-3)*u,4*u,12*u,Color("809397"))
+					_cube(c + Vector2(x*5,-15)*u,3*u,3*u,tint)
+				_cube(c + Vector2(0,0)*u,4*u,7*u,tint.darkened(.1))
+			"range":
+				_cube(c + Vector2(0,-3)*u,5*u,11*u,Color("809397"))
+				_cube(c + Vector2(0,-14)*u,9*u,3*u,tint)
+				_cube(c + Vector2(0,-17)*u,2*u,7*u,tint.lightened(.25))
+			"gravity":
+				_cube(c + Vector2(0,-5)*u,4*u,9*u,tint.lightened(.3))
+				for x in [-1,1]:
+					_cube(c + Vector2(x*9,-1)*u,3*u,15*u,tint)
+				_cube(c + Vector2(0,-16)*u,10*u,3*u,tint)
+			"nova", "overcharge":
+				_cube(c + Vector2(0,-5)*u,6*u,12*u,tint.lightened(.25))
+				for x in [-1,1]:
+					_cube(c + Vector2(x*10,-2)*u,3*u,7*u,tint)
+					_cube(c + Vector2(x*6,-13)*u,3*u,7*u,tint)
 			"repair", "venom":
 				_cube(c + Vector2(0, -3) * u, 7 * u, 11 * u, tint)
 				_cube(c + Vector2(0, -14) * u, 4 * u, 4 * u, Color("e9f1df"))

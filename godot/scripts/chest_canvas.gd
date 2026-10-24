@@ -60,6 +60,15 @@ func open_chest() -> void:
 	_tween.parallel().tween_callback(_burst).set_delay(0.06 if reduced_motion else 0.14)
 	_tween.tween_property(self, "_glow", 0.28, 1.0)
 
+func show_opened() -> void:
+	# Restore a completed reveal without replaying or granting rewards again.
+	if is_instance_valid(_tween): _tween.kill()
+	_opened = true
+	_lid_angle = -1.70
+	_shake = 0.0
+	_glow = 0.28
+	queue_redraw()
+
 func reset() -> void:
 	if is_instance_valid(_tween):
 		_tween.kill()

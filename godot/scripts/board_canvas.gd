@@ -32,12 +32,22 @@ var _font: Font
 var _drop_cell: int = -1
 var _drop_number: int = 0
 var _drop_allowed: bool = false
+var _attachment_cell: int = -1
+var _attachment_kind: String = ""
+var _attachment_allowed: bool = false
+var _attachment_targets: bool = false
+var _equip_landings: Dictionary = {}
+var _equip_slots: Dictionary = {}
 
 func setup(model: RefCounted) -> void:
 	run = model
 	_rng.seed = 44219
 	_font = ThemeDB.fallback_font
 	_effects.clear()
+	_equip_landings.clear()
+	_equip_slots.clear()
+	set_attachment_preview(-1,"",false)
+	set_attachment_targets(false)
 	_recoil.clear()
 	_enemy_positions.clear()
 	_enemy_angles.clear()
@@ -51,6 +61,11 @@ func tick(dt: float) -> void:
 	var target: float = 0.0 if str(run.phase) == "solve" else 1.0
 	_morph = move_toward(_morph, target, dt * (4.0 if reduced_motion else 1.35))
 	_update_projection()
+	for cell: Variant in _equip_landings.keys():
+		_equip_landings[cell] = float(_equip_landings[cell]) + dt
+		if float(_equip_landings[cell]) >= 0.48:
+			_equip_landings.erase(cell)
+			_equip_slots.erase(cell)
 	for key: Variant in _recoil.keys():
 		_recoil[key] = maxf(0.0, float(_recoil[key]) - dt * 6.0)
 		if float(_recoil[key]) <= 0.0: _recoil.erase(key)
@@ -82,6 +97,16 @@ func set_drop_preview(cell: int, number: int, allowed: bool) -> void:
 	_drop_cell = cell if cell >= 0 and cell < 81 else -1
 	_drop_number = clampi(number, 0, 9)
 	_drop_allowed = allowed
+	queue_redraw()
+
+func set_attachment_preview(cell: int, kind: String, allowed: bool) -> void:
+	_attachment_cell = cell if cell >= 0 and cell < 81 else -1
+	_attachment_kind = kind
+	_attachment_allowed = allowed
+	queue_redraw()
+
+func set_attachment_targets(active: bool) -> void:
+	_attachment_targets = active
 	queue_redraw()
 
 func set_family_focus(number: int) -> void:
@@ -183,6 +208,7 @@ func _draw() -> void:
 	for key: Variant in run.towers:
 		_draw_tower(int(key),run.towers[key])
 	for enemy: Dictionary in run.enemies: _draw_enemy(enemy)
+	_draw_attachment_preview()
 	_flush_faces()
 	_draw_entity_labels()
 	_draw_effects()
@@ -226,6 +252,9 @@ func _draw_tiles() -> void:
 		var pos: Vector3 = _cell_pos(cell)
 		var color: Color = paper.lerp(tactical,_blend)
 		draw_colored_polygon(_quad(pos,0.492,0.0),color)
+		if _attachment_targets and run.towers.has(cell):
+			var full: bool = run.towers[cell].attachments.size() >= 5
+			_polyline_closed(_quad(pos,0.385,0.045),Color("44615f") if full else Color("5b9d88"),maxf(1.0,_scale*0.02))
 		if matching:
 			var match_color: Color = FAMILY_COLORS[_family_focus-1].lightened(0.18) if _family_focus > 0 else Color("77d8ee")
 			_polyline_closed(_quad(pos,0.445,0.025),Color("357991").lerp(match_color,_blend),maxf(1.35,_scale*0.032))
@@ -263,18 +292,19 @@ func _draw_tower_badges() -> void:
 		# Keep the compact ID beside the body so it cannot cover the next row's
 		# colored turret roof in the flatter portrait camera.
 		var center: Vector2 = project_point(_cell_pos(cell)+Vector3(0.22,0.13,0.28))
-		var size: int = maxi(16,roundi(_scale*(0.49 if focused else 0.46)))
-		var color: Color = Color("fff4d5") if cell == selected_cell else FAMILY_COLORS[number-1].lightened(0.25 if focused else 0.08)
-		if bool(run.towers[cell].illegal): color = Color("ff9c9c")
+		var emphasized: bool = focused or cell == selected_cell
+		var size: int = maxi(13 if emphasized else 11,roundi(_scale*(0.36 if emphasized else 0.30)))
+		var color: Color = Color("f6e7c8") if cell == selected_cell else FAMILY_COLORS[number-1].lerp(Color("b4c9c5"),0.36)
+		if bool(run.towers[cell].illegal): color = Color("e6aaa6")
+		color.a = 0.88 if emphasized else 0.58
 		var text: String = str(number)
 		var width: float = _font.get_string_size(text,HORIZONTAL_ALIGNMENT_LEFT,-1,size).x
-		var badge_size: Vector2 = Vector2(width+8.0,float(size)+3.0)
+		var badge_size: Vector2 = Vector2(width+6.0,float(size)+2.0)
 		var badge: Rect2 = Rect2(center-badge_size*0.5,badge_size)
-		draw_rect(badge.grow(1.0),Color("0a202a"))
-		draw_rect(badge,Color("102a35"))
-		draw_rect(badge,color if focused else Color(color,0.55),false,2.0 if focused else 1.0)
+		draw_rect(badge,Color(Color("102a35"),0.58 if emphasized else 0.32))
+		if emphasized: draw_rect(badge,Color(color,0.38),false,1.0)
 		var baseline: Vector2 = center+Vector2(-width*0.5,(_font.get_ascent(size)-_font.get_descent(size))*0.5)
-		draw_string_outline(_font,baseline,text,HORIZONTAL_ALIGNMENT_LEFT,-1,size,maxi(3,roundi(_scale*0.07)),Color("0a202a"))
+		draw_string_outline(_font,baseline,text,HORIZONTAL_ALIGNMENT_LEFT,-1,size,maxi(1,roundi(_scale*0.035)),Color(Color("0a202a"),0.78 if emphasized else 0.48))
 		draw_string(_font,baseline,text,HORIZONTAL_ALIGNMENT_LEFT,-1,size,color)
 
 func _draw_selection() -> void:
@@ -309,6 +339,24 @@ func _draw_drop_preview() -> void:
 	if int(run.board[_drop_cell]) == 0 and _drop_number > 0:
 		var ink: Color = Color("176a54").lerp(Color("c2ffe3"),_blend) if _drop_allowed else Color("9c2440").lerp(Color("ffacb9"),_blend)
 		_text_center(str(_drop_number),project_point(pos),maxi(10,roundi(_scale*0.58)),ink)
+
+func _draw_attachment_preview() -> void:
+	if _attachment_cell < 0 or _attachment_cell >= 81: return
+	var pos: Vector3 = _cell_pos(_attachment_cell)
+	var tint: Color = MODULE_COLORS.get(_attachment_kind,Color("83e7c1")) if _attachment_allowed else Color("c08b83")
+	_polyline_closed(_quad(pos,0.425,0.07),tint,maxf(1.8,_scale*0.042))
+	var used: int = run.towers[_attachment_cell].attachments.size() if run.towers.has(_attachment_cell) else 0
+	for slot: int in range(5):
+		var color: Color = Color("526a6c") if slot >= used else Color("accac1")
+		if slot == used and _attachment_allowed: color = tint.lightened(0.2)
+		_cube(pos+Vector3((slot-2)*0.13,0.09,0.39),Vector3(0.09,0.055,0.06),color)
+	if _attachment_allowed and used < 5:
+		var hover: float = 0.0 if reduced_motion else sin(_clock*3.0)*0.035
+		var y: float = (0.91+float(used)*0.16+hover)*maxf(0.25,_blend)
+		_cube(pos+Vector3(0,y,0),Vector3(0.43,0.11,0.43),Color("2d4956"))
+		_cube(pos+Vector3(0,y+0.065,0),Vector3(0.45,0.035,0.45),tint)
+		for side: float in [-1.0,1.0]:
+			_cube(pos+Vector3(side*0.22,y+0.06,0),Vector3(0.07,0.16,0.10),tint.lightened(0.20))
 
 func _draw_route() -> void:
 	if run.route.size() < 2: return
@@ -375,7 +423,10 @@ func _draw_tower(cell: int, tower: Dictionary) -> void:
 	for i: int in range(mini(5,tower.attachments.size())):
 		var kind: String = str(tower.attachments[i].kind)
 		var color: Color = MODULE_COLORS.get(kind,family)
-		var y: float = 0.43+float(i)*0.16
+		var landing: float = clampf(float(_equip_landings.get(cell,0.48))/0.48,0.0,1.0)
+		var landing_slot: int = int(_equip_slots.get(cell,tower.attachments.size()-1))
+		var lift: float = 0.0 if reduced_motion or i != landing_slot else pow(1.0-landing,3.0)*0.82
+		var y: float = 0.43+float(i)*0.16+lift
 		_tower_box(pos,Vector3(0,y,0),Vector3(0.43,0.11,0.43),Color("2d4956"),scale3)
 		_tower_box(pos,Vector3(0,y+0.065,0),Vector3(0.45,0.035,0.45),color,scale3)
 		if kind == "electric" or kind == "frost":
@@ -468,7 +519,18 @@ func play_event(event: Dictionary) -> void:
 		if event.has("cell"): _recoil[int(event.cell)] = 1.0
 		_add_effect({"kind":"beam","pos":pos,"target":event.get("target",pos),"height":float(event.get("height",0.5)),"color":color,"style":str(event.get("kind","bolt")),"life":0.16})
 		_burst(event.get("target",pos),color,3,0.3)
-	elif type == "plant" or type == "upgrade" or type == "equip":
+	elif type == "equip":
+		var cell: int = int(event.get("cell",-1))
+		if cell >= 0:
+			if not str(event.get("kind","")).is_empty():
+				_equip_landings[cell] = 0.0
+				if event.has("slot"): _equip_slots[cell] = int(event.slot)
+				else: _equip_slots.erase(cell)
+			if pos.x < -90: pos = Vector2(cell%9,cell/9)
+		if pos.x > -90:
+			_burst(pos,color,6,0.45)
+			_add_effect({"kind":"ring","pos":pos,"color":color,"radius":0.65,"life":0.45})
+	elif type == "plant" or type == "upgrade":
 		if pos.x > -90:
 			_burst(pos,color,9,0.7)
 			_add_effect({"kind":"ring","pos":pos,"color":color,"radius":0.65,"life":0.65})

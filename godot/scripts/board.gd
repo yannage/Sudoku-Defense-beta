@@ -49,6 +49,16 @@ var _drop_accent: Material
 var _drop_cell: int = -1
 var _drop_number: int = 0
 var _drop_allowed: bool = false
+var _attachment_cell: int = -1
+var _attachment_kind: String = ""
+var _attachment_allowed: bool = false
+var _attachment_preview: Node3D
+var _attachment_hover: Node3D
+var _attachment_signature: String = ""
+var _attachment_targets: bool = false
+var _target_frames: Dictionary = {}
+var _equip_landings: Dictionary = {}
+var _equip_slots: Dictionary = {}
 var _environment: Environment
 var _board_rect: Rect2 = Rect2()
 
@@ -59,6 +69,10 @@ func setup(model: RefCounted) -> void:
 		_build_world()
 	_last_board = ""
 	_route_signature = ""
+	_equip_landings.clear()
+	_equip_slots.clear()
+	set_attachment_preview(-1,"",false)
+	set_attachment_targets(false)
 	_sync_board(true)
 
 func _build_world() -> void:
@@ -231,6 +245,9 @@ func tick(dt: float) -> void:
 		_fit_board_rect(eased)
 	_sync_board(false)
 	_sync_towers(dt)
+	_sync_attachment_targets()
+	if is_instance_valid(_attachment_hover):
+		_attachment_hover.position.y = 0.06 if reduced_motion else 0.06 + sin(_clock * 3.0) * 0.035
 	_sync_enemies(dt)
 	_update_fx(dt)
 	_animate_route()
@@ -266,6 +283,58 @@ func set_drop_preview(cell: int, number: int, allowed: bool) -> void:
 	_drop_label.text = str(_drop_number) if _drop_number > 0 and run != null and int(run.board[_drop_cell]) == 0 else ""
 	_drop_label.modulate = Color("176a54") if allowed else Color("9c2440")
 	if _morph > 0.5: _drop_label.modulate = Color("c2ffe3") if allowed else Color("ffacb9")
+
+func set_attachment_targets(active: bool) -> void:
+	_attachment_targets = active
+	if _world != null: _sync_attachment_targets()
+
+func _sync_attachment_targets() -> void:
+	for key: Variant in _target_frames.keys():
+		if run == null or not run.towers.has(key):
+			(_target_frames[key] as Node3D).queue_free()
+			_target_frames.erase(key)
+	if run == null: return
+	for key: Variant in run.towers:
+		if not _attachment_targets and not _target_frames.has(key): continue
+		var full: bool = run.towers[key].attachments.size() >= 5
+		var frame: Node3D = _target_frames.get(key)
+		if frame == null or bool(frame.get_meta("full",false)) != full:
+			if frame != null: frame.queue_free()
+			frame = Node3D.new()
+			_world.add_child(frame)
+			frame.position = _cell_pos(int(key))
+			frame.set_meta("full",full)
+			_square_frame(frame,0.77,0.018,Color("44615f") if full else Color("5b9d88"),0.045)
+			_target_frames[key] = frame
+		frame.visible = _attachment_targets
+
+func set_attachment_preview(cell: int, kind: String, allowed: bool) -> void:
+	_attachment_cell = cell if cell >= 0 and cell < 81 else -1
+	_attachment_kind = kind
+	_attachment_allowed = allowed
+	if _world == null: return
+	var used: int = run.towers[cell].attachments.size() if run != null and run.towers.has(cell) else 0
+	var signature := "%d/%s/%s/%d" % [_attachment_cell,kind,allowed,used]
+	if signature == _attachment_signature: return
+	_attachment_signature = signature
+	if is_instance_valid(_attachment_preview):
+		_attachment_preview.queue_free()
+		_attachment_preview = null
+		_attachment_hover = null
+	if _attachment_cell < 0: return
+	_attachment_preview = Node3D.new()
+	_world.add_child(_attachment_preview)
+	_attachment_preview.position = _cell_pos(cell)
+	var tint: Color = MODULE_COLORS.get(kind,Color("83e7c1")) if allowed else Color("c08b83")
+	_square_frame(_attachment_preview,0.85,0.042,tint,0.07)
+	for slot: int in range(5):
+		var pip_color: Color = Color("526a6c") if slot >= used else Color("accac1")
+		if slot == used and allowed: pip_color = tint.lightened(0.2)
+		_box(_attachment_preview,Vector3((slot-2)*0.13,0.09,0.39),Vector3(0.09,0.055,0.06),pip_color,true)
+	if allowed and used < 5:
+		_attachment_hover = Node3D.new()
+		_attachment_preview.add_child(_attachment_hover)
+		_module(_attachment_hover,kind,0.85+float(used)*0.16)
 
 func set_family_focus(number: int) -> void:
 	var value: int = clampi(number,0,9)
@@ -408,13 +477,17 @@ func _update_palette(blend: float) -> void:
 		_labels[i].billboard = BaseMaterial3D.BILLBOARD_ENABLED if badge else BaseMaterial3D.BILLBOARD_DISABLED
 		_labels[i].no_depth_test = badge
 		_labels[i].rotation_degrees.x = 0.0 if badge else -90.0
-		_labels[i].outline_size = 14 if badge else 0
+		_labels[i].outline_size = 8 if badge else 0
 		_labels[i].outline_modulate = Color("0a202a")
 		if badge:
-			_labels[i].pixel_size = 0.0090 if matching else 0.0082
-			_labels[i].position.y = 0.13
-			_labels[i].modulate = Color("fff4d5") if i == selected_cell else _family(int(towers[i].number)).lightened(0.25 if matching else 0.08)
-			if bool(towers[i].illegal): _labels[i].modulate = Color("ff9c9c")
+			# Tower IDs are quiet annotations, not another row of bright Sudoku digits.
+			var emphasized: bool = matching or i == selected_cell
+			_labels[i].pixel_size = 0.0068 if emphasized else 0.0058
+			_labels[i].position = _cell_pos(i) + Vector3(0.22,0.13,0.28)
+			var badge_color: Color = Color("f6e7c8") if i == selected_cell else _family(int(towers[i].number)).lerp(Color("b4c9c5"),0.36)
+			if bool(towers[i].illegal): badge_color = Color("e6aaa6")
+			_labels[i].modulate = Color(badge_color,0.88 if emphasized else 0.58)
+			_labels[i].outline_modulate = Color(Color("0a202a"),0.78 if emphasized else 0.48)
 	var match_color: Color = _family(_family_focus).lightened(0.18) if _family_focus > 0 else Color("77d8ee")
 	VoxelMaterial.set_color(_match_accent, Color("357991").lerp(match_color, blend))
 	for material: Material in _grid_mats:
@@ -425,6 +498,11 @@ func _update_palette(blend: float) -> void:
 		VoxelMaterial.set_color(_selection_accent, Color("187568").lerp(Color("8dffce"), blend))
 
 func _sync_towers(dt: float) -> void:
+	for cell: Variant in _equip_landings.keys():
+		_equip_landings[cell] = float(_equip_landings[cell]) + dt
+		if float(_equip_landings[cell]) >= 0.48:
+			_equip_landings.erase(cell)
+			_equip_slots.erase(cell)
 	var towers: Dictionary = run.get("towers")
 	for key: Variant in _tower_nodes.keys():
 		if not towers.has(key):
@@ -444,6 +522,15 @@ func _sync_towers(dt: float) -> void:
 		var seed_node: Node3D = entry["seed"]
 		var body: Node3D = entry["body"]
 		var head: Node3D = entry["head"]
+		var landing: float = clampf(float(_equip_landings.get(key,0.48))/0.48,0.0,1.0)
+		var lift: float = 0.0 if reduced_motion else pow(1.0-landing,3.0)*0.82
+		var layers: Array = entry.get("layers",[])
+		var landing_slot: int = int(_equip_slots.get(key,layers.size()-1))
+		for index: int in range(layers.size()):
+			var layer: Node3D = layers[index]
+			layer.position.y = lift if index == landing_slot else 0.0
+			layer.rotation.y = lift*0.45 if index == landing_slot else 0.0
+		head.position.y = float(entry["head_y"])+lift*0.20
 		var growth: float = clampf(float(tower.get("growth", 1.0)), 0.0, 1.0)
 		var show_amount: float = smoothstep(0.12, 0.8, _morph) * maxf(0.1, growth)
 		body.scale = Vector3(lerpf(0.45, 1.0, show_amount), maxf(0.015, show_amount), lerpf(0.45, 1.0, show_amount))
@@ -482,9 +569,13 @@ func _build_tower(cell: int, tower: Dictionary, signature: String) -> Dictionary
 	_box(body, Vector3(0, 0.28, 0), Vector3(0.35, 0.19, 0.35), color.darkened(0.35))
 	_box(body, Vector3(0, 0.28, 0.185), Vector3(0.15, 0.07, 0.02), color, true)
 	var attachments: Array = tower.get("attachments", [])
+	var layers: Array[Node3D] = []
 	for i: int in range(mini(5, attachments.size())):
 		var item: Dictionary = attachments[i]
-		_module(body, str(item.get("kind", "power")), 0.43 + float(i) * 0.16)
+		var layer := Node3D.new()
+		body.add_child(layer)
+		layers.append(layer)
+		_module(layer, str(item.get("kind", "power")), 0.43 + float(i) * 0.16)
 	var head_y: float = 0.47 + float(mini(5, attachments.size())) * 0.16
 	var head: Node3D = Node3D.new()
 	body.add_child(head)
@@ -499,7 +590,7 @@ func _build_tower(cell: int, tower: Dictionary, signature: String) -> Dictionary
 	var level: int = int(tower.get("level", 1))
 	for j: int in range(mini(level - 1, 4)):
 		_box(body, Vector3(-0.25 + float(j) * 0.15, 0.20, 0.29), Vector3(0.065, 0.045, 0.04), Color("ffe6a3"), true)
-	return {"node":node, "body":body, "seed":seed_node, "head":head, "barrel":barrel, "signature":signature, "recoil":0.0}
+	return {"node":node, "body":body, "seed":seed_node, "head":head, "barrel":barrel, "signature":signature, "recoil":0.0, "layers":layers, "head_y":head_y}
 
 func _module(parent: Node3D, kind: String, y: float) -> void:
 	var color: Color = MODULE_COLORS.get(kind, Color("ffb5d5"))
@@ -684,7 +775,15 @@ func play_event(event: Dictionary) -> void:
 		"plant":
 			_burst(pos + Vector3(0, 0.18, 0), color, 10, 0.7)
 			_ring(pos, color, 0.9, 0.45)
-		"upgrade", "equip":
+		"equip":
+			if cell >= 0 and not str(event.get("kind","")).is_empty():
+				_equip_landings[cell] = 0.0
+				if event.has("slot"): _equip_slots[cell] = int(event.slot)
+				else: _equip_slots.erase(cell)
+			_burst(pos + Vector3(0,0.48,0),color,7,0.55)
+			_ring(pos,color,0.7,0.45)
+			_refresh_range()
+		"upgrade":
 			_burst(pos + Vector3(0, 0.55, 0), Color("ffd694"), 15, 1.1)
 			_ring(pos, Color("ffd694"), 1.1, 0.65)
 			_refresh_range()

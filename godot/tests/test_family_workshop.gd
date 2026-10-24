@@ -111,6 +111,8 @@ func exercise() -> void:
 	check(matching_givens > 0, "Fixture checks matching fixed clues as well as matching towers")
 	var previews: Array[int] = []
 	scene.dock.family_preview_requested.connect(func(number: int): previews.append(number))
+	scene.dock._scroll.ensure_control_visible(upgrade)
+	await frames()
 	await move_mouse(upgrade.get_global_rect().get_center())
 	check(family in previews and scene.world._family_focus == family, "Mouse hover on the actual family action previews its affected towers")
 	await move_mouse(Vector2(30, 90))

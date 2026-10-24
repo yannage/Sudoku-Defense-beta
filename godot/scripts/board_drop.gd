@@ -61,7 +61,7 @@ func _gui_input(event: InputEvent) -> void:
 func _can_drop_data(at_position: Vector2, data: Variant) -> bool:
 	if not data is Dictionary or data.get("type","") != "attachment": return false
 	var cell: int = host.world.cell_at_screen(_screen_point(at_position))
-	return host.run.towers.has(cell) and not host.menu_open and not host.manual_pause
+	return host._can_attach_module(cell,str(data.get("item_id", "")))
 
 func _drop_data(at_position: Vector2, data: Variant) -> void:
 	if not _can_drop_data(at_position,data): return

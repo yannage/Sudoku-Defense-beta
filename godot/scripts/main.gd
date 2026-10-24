@@ -10,6 +10,7 @@ const DropScript = preload("res://scripts/board_drop.gd")
 const ControllerScript = preload("res://scripts/controller_input.gd")
 const SeedPointerScript = preload("res://scripts/seed_pointer.gd")
 const QuickIconScript = preload("res://scripts/quick_icon.gd")
+const GearFeedbackScript = preload("res://scripts/gear_feedback.gd")
 const INK := Color("0a1722")
 const PANEL := Color("112634")
 const MINT := Color("83e7c1")
@@ -43,6 +44,7 @@ var _pointer_hint_owner := -2 # -1 mouse, >=0 native touch, -2 no pending handof
 var controller
 var seed_pointer
 var board_input
+var gear_feedback
 var _seed_text := ""
 var _seed_editing := false
 var _seed_return_initial := true
@@ -271,11 +273,17 @@ func _build_ui() -> void:
 	dock = DockScript.new()
 	ui.add_child(dock)
 	dock.setup(run)
+	dock.set_reduced_motion(reduced_motion)
 	dock.changed.connect(_action)
 	dock.closed.connect(func(): armed_item = ""; _release_ui_focus(); _refresh())
 	dock.cell_requested.connect(_inspect_tower)
 	dock.family_preview_requested.connect(_update_family_focus)
 	dock.item_armed.connect(func(item_id):
+		if str(item_id).is_empty():
+			armed_item = ""
+			_update_attachment_preview()
+			_refresh()
+			return
 		if controller_used:
 			dock.close_panel(true)
 			armed_item = str(item_id)
@@ -289,10 +297,17 @@ func _build_ui() -> void:
 	for child in ui.get_children():
 		if child is Button: child.focus_mode = Control.FOCUS_NONE
 	for b in number_buttons: b.focus_mode = Control.FOCUS_NONE
+	# Control hit testing follows scene order, not CanvasItem z_index. Keep the
+	# sheet after every HUD button so covered Tools/number controls cannot steal taps.
+	ui.move_child(dock,ui.get_child_count()-1)
 	seed_pointer = SeedPointerScript.new()
 	seed_pointer.host = self
 	seed_pointer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.add_child(seed_pointer)
+	gear_feedback = GearFeedbackScript.new()
+	gear_feedback.host = self
+	gear_feedback.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	ui.add_child(gear_feedback)
 
 func _add_quick_icon(quick: Button, kind: String) -> void:
 	var icon := QuickIconScript.new()
@@ -531,10 +546,12 @@ func _process(dt: float) -> void:
 	if not blocked:
 		run.update(minf(dt,0.05)*game_speed if run.phase == "battle" else minf(dt,0.05))
 	if world.has_method("set_panel_open"): world.set_panel_open(dock.is_open())
+	_update_attachment_preview()
 	world.tick(minf(dt,0.05))
 	for event in run.drain_events():
 		world.play_event(event)
 		sound.play_event(event)
+		if str(event.get("type", "")) == "loot": gear_feedback.chest_recovered(event)
 	if notice_time > 0:
 		notice_time -= dt
 		notice.modulate.a = minf(1,notice_time*2)
@@ -692,6 +709,38 @@ func _inspect_tower(cell: int) -> void:
 	# controller cursor across the battlefield on the way to an empty square.
 	if run.towers.has(cell): selected_number = int(run.towers[cell].number)
 	_select(cell,false)
+
+func _attachment_item(item_id: String) -> Dictionary:
+	for item: Dictionary in run.items:
+		if str(item.get("id", "")) == item_id and str(item.get("type", "")) == "attachment": return item
+	return {}
+
+func _can_attach_module(cell: int, item_id: String) -> bool:
+	return not menu_open and not manual_pause and run._gear_phase() and run.towers.has(cell) and run.towers[cell].attachments.size() < 5 and not _attachment_item(item_id).is_empty()
+
+func _update_attachment_preview() -> void:
+	if gear_feedback == null: return
+	var dragging: bool = get_viewport().gui_is_dragging()
+	var data: Variant = get_viewport().gui_get_drag_data() if dragging else null
+	var item_id: String = armed_item
+	if data is Dictionary and str(data.get("type", "")) == "attachment": item_id = str(data.get("item_id", ""))
+	elif dragging: item_id = ""
+	var item: Dictionary = _attachment_item(item_id) if not item_id.is_empty() else {}
+	var active: bool = not item.is_empty() and not menu_open and not manual_pause and not (dock.is_open() and dock.current_panel == "loot")
+	if world.has_method("set_attachment_targets"): world.set_attachment_targets(active)
+	var cell: int = -1
+	var pointer: Vector2 = get_viewport().get_mouse_position()
+	if active:
+		if controller_used and not dragging: cell = selected_cell
+		elif not (dock.is_open() and dock._shell.get_global_rect().has_point(pointer)): cell = world.cell_at_screen(pointer)
+	if not run.towers.has(cell): cell = -1
+	var allowed: bool = cell >= 0 and _can_attach_module(cell,item_id)
+	var kind: String = str(item.get("kind", "")) if active else ""
+	if world.has_method("set_attachment_preview"): world.set_attachment_preview(cell,kind,allowed)
+	var point: Vector2 = world.cell_screen_position(cell) if cell >= 0 else Vector2.ZERO
+	var color: Color = Color(str(item.get("color", "83e7c1")))
+	var slots: int = run.towers[cell].attachments.size() if cell >= 0 else 0
+	gear_feedback.set_target(cell,point,pointer,color,slots,allowed,dragging)
 
 func _update_family_focus(number: int = 0) -> void:
 	var family: int = number
@@ -931,7 +980,7 @@ func _help() -> void:
 		"01  SOLVE  ·  Tap an empty square, then a number — or drag a number onto its square. Every correct answer grows a tower and earns credits. Aim for 6–8 towers before your first wave.",
 		"02  PREPARE  ·  Click a tower to upgrade it. Open Gear to drag a module onto a tower, or select an item and then its target. Each tower holds five modules. Repeats stack.",
 		"03  DEFEND  ·  Your latest moves bend the enemy route. Need emergency firepower? Plant a number during battle—even an illegal one—at a credit and corruption cost.",
-		"04  LOOT  ·  Enemies drop energy fragments. Spend them to unlock chests. Gear and family upgrades follow you to the next garden. Visit Camp between waves."
+		"04  LOOT  ·  Open Chests to visit your loot table. Tap a voxel chest to spend fragments and reveal its gear. Modules and family upgrades follow you to the next garden."
 	]:
 		var l := label(text,17,WHITE)
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -939,7 +988,7 @@ func _help() -> void:
 	box.add_child(label("CONTROLLER",12,MINT))
 	var input_label := label("D-pad / left stick: move  ·  LB / RB: number / inventory tab\nA: confirm / plant / attach  ·  X: gear  ·  Y: next phase  ·  B: back\nStart: pause / resume  ·  View: help / options",15,MUTED)
 	box.add_child(input_label)
-	var reduce := button("Reduced motion: " + ("ON" if reduced_motion else "OFF"),func(): reduced_motion=not reduced_motion; world.set_reduced_motion(reduced_motion); _help())
+	var reduce := button("Reduced motion: " + ("ON" if reduced_motion else "OFF"),func(): reduced_motion=not reduced_motion; world.set_reduced_motion(reduced_motion); dock.set_reduced_motion(reduced_motion); _help())
 	box.add_child(reduce)
 	box.add_child(button("Sound: " + ("OFF" if muted else "ON"),func(): _toggle_sound(); _help()))
 	box.add_child(button("Notes: " + ("ON" if board_notes else "OFF"),func(): board_notes=not board_notes; _help()))

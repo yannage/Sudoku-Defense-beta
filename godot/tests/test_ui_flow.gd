@@ -158,7 +158,10 @@ func exercise() -> void:
 			scene.dock.open_panel(kind,cells[0])
 			for i in range(2): await process_frame
 			check(viewport_rect.encloses(scene.dock._shell.get_global_rect()),"Responsive dock fits %s (%s): %s" % [window_size,kind,scene.dock._shell.get_global_rect()])
-			if scene.portrait_layout:
+			if kind == "loot":
+				check(is_instance_valid(scene.dock._loot_table) and scene.dock._loot_table.is_visible_in_tree(),"Loot uses its persistent table surface")
+				check(scene.dock._shell.size.x > root.content_scale_size.x * 0.7,"Loot presentation uses the full screen width")
+			elif scene.portrait_layout:
 				check(scene.dock._shell.position.y >= scene.board_rect.end.y,"Phone sheet leaves board visible")
 				var scroll_rect: Rect2 = scene.dock._scroll.get_global_rect()
 				for child in scene.dock._scroll.find_children("*","Control",true,false):

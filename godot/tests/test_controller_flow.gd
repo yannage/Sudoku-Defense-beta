@@ -80,8 +80,12 @@ func arm_first_module() -> String:
 	await press(JOY_BUTTON_X)
 	check(scene.dock.is_open() and scene.dock.current_panel == "bag", "X opens gear")
 	var item_id: String = ""
-	for item in scene.run.items:
-		if str(item.type) == "attachment": item_id = str(item.id); break
+	# The visual inventory sorts modules; navigate to its first module rather
+	# than assuming the underlying storage order is also the display order.
+	for button in scene.dock.find_children("*","Button",true,false):
+		if str(button.get_meta("focus_id"," ")).begins_with("item:") and str(button.item.type) == "attachment":
+			item_id = str(button.item.id)
+			break
 	var card: Button = button_by_id(scene.dock, "item:" + item_id)
 	check(not item_id.is_empty() and is_instance_valid(card), "Inventory module has a stable focus target")
 	if is_instance_valid(card):
@@ -284,7 +288,12 @@ func exercise() -> void:
 	check(scene.dock.is_open() and scene.dock.current_panel == "loot", "Completed wave opens controller-accessible loot")
 	var chests_before: int = scene.run.chests.size()
 	var fragments_before: int = scene.run.fragments
-	await activate_text(scene.dock, "Crack it open")
+	var chest_button: Button = button_by_id(scene.dock, "chest:" + str(chest.id))
+	check(is_instance_valid(chest_button) and not chest_button.disabled, "Controller can focus the tappable chest")
+	if is_instance_valid(chest_button):
+		chest_button.grab_focus()
+		await frames()
+		await press(JOY_BUTTON_A)
 	check(scene.run.chests.size() == chests_before - 1 and scene.run.fragments == fragments_before - int(chest.cost), "A opens a chest and spends its fragment cost once")
 	await press(JOY_BUTTON_B)
 	await press(JOY_BUTTON_Y)

@@ -358,7 +358,7 @@ func swap_attachment(cell: int, slot: int, item_id: Variant) -> Dictionary:
 	var item: Dictionary = items[index]
 	towers[cell].attachments[slot] = item
 	items[index] = old
-	_emit("equip", {"cell":cell,"pos":cell_position(cell),"kind":item.kind,"color":Color(str(item.color)),"text":"Module swapped"})
+	_emit("equip", {"cell":cell,"slot":slot,"pos":cell_position(cell),"kind":item.kind,"color":Color(str(item.color)),"text":"Module swapped"})
 	return _ok("Module swapped. Previous equipment returned to your bag.")
 
 func _item_index(item_id: Variant) -> int:

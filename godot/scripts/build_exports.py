@@ -164,11 +164,17 @@ def main() -> None:
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_pointer_dispatch.gd", "--", "--canvas-graphics"], logs / "canvas-pointer-dispatch-tests.log", expected="POINTER_DISPATCH_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_family_workshop.gd"], logs / "family-workshop-tests.log", expected="FAMILY_WORKSHOP_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_family_workshop.gd", "--", "--canvas-graphics"], logs / "canvas-family-workshop-tests.log", expected="FAMILY_WORKSHOP_PASS")
+    run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_loot_table.gd"], logs / "loot-table-tests.log", expected="LOOT_TABLE_PASS")
+    run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_loot_table.gd", "--", "--canvas-graphics"], logs / "canvas-loot-table-tests.log", expected="LOOT_TABLE_PASS")
+    run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_loot_gear_flow.gd"], logs / "loot-gear-flow-tests.log", expected="LOOT_GEAR_FLOW_PASS")
+    run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_loot_gear_flow.gd", "--", "--canvas-graphics"], logs / "canvas-loot-gear-flow-tests.log", expected="LOOT_GEAR_FLOW_PASS")
     if args.render_check:
         for script, flag, logfile, marker in [
             ("test_rendering.gd", "--safe-graphics", "rendering-tests.log", "RENDER_PASS"),
             ("test_canvas_rendering.gd", "--canvas-graphics", "canvas-rendering-tests.log", "CANVAS_RENDER_PASS"),
             ("test_chest_canvas.gd", "--canvas-graphics", "canvas-chest-tests.log", "0 failures (real GLES pixels)"),
+            ("test_loot_gear_flow.gd", "--safe-graphics", "loot-gear-render-tests.log", "LOOT_GEAR_FLOW_PASS"),
+            ("test_loot_gear_flow.gd", "--canvas-graphics", "canvas-loot-gear-render-tests.log", "LOOT_GEAR_FLOW_PASS"),
         ]:
             command = [args.godot, "--path", str(PROJECT), "--audio-driver", "Dummy", "--rendering-method", "gl_compatibility", "--rendering-driver", "opengl3_es", "--script", "res://tests/" + script, "--", flag]
             if not os.environ.get("DISPLAY"):

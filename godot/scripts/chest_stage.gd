@@ -28,7 +28,7 @@ func _ready() -> void:
 	_viewport.size = Vector2i(360, 250)
 	_viewport.transparent_bg = true
 	_viewport.own_world_3d = true
-	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	_viewport.render_target_update_mode = SubViewport.UPDATE_WHEN_VISIBLE
 	_viewport.gui_disable_input = true
 	_viewport.msaa_3d = Viewport.MSAA_DISABLED
 	add_child(_viewport)
@@ -131,6 +131,20 @@ func open_chest() -> void:
 	_tween.tween_property(_lid, "rotation:x", -1.70, 0.5 if not reduced_motion else 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	_tween.parallel().tween_callback(_sparkles).set_delay(0.14)
 	_tween.tween_property(_glow, "scale:y", 0.2, 1.2).set_ease(Tween.EASE_OUT)
+
+func show_opened() -> void:
+	# Completed-reveal pose for a persistent loot table.
+	if _tween != null: _tween.kill()
+	_opened = true
+	if _lid != null: _lid.rotation.x = -1.70
+	if _glow != null:
+		_glow.visible = true
+		_glow.scale.y = 0.22
+
+func set_preview_active(value: bool) -> void:
+	if _viewport != null:
+		_viewport.render_target_update_mode = SubViewport.UPDATE_WHEN_VISIBLE if value else SubViewport.UPDATE_DISABLED
+	set_process(value)
 
 func reset() -> void:
 	_opened = false
