@@ -103,11 +103,53 @@ func blank_cell() -> int:
 func camera_button() -> Vector2:
 	return scene.hud_nodes.camera.get_global_rect().get_center()
 
+func check_camera_layout() -> void:
+	# Actual Control bounds include text-driven minima; requested rectangles alone
+	# miss labels growing into the quick row and chest counts widening its buttons.
+	var original_chests: Array[Dictionary] = scene.run.chests.duplicate(true)
+	var original_controller: bool = scene.controller_used
+	scene.notice.hide()
+	scene.notice_time = 0.0
+	for count: int in [0,123]:
+		scene.run.chests.clear()
+		for i: int in range(count): scene.run.chests.append({"id":"layout-%d" % i})
+		for controller_hint: bool in [false,true]:
+			scene.controller_used = controller_hint
+			scene._layout_ui()
+			await frames(4)
+			var context := "%d chests, %s hints" % [count,"controller" if controller_hint else "touch"]
+			var viewport: Rect2 = root.get_visible_rect()
+			var quick: Array[Control] = [scene.bag_button,scene.loot_button,scene.hud_nodes.camp,scene.hud_nodes.camera,scene.hud_nodes.camera_reset]
+			if scene.hud_nodes.tools.is_visible_in_tree(): quick.append(scene.hud_nodes.tools)
+			var on_screen := true
+			var separated := true
+			var text_fits := true
+			var hint_clear: bool = scene.selected_label.is_visible_in_tree() and scene.candidate_label.is_visible_in_tree()
+			for i: int in range(quick.size()):
+				var rect: Rect2 = quick[i].get_global_rect()
+				var text_size: Vector2 = quick[i].get_theme_font("font").get_string_size(quick[i].text,HORIZONTAL_ALIGNMENT_LEFT,-1,quick[i].get_theme_font_size("font_size"))
+				var box: StyleBox = quick[i].get_theme_stylebox("normal")
+				if scene.portrait_layout: text_fits = text_fits and text_size.x <= rect.size.x-box.get_content_margin(SIDE_LEFT)-box.get_content_margin(SIDE_RIGHT)+0.1
+				on_screen = on_screen and quick[i].is_visible_in_tree() and viewport.encloses(rect) and rect.size.y >= 44.0
+				hint_clear = hint_clear and not rect.intersects(scene.selected_label.get_global_rect()) and not rect.intersects(scene.candidate_label.get_global_rect())
+				for j: int in range(i+1,quick.size()): separated = separated and not rect.intersects(quick[j].get_global_rect())
+			check(on_screen,"Camera quick controls stay on screen with usable touch targets: "+context)
+			check(separated,"Camera quick controls do not overlap: "+context)
+			if scene.portrait_layout: check(text_fits,"Portrait quick labels and chest counts fit without clipping: "+context)
+			check(hint_clear and viewport.encloses(scene.candidate_label.get_global_rect()),"Camera instructions stay visible and clear of quick controls: "+context)
+	scene.run.chests = original_chests
+	scene.controller_used = original_controller
+	scene._layout_ui()
+	await frames(3)
+
 func capture(label: String) -> void:
 	if "--capture-camera" not in OS.get_cmdline_user_args(): return
 	check(DisplayServer.get_name() != "headless","Camera capture requires real graphics")
 	if DisplayServer.get_name() == "headless": return
 	scene.notice.hide()
+	scene.notice_time = 0.0
+	scene._update_context_visibility()
+	scene._refresh()
 	await frames(2)
 	await RenderingServer.frame_post_draw
 	var image: Image = root.get_texture().get_image()
@@ -182,6 +224,7 @@ func pointer_controls() -> void:
 	await tap(camera_button())
 	check(scene.camera_mode,"Touch Camera button enables orbit mode")
 	check(scene.hud_nodes.camera_reset.is_visible_in_tree() and viewport.encloses(scene.hud_nodes.camera_reset.get_global_rect()),"Reset view is accessible in camera mode")
+	await check_camera_layout()
 	scene.world.reset_camera()
 	settle()
 	touch(center,true)

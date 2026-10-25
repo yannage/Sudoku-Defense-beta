@@ -340,11 +340,12 @@ func _layout_quick_icons() -> void:
 		# compact horizontal row. Both retain the entire original button target.
 		for state in ["normal","hover","pressed","disabled","focus"]:
 			var box: StyleBoxFlat = quick.get_theme_stylebox(state)
-			box.content_margin_left = 12 if portrait_layout else 50
-			box.content_margin_right = 12
+			box.content_margin_left = 5 if portrait_layout else 50
+			box.content_margin_right = 5 if portrait_layout else 12
 			box.content_margin_top = 36 if portrait_layout else 8
 			box.content_margin_bottom = 8
 		if portrait_layout: _font(quick,20)
+		quick.clip_text = portrait_layout
 
 func _queue_layout() -> void:
 	if _layout_queued: return
@@ -409,7 +410,11 @@ func _layout_ui() -> void:
 		var quick_buttons: Array = [bag_button,loot_button,hud_nodes.camp,hud_nodes.camera_reset if camera_mode else hud_nodes.tools,hud_nodes.camera]
 		for i in range(quick_buttons.size()):
 			var quick: Button = quick_buttons[i]
-			_place(quick,Rect2(20+i*(quick_w+8),h-276,quick_w,72)); _font(quick,24)
+			# Set font and clipping before assigning the rectangle: a larger old
+			# minimum size otherwise survives after the phone style is applied.
+			_font(quick,20)
+			quick.clip_text = true
+			_place(quick,Rect2(20+i*(quick_w+8),h-276,quick_w,72))
 		var number_w := (w-56)/9.0
 		for i in range(9):
 			var b := number_buttons[i]
@@ -424,6 +429,9 @@ func _layout_ui() -> void:
 		notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		hud_nodes.tools.text = "Done" if tools_open else "Tools"
 	else:
+		hud_nodes.camera.clip_text = false
+		hud_nodes.camera_reset.clip_text = false
+		hud_nodes.tools.clip_text = false
 		_place(hud_nodes.top,Rect2(0,0,w,78))
 		_place(hud_nodes.logo,Rect2(24,18,42,42))
 		_place(header,Rect2(80,14,325,32)); _font(header,24)
@@ -693,8 +701,24 @@ func _refresh() -> void:
 		candidate_label.text = "Right stick to rotate
 R3 reset · B done" if controller_used else "Drag left / right
 Done to return to planting"
+		if portrait_layout:
+			candidate_label.text = "RS rotate · R3 reset · B done" if controller_used else "Drag sideways · Done to plant"
+			_font(candidate_label,22)
 		controls_label.text = "CAMERA   Right stick rotate   R3 reset view   B / L3 done" if controller_used else "CAMERA   Drag left / right   Q / E rotate   HOME reset   ESC done"
+	if portrait_layout:
+		for quick: Button in [bag_button,loot_button,hud_nodes.camp,hud_nodes.tools,hud_nodes.camera,hud_nodes.camera_reset]:
+			_fit_quick_label(quick)
 	_update_family_focus()
+
+func _fit_quick_label(quick: Button) -> void:
+	# Keep ordinary phone labels at 20 px; only long counters need less space.
+	var surface: StyleBox = quick.get_theme_stylebox("normal")
+	var room: float = quick.size.x-surface.get_content_margin(SIDE_LEFT)-surface.get_content_margin(SIDE_RIGHT)
+	var font: Font = quick.get_theme_font("font")
+	var pixels := 20
+	while pixels > 16 and font.get_string_size(quick.text,HORIZONTAL_ALIGNMENT_LEFT,-1,pixels).x > room:
+		pixels -= 1
+	_font(quick,pixels)
 
 func _wave_enemies_remaining() -> int:
 	# Kills is a run total. Wave progress also includes enemies that hit the core.
