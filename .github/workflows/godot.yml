@@ -80,7 +80,7 @@ jobs:
           Expand-Archive -Path $archive -DestinationPath windows-build
           $folder = (Resolve-Path windows-build).Path
           $exe = Join-Path $folder 'SudokuDefense.exe'
-          $version = [regex]::Match((Get-Content godot/project.godot -Raw), '(?m)^config/version="([^"]+)"$').Groups[1].Value
+          $version = [regex]::Match((Get-Content godot/project.godot -Raw), '(?m)^config/version="([^"]+)"\r?$').Groups[1].Value
           if (-not $version) { throw 'Missing application version' }
           $process = Start-Process -FilePath $exe -WorkingDirectory $folder -ArgumentList @('--headless', '--audio-driver', 'Dummy', '--quit-after', '120', '--log-file', 'windows-smoke.log', '--', '--smoke-test') -Wait -PassThru
           $log = Get-Content (Join-Path $folder 'windows-smoke.log') -Raw
