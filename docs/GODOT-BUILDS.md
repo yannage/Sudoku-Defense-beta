@@ -65,6 +65,39 @@ availability is for existing owners/testers with eligible override packages.
 
 For the existing Steam app 3721150/depot 3721151, run `python3 steam/prepare_godot_linux.py` after exporting. It copies the Godot ELF byte-for-byte to a staging directory with the stable Steam launch filename `sudoku-defense`, includes the license notices, tests the renamed executable, and creates a Linux-only ZIP. Its manifest specifies Merge With Baseline against the current live build to preserve Windows. The normal Linux download still uses `sudoku-defense.x86_64`. See [STEAM-RELEASE.md](STEAM-RELEASE.md) for the exact staging paths, current Steam upload record, and existing depot configuration. The Windows download uses `SudokuDefense.exe`. Verify launch, controls, audio, save/resume, and performance on an installed testing build before promoting it for a wider audience.
 
+### Updating both desktop platforms together
+
+For a release that changes both platforms, download the Linux and Windows ZIPs
+from the **same successful CI workflow**, together with
+`windows-startup-validation.json` from that workflow's Windows startup job.
+Prepare one complete shared-depot archive with:
+
+```sh
+python3 steam/prepare_godot_desktop.py \
+  --linux-archive /path/to/Sudoku-Defense-Godot-Linux.zip \
+  --windows-archive /path/to/Sudoku-Defense-Godot-Windows.zip \
+  --windows-validation /path/to/windows-startup-validation.json \
+  --source-commit FULL_40_CHARACTER_CI_COMMIT_SHA
+```
+
+The local project's version and Godot license notices must match these
+artifacts. The helper rejects extra ZIP members, invalid executable formats,
+different notices, and Windows validation evidence with the wrong source,
+version, archive hash, executable hash, or startup result. It renames only the
+Linux executable, boots that exact copy, verifies every output file, and
+preserves its executable permissions.
+
+The result is `release/Sudoku-Defense-Godot-Steam-Desktop-VERSION.zip`, containing
+exactly `sudoku-defense`, `SudokuDefense.exe`, `GODOT-LICENSE.txt`, and
+`GODOT-THIRD-PARTY.txt`. This complete archive supports Steamworks **Standard
+replacement** for depot **3721151**. The generated
+`release/steam-godot-desktop-manifest.json` records the source artifacts,
+checksums, validation results, and a **pending** upload status. It does not
+upload or activate anything. Inspect both executable hashes in the resulting
+Steam manifest before activation, then record the actual BuildID and live
+branch in the release record. A single-platform ZIP still requires **Merge
+With Baseline**.
+
 ### Controller setup for this port
 
 Godot's desktop exports use its native gamepad input; receiving the Deck's buttons and sticks does not require a browser wrapper or the Steam Input API. Godot has used SDL 3 for desktop controllers since 4.5. The web export uses a different controller backend, so a browser pass is not a substitute for testing the installed Deck build. See [Godot controller support](https://docs.godotengine.org/en/stable/tutorials/inputs/controllers_gamepads_joysticks.html).
@@ -78,6 +111,27 @@ The controller regression suite injects joypad button/axis events through the ac
 Headless import and executable boot checks detect packaging and script errors. They do not establish controller usability, graphics performance, Proton compatibility, or Steam Deck verification. Browser play is a convenient test surface; desktop and Deck testing remain separate release gates.
 
 ## Current source and verification
+
+Version **0.3.12** adds manual board rotation in the native and Canvas renderers.
+The camera keeps the board framed throughout a full turn, carries the chosen
+angle through phase changes, and eases back to the default angle with Reset
+view. The controls are:
+
+| Input | Rotate | Reset / exit |
+| --- | --- | --- |
+| Mouse | Right-drag on the board | Reset view button |
+| Keyboard | Hold Q or E | Home resets the view |
+| Touch | Tap Camera, then drag across the board | Reset view; finish Camera mode to place numbers |
+| Controller / Steam Deck | Click L3 for Camera mode, then move the right stick horizontally | R3 resets; B exits Camera mode |
+
+Outside Camera mode, the right stick remains the UI cursor and R3/RT retain
+their existing click/drag behavior. Camera gestures do not place numbers or
+equip modules. Opening a menu or management panel, losing focus, pausing, or
+disconnecting the controller cancels camera input. New runs start at the
+default orientation. Physical Steam Deck and Windows input/performance checks
+remain separate from automated event and rendering tests. The live Steam
+build remains the **0.3.11** build recorded above until a new activation is
+verified and the release record is updated.
 
 Version **0.3.9** revises player-facing instructions, tooltips, loot descriptions, and menu copy. Runs, rounds, Gear, modules, boosts, and chests use consistent terms. Chest rewards show the same effect names as the inventory. Help explains Sudoku rules, reserve seeds, corruption, and progression directly; the slot machine lists actual credit returns. Loot tooltips derive current descriptions from item stats so saved gear uses the revised copy too. The battle HUD now reports enemies left in the current wave instead of comparing run-wide kills with a single wave total. A regression covers later-round and portrait counters.
 

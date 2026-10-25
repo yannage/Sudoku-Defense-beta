@@ -8,6 +8,7 @@ const FAMILY_COLORS: Array[Color] = [Color("6de8ff"), Color("a4c7ff"), Color("c6
 const MODULE_COLORS: Dictionary = {"rapid":Color("6de8ff"), "electric":Color("c6a0ff"), "frost":Color("a4c7ff"), "blast":Color("ffae68"), "venom":Color("9be878"), "range":Color("ffe188"), "power":Color("fb86c3"), "gravity":Color("bb9bff"), "nova":Color("ff7289")}
 const SeedPlanting = preload("res://scripts/seed_planting.gd")
 const BoardTransition = preload("res://scripts/board_transition.gd")
+const CameraOrbit = preload("res://scripts/camera_orbit.gd")
 
 var run: RefCounted
 var selected_cell: int = -1
@@ -41,9 +42,11 @@ var _attachment_targets: bool = false
 var _equip_landings: Dictionary = {}
 var _equip_slots: Dictionary = {}
 var _seed_plantings: Dictionary = {}
+var _camera_orbit = CameraOrbit.new()
 
 func setup(model: RefCounted) -> void:
 	run = model
+	_camera_orbit.clear()
 	_rng.seed = 44219
 	_font = ThemeDB.fallback_font
 	_effects.clear()
@@ -62,6 +65,7 @@ func setup(model: RefCounted) -> void:
 func tick(dt: float) -> void:
 	if run == null: return
 	_clock += dt
+	_camera_orbit.advance(dt,reduced_motion)
 	var target: float = 0.0 if str(run.phase) == "solve" else 1.0
 	_morph = BoardTransition.advance(_morph, target, dt, reduced_motion)
 	_update_projection()
@@ -124,6 +128,18 @@ func set_panel_open(_value: bool) -> void:
 	# Main owns the HUD-free rectangle, including the expanded inventory dock.
 	pass
 
+func rotate_camera(radians: float) -> void:
+	_camera_orbit.rotate(radians)
+
+func reset_camera() -> void:
+	_camera_orbit.reset()
+
+func camera_is_rotated() -> bool:
+	return _camera_orbit.is_rotated()
+
+func get_camera_yaw() -> float:
+	return _camera_orbit.yaw
+
 func set_board_rect(value: Rect2) -> void:
 	_board_rect = value
 	_update_projection()
@@ -153,7 +169,7 @@ func _update_projection() -> void:
 		var size: Vector2 = get_viewport_rect().size
 		rect = Rect2(Vector2(16,16),size-Vector2(32,32))
 	var portrait: bool = get_viewport_rect().size.y > get_viewport_rect().size.x
-	var yaw: float = (0.12 if portrait else 0.32) * _blend
+	var yaw: float = (0.12 if portrait else 0.32) * _blend + _camera_orbit.yaw
 	# Ease the pitch itself: deriving height from a flattened blend introduces
 	# a square-root slope at the overhead endpoint and starts the tilt abruptly.
 	var pitch: float = acos(0.76 if portrait else 0.70) * _blend

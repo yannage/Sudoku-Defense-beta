@@ -82,6 +82,11 @@ var layout_size := Vector2.ZERO
 var _layout_queued := false
 var _dock_was_open := false
 var _notice_replaces_context := false
+var camera_mode := false
+var _camera_axis := Vector2.ZERO
+var _camera_keys: Dictionary = {}
+var _camera_window_focused := true
+const CAMERA_SPEED := 1.65
 
 func _ready() -> void:
 	get_tree().auto_accept_quit = false
@@ -99,10 +104,10 @@ func _ready() -> void:
 	controller.navigated.connect(_controller_navigate)
 	controller.controller_lost.connect(_controller_disconnected)
 	controller.pointer_activity.connect(_controller_pointer_activity)
-	controller.pointer_axis_changed.connect(controller_cursor.set_axis)
-	controller.pointer_button_changed.connect(controller_cursor.set_button)
-	controller.pointer_precision_changed.connect(controller_cursor.set_precision)
-	controller.pointer_reset.connect(controller_cursor.deactivate)
+	controller.pointer_axis_changed.connect(_controller_pointer_axis)
+	controller.pointer_button_changed.connect(_controller_pointer_button)
+	controller.pointer_precision_changed.connect(_controller_pointer_precision)
+	controller.pointer_reset.connect(_controller_pointer_reset)
 	add_child(controller)
 	controller_used = not Input.get_connected_joypads().is_empty()
 	dock.set_controller_mode(controller_used)
@@ -114,6 +119,11 @@ func _ready() -> void:
 	if "--smoke-test" in OS.get_cmdline_user_args(): print("SUDOKU_DEFENSE_READY version=" + str(ProjectSettings.get_setting("application/config/version")))
 
 func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
+		_camera_window_focused = false
+		_cancel_camera_controls()
+	elif what == NOTIFICATION_WM_WINDOW_FOCUS_IN:
+		_camera_window_focused = true
 	if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT and seed_pointer != null:
 		if controller_cursor != null: controller_cursor.deactivate()
 		seed_pointer.cancel()
@@ -238,6 +248,12 @@ func _build_ui() -> void:
 	camp.tooltip_text = "Passives and salvage slots, available between battles"
 	positioned(camp,Rect2(1092,204,164,46))
 	_add_quick_icon(camp,"camp")
+	var camera_button: Button = hud("camera",button("Camera",_toggle_camera_mode))
+	camera_button.tooltip_text = "Rotate the board: right-drag, Q / E, or L3 camera mode. Home resets the view."
+	positioned(camera_button,Rect2(1092,259,164,46))
+	var camera_reset: Button = hud("camera_reset",button("Reset view",_reset_camera_view))
+	camera_reset.tooltip_text = "Return to the default camera angle (Home / R3 in camera mode)"
+	positioned(camera_reset,Rect2(1092,314,164,46))
 	pause_label = label("TACTICAL PAUSE",14,AMBER)
 	pause_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	positioned(pause_label,Rect2(430,85,420,32))
@@ -359,7 +375,8 @@ func _layout_ui() -> void:
 	var open: bool = dock != null and dock.is_open()
 	for key in ["brand","journey","mute","pause","plant_caption"]:
 		hud_nodes[key].visible = not portrait_layout
-	hud_nodes.tools.visible = portrait_layout
+	hud_nodes.tools.visible = portrait_layout and not camera_mode
+	hud_nodes.camera_reset.visible = not portrait_layout or camera_mode
 	controls_label.visible = not portrait_layout
 	phase_detail.visible = true
 	selected_label.visible = not (portrait_layout and tools_open)
@@ -386,9 +403,10 @@ func _layout_ui() -> void:
 		_place(hud_nodes.hint,Rect2(32+tool_w,info_y,tool_w,72)); _font(hud_nodes.hint,23)
 		_place(reserve_button,Rect2(44+2*tool_w,info_y,tool_w,72)); _font(reserve_button,22)
 		_place(hud_nodes.bottom,Rect2(0,h-292,w,292))
-		# Four quick tabs expose one management surface at a time.
-		var quick_w := (w-64)/4.0
-		var quick_buttons: Array = [bag_button,loot_button,hud_nodes.camp,hud_nodes.tools]
+		# Camera controls share the phone's existing quick row, keeping the grid
+		# full-sized. In camera mode Done / Reset replace Camera / Tools.
+		var quick_w := (w-72)/5.0
+		var quick_buttons: Array = [bag_button,loot_button,hud_nodes.camp,hud_nodes.camera_reset if camera_mode else hud_nodes.tools,hud_nodes.camera]
 		for i in range(quick_buttons.size()):
 			var quick: Button = quick_buttons[i]
 			_place(quick,Rect2(20+i*(quick_w+8),h-276,quick_w,72)); _font(quick,24)
@@ -428,6 +446,8 @@ func _layout_ui() -> void:
 		_place(bag_button,Rect2(w-188,94,164,46)); _font(bag_button,17)
 		_place(loot_button,Rect2(w-188,149,164,46)); _font(loot_button,17)
 		_place(hud_nodes.camp,Rect2(w-188,204,164,46)); _font(hud_nodes.camp,17)
+		_place(hud_nodes.camera,Rect2(w-188,259,164,46)); _font(hud_nodes.camera,17)
+		_place(hud_nodes.camera_reset,Rect2(w-188,314,164,46)); _font(hud_nodes.camera_reset,17)
 		_place(hud_nodes.bottom,Rect2(0,h-104,w,104))
 		_place(hud_nodes.plant_caption,Rect2(26,h-90,170,22))
 		for i in range(9):
@@ -468,6 +488,8 @@ func _layout_ui() -> void:
 			_place(bag_button,Rect2(w-180,80,160,50)); _font(bag_button,21)
 			_place(loot_button,Rect2(w-180,140,160,50)); _font(loot_button,21)
 			_place(hud_nodes.camp,Rect2(w-180,200,160,50)); _font(hud_nodes.camp,21)
+			_place(hud_nodes.camera,Rect2(w-180,260,160,50)); _font(hud_nodes.camera,21)
+			_place(hud_nodes.camera_reset,Rect2(w-180,320,160,50)); _font(hud_nodes.camera_reset,21)
 			_place(hud_nodes.bottom,Rect2(0,h-80,w,80))
 			for i in range(9):
 				_place(number_buttons[i],Rect2(20+i*61,h-70,54,50)); _font(number_buttons[i],29)
@@ -549,6 +571,7 @@ func _style_modal_tree(node: Node) -> void:
 	for child in node.get_children(): _style_modal_tree(child)
 
 func _process(dt: float) -> void:
+	_tick_camera_controls(minf(dt,0.05))
 	# Switching hint styles rebuilds the dock. Defer it until a cursor click or
 	# drag has finished so its pressed Control survives through release.
 	if _controller_pointer_active() and not controller_cursor.button_down and not get_viewport().gui_is_dragging():
@@ -656,9 +679,21 @@ func _refresh() -> void:
 		var selected_bg: Color = Color("253740") if complete else Color("315950")
 		b.add_theme_stylebox_override("normal",style(selected_bg if selected_number==i+1 else PANEL, tint if selected_number==i+1 else Color("35505a")))
 	if portrait_layout: _refresh_portrait_text()
-	controls_label.text = "D-PAD grid   RS cursor   R3 click   LB/RB number   A plant   X gear   Y advance" if controller_used else "TAP square + number   DRAG number to plant   TAB gear   ESC menu"
+	controls_label.text = "D-PAD grid   RS cursor   L3 camera   LB/RB number   A plant   X gear   Y advance" if controller_used else "TAP / DRAG to plant   RIGHT-DRAG / Q E rotate   HOME reset   ESC menu"
 	if controller_used and not armed_item.is_empty(): controls_label.text = "D-PAD / STICK choose tower     A attach module     B cancel"
-	if _controller_pointer_active(): controls_label.text = "RS cursor   R3 click   RT hold / drag   LT precision   Left stick / D-pad grid"
+	if _controller_pointer_active(): controls_label.text = "RS cursor   R3 click   RT drag   LT precision   L3 camera   D-PAD grid"
+	hud_nodes.camera.text = "Done" if camera_mode else "Camera"
+	hud_nodes.camera.disabled = not camera_mode and not _camera_available()
+	hud_nodes.camera_reset.disabled = not _camera_available() or not world.camera_is_rotated()
+	hud_nodes.camera_reset.text = "Reset" if portrait_layout else "Reset view"
+	hud_nodes.tools.disabled = camera_mode
+	if portrait_layout: _font(hud_nodes.camera_reset,20)
+	if camera_mode:
+		selected_label.text = "ROTATE THE BOARD"
+		candidate_label.text = "Right stick to rotate
+R3 reset · B done" if controller_used else "Drag left / right
+Done to return to planting"
+		controls_label.text = "CAMERA   Right stick rotate   R3 reset view   B / L3 done" if controller_used else "CAMERA   Drag left / right   Q / E rotate   HOME reset   ESC done"
 	_update_family_focus()
 
 func _wave_enemies_remaining() -> int:
@@ -679,7 +714,7 @@ func _number_complete(number: int) -> bool:
 	return number >= 1 and number <= 9 and _number_correct_counts()[number] == 9
 
 func _number_input_allowed() -> bool:
-	return has_active_run and not menu_open and not manual_pause and armed_item.is_empty() and run.phase in ["solve","prep","battle","loot"]
+	return has_active_run and not menu_open and not manual_pause and not camera_mode and armed_item.is_empty() and run.phase in ["solve","prep","battle","loot"]
 
 func _number_placement_allowed() -> bool:
 	return _number_input_allowed() and not dock.is_open() and run.phase in ["solve","battle"]
@@ -690,7 +725,10 @@ func _pointer_activity(pointer_owner: int = -2) -> void:
 	if pointer_owner == -2 and _pointer_hint_owner != -2: _finish_pointer_activity.call_deferred()
 	if controller_used:
 		controller_used = false
-		if controller != null: controller.reset_navigation()
+		_camera_axis = Vector2.ZERO
+		if controller != null:
+			controller.reset_navigation()
+			if camera_mode: controller.reset_pointer()
 		_pointer_hint_owner = pointer_owner
 		if pointer_owner == -2: dock.set_controller_mode.call_deferred(false)
 		_refresh()
@@ -703,7 +741,7 @@ func _finish_pointer_activity() -> void:
 	if not controller_used: dock.set_controller_mode(false)
 
 func _tap_board(cell: int) -> void:
-	if menu_open or manual_pause or (seed_pointer != null and seed_pointer.is_active()): return
+	if camera_mode or menu_open or manual_pause or (seed_pointer != null and seed_pointer.is_active()): return
 	# Pointer taps choose an empty square; only a number tap/drop commits it.
 	# Controller A still uses _select(..., true) for deliberate planting.
 	_select(cell,run.towers.has(cell),true)
@@ -790,7 +828,27 @@ func _select(cell: int, place_now: bool = true, equip_armed: bool = true) -> voi
 		_action(run.place(cell,selected_number))
 	_refresh()
 
+func _screen_grid_direction(direction: Vector2i) -> Vector2i:
+	# Choose one projected horizontal axis, then its perpendicular grid axis.
+	# A consistent pair keeps all four neighbors reachable at diagonal views,
+	# where independently choosing the nearest direction can tie twice.
+	var origin: Vector2 = world.cell_screen_position(40)
+	var right := Vector2i.RIGHT
+	var score := -INF
+	for candidate: Vector2i in [Vector2i.RIGHT,Vector2i.DOWN,Vector2i.LEFT,Vector2i.UP]:
+		var projected: Vector2 = world.cell_screen_position(40+candidate.x+candidate.y*9)-origin
+		var alignment: float = projected.normalized().x
+		if alignment > score+0.000001:
+			score = alignment
+			right = candidate
+	if direction.x != 0: return right*direction.x
+	var down := Vector2i(-right.y,right.x)
+	var projected_down: Vector2 = world.cell_screen_position(40+down.x+down.y*9)-origin
+	if projected_down.y < 0.0: down = -down
+	return down*direction.y
+
 func _move_selection(direction: Vector2i) -> void:
+	direction = _screen_grid_direction(direction)
 	if selected_cell < 0: selected_cell = 40
 	else:
 		var x: int = clampi(selected_cell%9+direction.x,0,8)
@@ -819,6 +877,7 @@ func _advance() -> void:
 
 func _toggle_dock(kind: String) -> void:
 	if menu_open: return
+	_cancel_camera_controls()
 	if dock.is_open() and dock.current_panel == kind: dock.close_panel()
 	else: dock.open_panel(kind,selected_cell)
 	_refresh()
@@ -830,6 +889,7 @@ func _toggle_sound() -> void:
 
 func _toggle_pause() -> void:
 	if menu_open: return
+	_cancel_camera_controls()
 	manual_pause = not manual_pause
 	_refresh()
 
@@ -860,6 +920,7 @@ func _load() -> bool:
 	return loaded
 
 func _start_run() -> void:
+	_cancel_camera_controls()
 	var input_seed: String = seed_input.text.strip_edges() if seed_input else ""
 	var chosen_seed: int = input_seed.to_int() if input_seed.is_valid_int() else int(Time.get_unix_time_from_system())%2147483647
 	has_active_run = true
@@ -888,6 +949,7 @@ func _close_overlay() -> void:
 	_refresh()
 
 func _modal(width: float = 650, height: float = 640) -> VBoxContainer:
+	_cancel_camera_controls()
 	if seed_pointer != null: seed_pointer.cancel()
 	if board_input != null: board_input.cancel_pointer()
 	if is_instance_valid(overlay): overlay.queue_free()
@@ -1078,6 +1140,12 @@ func _help() -> void:
 		var l := label(text,17,WHITE)
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		box.add_child(l)
+	box.add_child(label("CAMERA",12,MINT))
+	var camera_help := label("Right-drag the board or hold Q / E to rotate. Home resets the view.
+Touch: tap Camera, drag left / right, then Done.
+Controller: press L3, use the right stick, R3 to reset, B to finish.",15,MUTED)
+	camera_help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(camera_help)
 	box.add_child(label("CONTROLLER",12,MINT))
 	var input_label := label("Left stick / D-pad: grid or menu focus  ·  LB / RB: number / tab\nRight stick: free cursor  ·  R3: click  ·  Hold RT: click / drag\nHold LT: precise cursor  ·  Hover at list edges to scroll\nA: confirm / plant  ·  X: gear  ·  Y: next phase  ·  B: back\nStart: pause menu  ·  View: help",15,MUTED)
 	box.add_child(input_label)
@@ -1132,12 +1200,24 @@ func _show_result() -> void:
 	go.grab_focus()
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.keycode in [KEY_Q,KEY_E]:
+		if not event.pressed:
+			_camera_keys.erase(event.keycode)
+		elif _camera_available():
+			_camera_keys[event.keycode] = true
+			get_viewport().set_input_as_handled()
+		return
 	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_HOME and _camera_available():
+			_reset_camera_view()
+			get_viewport().set_input_as_handled()
+			return
 		if event.keycode == KEY_F:
 			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if DisplayServer.window_get_mode()==DisplayServer.WINDOW_MODE_FULLSCREEN else DisplayServer.WINDOW_MODE_FULLSCREEN)
 			return
 		if event.keycode == KEY_ESCAPE:
-			if menu_open: _close_overlay()
+			if camera_mode: _set_camera_mode(false)
+			elif menu_open: _close_overlay()
 			elif dock.is_open(): dock.close_panel()
 			else: _show_menu(false)
 			return
@@ -1145,7 +1225,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.keycode == KEY_TAB: _toggle_dock("bag"); return
 		if event.keycode == KEY_P: _toggle_pause(); return
 		if event.keycode == KEY_M: muted=not muted; sound.set_muted(muted); return
-		if dock.is_open(): return
+		if dock.is_open() or camera_mode: return
 		controller_used = false
 		if event.keycode >= KEY_1 and event.keycode <= KEY_9: _choose_number(event.keycode-KEY_0)
 		elif event.keycode == KEY_ENTER: _advance()
@@ -1156,6 +1236,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif event.keycode == KEY_DOWN: _move_selection(Vector2i.DOWN)
 
 func _input(event: InputEvent) -> void:
+	if event is InputEventKey and not event.pressed: _camera_keys.erase(event.keycode)
 	if controller_cursor != null and controller_cursor.owns_event(event): return
 	if event is InputEventKey and event.pressed:
 		_pointer_activity()
@@ -1166,11 +1247,75 @@ func _input(event: InputEvent) -> void:
 		if event.pressed: _pointer_activity(event.index)
 		elif _pointer_hint_owner == event.index: _finish_pointer_activity.call_deferred()
 
+func _camera_available() -> bool:
+	return _camera_window_focused and has_active_run and not menu_open and not manual_pause and not dock.is_open() and armed_item.is_empty() and run.phase in ["solve","prep","battle","loot"] and (seed_pointer == null or not seed_pointer.is_active()) and not get_viewport().gui_is_dragging()
+
+func _toggle_camera_mode() -> void:
+	if camera_mode: _set_camera_mode(false)
+	elif _camera_available(): _set_camera_mode(true)
+
+func _set_camera_mode(value: bool) -> void:
+	if camera_mode == value: return
+	camera_mode = value
+	_camera_axis = Vector2.ZERO
+	_camera_keys.clear()
+	if board_input != null: board_input.cancel_pointer()
+	if seed_pointer != null: seed_pointer.cancel()
+	if controller_cursor != null: controller_cursor.deactivate()
+	if controller != null: controller.reset_pointer()
+	if value: tools_open = false
+	_layout_ui()
+
+func _cancel_camera_controls() -> void:
+	_camera_axis = Vector2.ZERO
+	_camera_keys.clear()
+	if board_input != null: board_input.cancel_pointer()
+	if camera_mode: _set_camera_mode(false)
+
+func _reset_camera_view() -> void:
+	if not _camera_available(): return
+	world.reset_camera()
+
+func _rotate_camera(radians: float) -> void:
+	if _camera_available(): world.rotate_camera(radians)
+
+func _tick_camera_controls(dt: float) -> void:
+	if not _camera_available():
+		if camera_mode or not _camera_keys.is_empty() or _camera_axis != Vector2.ZERO or (board_input != null and board_input.camera_pointer_active()):
+			_cancel_camera_controls()
+		return
+	var strength: float = float(_camera_keys.has(KEY_E))-float(_camera_keys.has(KEY_Q))
+	if camera_mode and absf(_camera_axis.x) > 0.20:
+		strength += signf(_camera_axis.x)*pow((absf(_camera_axis.x)-0.20)/0.80,1.4)
+	if not is_zero_approx(strength): world.rotate_camera(clampf(strength,-1.0,1.0)*CAMERA_SPEED*dt)
+
+func _controller_pointer_axis(axis: Vector2) -> void:
+	if camera_mode: _camera_axis = axis
+	else: controller_cursor.set_axis(axis)
+
+func _controller_pointer_button(source: String, pressed: bool) -> void:
+	if camera_mode:
+		if source == "stick" and pressed: _reset_camera_view()
+		return
+	controller_cursor.set_button(source,pressed)
+
+func _controller_pointer_precision(pressed: bool) -> void:
+	if not camera_mode: controller_cursor.set_precision(pressed)
+
+func _controller_pointer_reset() -> void:
+	_camera_axis = Vector2.ZERO
+	if controller_cursor != null: controller_cursor.deactivate()
+
 func _controller_pointer_active() -> bool:
 	return controller_cursor != null and controller_cursor.is_active()
 
 func _controller_pointer_activity() -> void:
 	_pointer_hint_owner = -2
+	if camera_mode:
+		var changed_mode: bool = not controller_used
+		controller_used = true
+		if changed_mode: _refresh()
+		return
 	var changed_mode: bool = not controller_used or not _controller_pointer_active()
 	if not _controller_pointer_active():
 		if board_input != null: board_input.cancel_pointer()
@@ -1180,6 +1325,7 @@ func _controller_pointer_activity() -> void:
 	if changed_mode: _refresh()
 
 func _controller_activity() -> void:
+	_camera_axis = Vector2.ZERO
 	_cursor_gesture_canceled = controller_cursor.deactivate() if controller_cursor != null else false
 	_pointer_hint_owner = -2
 	if board_input != null: board_input.cancel_pointer()
@@ -1208,6 +1354,7 @@ func _controller_buttons(scope: Control) -> Array[Control]:
 	return buttons
 
 func _controller_navigate(direction: Vector2i) -> void:
+	if camera_mode: return
 	var scope: Control = _controller_scope()
 	if scope == null:
 		if has_active_run and not manual_pause: _move_selection(direction)
@@ -1239,6 +1386,14 @@ func _controller_confirm_ui() -> void:
 		focused.pressed.emit()
 
 func _controller_action(action: String) -> void:
+	if action == "camera":
+		_toggle_camera_mode()
+		return
+	if camera_mode and action == "cancel":
+		_set_camera_mode(false)
+		_cursor_gesture_canceled = false
+		return
+	if camera_mode and action in ["confirm","previous","next","advance"]: return
 	var canceled_gesture: bool = _cursor_gesture_canceled
 	_cursor_gesture_canceled = false
 	if action == "cancel" and canceled_gesture:
@@ -1288,6 +1443,7 @@ func _controller_action(action: String) -> void:
 		"advance": _advance()
 
 func _controller_disconnected() -> void:
+	_cancel_camera_controls()
 	if controller_cursor != null: controller_cursor.deactivate()
 	if has_active_run:
 		if not menu_open: _show_menu(false)

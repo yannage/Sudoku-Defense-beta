@@ -7,6 +7,7 @@ const MODULE_COLORS: Dictionary = {"rapid":Color("6de8ff"), "electric":Color("c6
 const VoxelMaterial = preload("res://scripts/voxel_material.gd")
 const SeedPlanting = preload("res://scripts/seed_planting.gd")
 const BoardTransition = preload("res://scripts/board_transition.gd")
+const CameraOrbit = preload("res://scripts/camera_orbit.gd")
 
 var run: RefCounted
 var selected_cell: int = -1
@@ -64,9 +65,11 @@ var _equip_slots: Dictionary = {}
 var _seed_plantings: Dictionary = {}
 var _environment: Environment
 var _board_rect: Rect2 = Rect2()
+var _camera_orbit = CameraOrbit.new()
 
 func setup(model: RefCounted) -> void:
 	run = model
+	_camera_orbit.clear()
 	_rng.seed = 44219
 	if camera == null:
 		_build_world()
@@ -231,6 +234,7 @@ func tick(dt: float) -> void:
 	if run == null or camera == null:
 		return
 	_clock += dt
+	_camera_orbit.advance(dt,reduced_motion)
 	var phase: String = str(run.get("phase"))
 	var target: float = 0.0 if phase == "solve" else 1.0
 	_morph = BoardTransition.advance(_morph, target, dt, reduced_motion)
@@ -248,7 +252,9 @@ func tick(dt: float) -> void:
 	# sharply even though the camera position itself was eased.
 	var solve_basis: Basis = Basis.looking_at(solve_focus - solve_pose, Vector3(0, 0, -1))
 	var battle_basis: Basis = Basis.looking_at(battle_focus - battle_pose, Vector3.UP)
-	camera.basis = solve_basis.slerp(battle_basis, eased)
+	# Apply manual orbit around world-up after the stable phase interpolation.
+	# Both camera orientation and position use the same offset and focus.
+	camera.basis = Basis(Vector3.UP,_camera_orbit.yaw) * solve_basis.slerp(battle_basis, eased)
 	var focus: Vector3 = solve_focus.lerp(battle_focus, eased)
 	var distance: float = lerpf(solve_pose.distance_to(solve_focus), battle_pose.distance_to(battle_focus), eased)
 	_shake = maxf(0, _shake - dt * 2.4)
@@ -278,6 +284,13 @@ func tick(dt: float) -> void:
 	if absf(_last_palette_morph - eased) > 0.02:
 		_last_palette_morph = eased
 		_update_palette(eased)
+	# Keep flat numbers readable when the board is viewed from its far side.
+	# They remain on the tile; tower badges already face the camera themselves.
+	var number_basis := Basis(Vector3.UP,_camera_orbit.yaw) * Basis(Vector3.RIGHT,-PI*0.5)
+	for number_label: Label3D in _labels:
+		if number_label.billboard == BaseMaterial3D.BILLBOARD_DISABLED:
+			number_label.basis = number_basis
+	_drop_label.basis = number_basis
 	for i: int in range(_decor.size()):
 		var d: Node3D = _decor[i]
 		d.rotation.z = 0.0 if reduced_motion else sin(_clock * 0.8 + float(i)) * 0.025
@@ -365,6 +378,18 @@ func set_family_focus(number: int) -> void:
 
 func set_panel_open(value: bool) -> void:
 	_panel_open = value
+
+func rotate_camera(radians: float) -> void:
+	_camera_orbit.rotate(radians)
+
+func reset_camera() -> void:
+	_camera_orbit.reset()
+
+func camera_is_rotated() -> bool:
+	return _camera_orbit.is_rotated()
+
+func get_camera_yaw() -> float:
+	return _camera_orbit.yaw
 
 func set_board_rect(value: Rect2) -> void:
 	# HUD layout supplies the usable area in root-viewport coordinates. Fitting

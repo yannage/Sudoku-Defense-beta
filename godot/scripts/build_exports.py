@@ -188,6 +188,9 @@ def main() -> None:
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_sudoku.gd"], logs / "sudoku-tests.log", expected="SUDOKU_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_board_transition.gd"], logs / "board-transition-tests.log", expected="BOARD_TRANSITION_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_board_transition.gd", "--", "--canvas-graphics"], logs / "canvas-board-transition-tests.log", expected="BOARD_TRANSITION_PASS")
+    for script, marker in [("test_camera_orbit.gd", "CAMERA_ORBIT_PASS"), ("test_camera_controls.gd", "CAMERA_CONTROLS_PASS")]:
+        for renderer, flags in [("native", []), ("canvas", ["--", "--canvas-graphics"])]:
+            run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/" + script] + flags, logs / f"{renderer}-{script.removesuffix('.gd')}.log", expected=marker)
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_ui_flow.gd"], logs / "ui-flow-tests.log", expected="UI_FLOW_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_ui_flow.gd", "--", "--canvas-graphics"], logs / "canvas-ui-flow-tests.log", expected="UI_FLOW_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_menu_presentation.gd"], logs / "menu-presentation-tests.log", expected="MENU_PRESENTATION_PASS")
@@ -221,12 +224,16 @@ def main() -> None:
             ("test_menu_presentation.gd", "--canvas-graphics", "canvas-menu-presentation-render-tests.log", "MENU_PRESENTATION_PASS"),
             ("test_controller_cursor.gd", "--safe-graphics", "controller-cursor-render-tests.log", "CONTROLLER_CURSOR_PASS"),
             ("test_controller_cursor.gd", "--canvas-graphics", "canvas-controller-cursor-render-tests.log", "CONTROLLER_CURSOR_PASS"),
+            ("test_camera_controls.gd", "--safe-graphics", "camera-controls-render-tests.log", "CAMERA_CONTROLS_PASS"),
+            ("test_camera_controls.gd", "--canvas-graphics", "canvas-camera-controls-render-tests.log", "CAMERA_CONTROLS_PASS"),
             ("test_loot_gear_flow.gd", "--safe-graphics", "loot-gear-render-tests.log", "LOOT_GEAR_FLOW_PASS"),
             ("test_loot_gear_flow.gd", "--canvas-graphics", "canvas-loot-gear-render-tests.log", "LOOT_GEAR_FLOW_PASS"),
         ]:
             command = [args.godot, "--path", str(PROJECT), "--audio-driver", "Dummy", "--rendering-method", "gl_compatibility", "--rendering-driver", "opengl3_es", "--script", "res://tests/" + script]
             if flag:
                 command += ["--", flag]
+            if script == "test_camera_controls.gd":
+                command += ["--capture-camera"]
             if not os.environ.get("DISPLAY"):
                 xvfb = shutil.which("xvfb-run")
                 if not xvfb:

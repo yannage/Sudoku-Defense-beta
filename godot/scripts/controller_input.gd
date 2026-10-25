@@ -18,6 +18,7 @@ const BUTTONS: Dictionary = {
 	JOY_BUTTON_X: "gear", JOY_BUTTON_Y: "advance",
 	JOY_BUTTON_LEFT_SHOULDER: "previous", JOY_BUTTON_RIGHT_SHOULDER: "next",
 	JOY_BUTTON_START: "pause", JOY_BUTTON_BACK: "help",
+	JOY_BUTTON_LEFT_STICK: "camera",
 }
 const DPAD: Dictionary = {
 	JOY_BUTTON_DPAD_LEFT: Vector2i.LEFT, JOY_BUTTON_DPAD_RIGHT: Vector2i.RIGHT,
