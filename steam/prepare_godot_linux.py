@@ -4,6 +4,8 @@
 This prepares files only. It does not authenticate, upload, or activate a build.
 The stable Steam executable name keeps existing launch options and old branches
 compatible while the normal desktop download retains its .x86_64 filename.
+The depot also contains Windows. Upload this Linux-only archive with Steamworks
+Merge With Baseline against the current live build to preserve that executable.
 """
 from __future__ import annotations
 
@@ -80,14 +82,14 @@ def main() -> None:
         "source_commit": args.source_commit or local_commit, "local_source_commit": local_commit,
         "source_tree": tree, "prepared_at": datetime.now(timezone.utc).isoformat(),
         "upload_status": "pending", "steam_build_id": None, "steam_depot_manifest_id": None,
-        "upload_mode": "Standard replacement", "launch_executable": "sudoku-defense",
+        "upload_mode": "Merge With Baseline", "baseline_requirement": "Current live build; preserve Windows executable", "launch_executable": "sudoku-defense",
         "archive": str(archive_path), "archive_bytes": archive_path.stat().st_size,
         "archive_sha256": digest(archive_path),
         "files": [{"path": path.name, "bytes": path.stat().st_size, "sha256": digest(path), "mode": oct(path.stat().st_mode & 0o777)} for path in sorted(STAGE.iterdir())],
     }
     manifest_path = RELEASE / "steam-godot-linux-manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
-    print(json.dumps({"stage": str(STAGE), "archive": str(archive_path), "sha256": manifest["archive_sha256"], "manifest": str(manifest_path), "boot": f"SUDOKU_DEFENSE_READY version={version}", "upload_status": "pending"}, indent=2))
+    print(json.dumps({"stage": str(STAGE), "archive": str(archive_path), "sha256": manifest["archive_sha256"], "manifest": str(manifest_path), "boot": f"SUDOKU_DEFENSE_READY version={version}", "upload_status": "pending", "upload_mode": manifest["upload_mode"], "baseline_requirement": manifest["baseline_requirement"]}, indent=2))
 
 
 if __name__ == "__main__":

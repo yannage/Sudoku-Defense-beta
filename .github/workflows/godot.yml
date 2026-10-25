@@ -62,9 +62,52 @@ jobs:
             godot/build/render-checks/
           retention-days: 14
 
+  windows-smoke:
+    needs: exports
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: Sudoku-Defense-Godot-Desktop-and-Source
+          path: packages
+      - name: Verify exported Windows startup
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $archive = Join-Path $PWD 'packages/Sudoku-Defense-Godot-Windows.zip'
+          Expand-Archive -Path $archive -DestinationPath windows-build
+          $folder = (Resolve-Path windows-build).Path
+          $exe = Join-Path $folder 'SudokuDefense.exe'
+          $version = [regex]::Match((Get-Content godot/project.godot -Raw), '(?m)^config/version="([^"]+)"$').Groups[1].Value
+          if (-not $version) { throw 'Missing application version' }
+          $process = Start-Process -FilePath $exe -WorkingDirectory $folder -ArgumentList @('--headless', '--audio-driver', 'Dummy', '--quit-after', '120', '--log-file', 'windows-smoke.log', '--', '--smoke-test') -Wait -PassThru
+          $log = Get-Content (Join-Path $folder 'windows-smoke.log') -Raw
+          Write-Host $log
+          if ($process.ExitCode -ne 0 -or $log -match 'ERROR:|Parse Error:' -or -not $log.Contains("SUDOKU_DEFENSE_READY version=$version")) {
+            throw "Windows startup failed with exit code $($process.ExitCode)"
+          }
+          @{
+            source_commit = '${{ github.sha }}'
+            game_version = $version
+            status = 'passed'
+            executable_sha256 = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+            archive_sha256 = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+            ready_marker = "SUDOKU_DEFENSE_READY version=$version"
+          } | ConvertTo-Json | Set-Content windows-startup-validation.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Sudoku-Defense-Windows-Startup-Validation
+          path: |
+            windows-startup-validation.json
+            windows-build/windows-smoke.log
+          retention-days: 30
+
   release:
     if: startsWith(github.ref, 'refs/tags/godot-v')
-    needs: exports
+    needs: [exports, windows-smoke]
     runs-on: ubuntu-24.04
     permissions:
       contents: write

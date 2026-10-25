@@ -1,6 +1,36 @@
 # Sudoku Defense: Steam release target
 
-## Current Steam testing build — Godot 0.3.9
+## Windows addition and shared depot uploads
+
+The Windows build uses the same Godot project and version as Linux. Export it
+with `python3 godot/scripts/build_exports.py --targets windows --godot
+/absolute/path/to/godot`. Its ZIP contains `SudokuDefense.exe` and the two Godot
+license notices at the archive root. Use a Windows-only, 64-bit Steam launch
+option pointing to `SudokuDefense.exe`; retain the Linux-only `sudoku-defense`
+launch option.
+
+On October 25, 2026, Steamworks inspection confirmed that existing depot
+**3721151** is configured for **All platforms**. The Windows addition uses that
+shared depot, rather than a separate Windows depot. The Linux baseline before
+the addition is build **26194379**, manifest **6413919482495814251**, version
+**0.3.11**. Actual activation IDs belong in the release record after upload.
+
+**For every future single-platform upload to this shared depot, choose Merge
+With Baseline and select the current live build as the baseline.** A Standard
+replacement using a Windows-only or Linux-only ZIP removes the other platform's
+executable. Standard replacement is appropriate only for a complete archive
+containing both `sudoku-defense` and `SudokuDefense.exe`, with their common
+license notices. Verify both executables in the resulting Steam manifest before
+activating the build, then verify the default branch points to it.
+
+`steam/prepare_godot_linux.py` and `steam/app_build_3721150.vdf` still stage only
+the Linux files. Their historical Standard-replacement instructions below
+describe the former Linux-only contents; do not use those instructions to
+replace the shared depot after Windows has been added. Use the Steamworks
+Merge With Baseline flow for that single-platform ZIP, or stage both platforms
+before using a full SteamPipe replacement upload.
+
+## Historical Steam testing build — Godot 0.3.9
 
 On **October 24, 2026 UTC**, native **Godot 0.3.9** was uploaded and activated on the main app's **default** branch for existing Steam testers. This version adds the seed planting/growth animation, clearer game copy, and the correct current-wave enemy count. The exact same native package is staged on the newly created separate Playtest's default branch. The main game remains unreleased, and the Playtest remains **Hidden / Not Playable / Limited**, with zero participants. No Valve review or public release was submitted.
 
@@ -61,7 +91,7 @@ The uploaded manifest lists exactly three files: `sudoku-defense`, `GODOT-LICENS
 
 The previous Godot **0.3.7** build **26176881**, manifest **6349129508851656728**, remains in build history as the rollback candidate. Its source commit was `1363fc3aac33b845e0a207c97875522fa22e7716` and ZIP SHA-256 was `edce2fd3a12c042a396ddb1b396140d9ff1fd94a15624fa8e794ff45ca5457b6`. No launch or controller settings changed for 0.3.8. The existing native Linux 64-bit launch, Generic Gamepad template, and **Left Mouse Click Emulation** touchscreen mode were preserved.
 
-Package 1309913 is an entitlement, not an upload destination. Do not create a new app for this update. A Windows export exists separately, but no Windows depot is documented or assumed here; do not put a Windows executable into the Linux-only depot.
+Package 1309913 is an entitlement, not an upload destination. Do not create a new app for this update. At this historical release, Windows exports were separate and no Windows Steam launch was configured. The former assumption that depot 3721151 was Linux-only is superseded by the October 25 inspection and shared-depot instructions above.
 
 ## Prepare the native Linux depot
 
@@ -81,13 +111,13 @@ The helper:
 4. Creates `release/Sudoku-Defense-Godot-Steam-Linux-<version>.zip` with three files directly at its root: `sudoku-defense` (mode 0755), `GODOT-LICENSE.txt`, and `GODOT-THIRD-PARTY.txt`.
 5. Verifies ZIP CRC and executable permissions, then writes SHA-256 hashes, source provenance, and pending-upload status to `release/steam-godot-linux-manifest.json`.
 
-Use this ZIP for a Steamworks **Standard replacement** upload to depot 3721151. Replacing the depot contents removes obsolete Electron libraries and `resources/app.asar`; those files are not needed by Godot. The ZIP is deliberately not nested under an extra directory. The normal desktop download keeps the filename `sudoku-defense.x86_64`; only the Steam staging copy uses `sudoku-defense`.
+Use this Linux-only ZIP for a Steamworks **Merge With Baseline** upload to depot 3721151, selecting the current live build so `SudokuDefense.exe` remains present. A full Standard replacement requires both platform executables. The historical migration from Electron used replacement to remove obsolete libraries and `resources/app.asar`; Godot does not need those files. The ZIP is deliberately not nested under an extra directory. The normal desktop download keeps the filename `sudoku-defense.x86_64`; only the Steam staging copy uses `sudoku-defense`.
 
 Keep binaries, Steam SDK files, credentials, login sessions, logs, and chunk caches out of Git. `release/` is ignored. The manifest and boot log are local packaging evidence, not depot content.
 
 ## SteamPipe configuration
 
-- `steam/app_build_3721150.vdf` points to the prepared `release/steam-godot-linux/` directory.
+- `steam/app_build_3721150.vdf` points to the prepared `release/steam-godot-linux/` directory. This is a Linux-only staging template, not a complete replacement for the shared depot. Add and verify the existing Windows executable before using it for a full upload; otherwise use Steamworks Merge With Baseline for the Linux ZIP.
 - `steam/depot_build_3721151.vdf` maps its contents recursively to the existing depot root.
 - `SetLive` is empty: an upload does not activate a branch automatically.
 - `Preview` is `0` for upload; use a temporary local copy with `Preview` set to `1` for a file-mapping dry run.

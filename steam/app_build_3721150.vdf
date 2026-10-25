@@ -1,3 +1,7 @@
+// This stages Linux only. Depot 3721151 is shared with Windows.
+// For a full SteamPipe upload, include the verified SudokuDefense.exe in
+// ContentRoot as well. Otherwise use the Linux ZIP in Steamworks with
+// Merge With Baseline against the current live build to preserve Windows.
 "AppBuild"
 {
     "AppID" "3721150"
