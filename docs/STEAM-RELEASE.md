@@ -1,6 +1,49 @@
 # Sudoku Defense: Steam release target
 
-## Current Steam testing build — Godot 0.3.11 for Windows and Linux
+## Current Steam testing build — Godot 0.3.12 camera controls
+
+On **October 25, 2026 (America/New_York)**, build **26205570** was activated on
+the main app's **default** branch for Windows and Linux. It adds smooth 360°
+board rotation with right-mouse dragging, Q/E, touch Camera mode, and L3/right
+stick controller controls. Reset view eases back along the shortest arc. The
+chosen angle persists through phase changes, and placement/navigation follow
+the rotated board. Portrait controls and instructions fit without overlap.
+
+| Item | Value |
+| --- | --- |
+| Main Steam app / shared depot | **3721150 / 3721151** |
+| Active default BuildID | **26205570** |
+| Depot manifest | **6626747563325911071** |
+| Windows executable | `SudokuDefense.exe`, 109,951,272 bytes |
+| Windows SHA-1 | `57637cf42d2a8639cfdc082a6027fb01b5cbc76d` |
+| Linux executable | `sudoku-defense`, 74,202,200 bytes |
+| Linux SHA-1 | `9c194ef7aca756c8a72670c7feefe08b886fdeb0` |
+| Upload mode | Standard replacement of the complete four-file shared depot |
+| Previous default / rollback | Build **26204484**, manifest **2564642636447194378** |
+
+Both platform packages come from source commit
+`56f0295d5184809f34018f163ebcdbd7f14208e9`, workflow
+[40245799289](https://github.com/yannage/Sudoku-Defense-beta/actions/runs/40245799289).
+Exports job **121326975628** and native Windows startup job **121328585588**
+passed. The full regression/render pipeline passed without Godot errors:
+camera checks include 1,252 headless assertions and 388 real GLES assertions
+per renderer; transition suites passed 220 native and 166 Canvas checks.
+Final Deck-size and portrait screenshots were visually reviewed for both
+renderers. Both exact packaged executables report version **0.3.12** at startup.
+
+The combined archive is **67,478,122 bytes**, SHA-256
+`f3c0ad4ab8ee468c0363e7717c0f01f94c2308a9daa39a4f9ed755370bdab468`.
+Steam's manifest contains exactly both executables and the two Godot license
+notices, with all sizes and SHA-1 hashes matching the staging manifest. The
+default branch table and current-build row confirmed activation. Steam's
+preview reported a **1.7 MB** update from the previous default build.
+
+Existing launch paths and platform settings remain in use. The app remains
+unreleased and available to eligible existing owners/testers; the separate
+Playtest app was not changed. Automated checks do not replace a physical
+Steam Deck/Windows controller, audio, performance, or Steam-client install pass.
+
+## Previous Steam testing build — Godot 0.3.11 for Windows and Linux
 
 On **October 25, 2026 (America/New_York)**, build **26204484** was activated on
 the main app's **default** branch. It adds native Windows x86-64 alongside the

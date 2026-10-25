@@ -58,7 +58,7 @@ Tags beginning with `godot-v` also create a GitHub release with the packages. Ta
 
 The Windows and Linux builds are separate deliverables from the same project. The Windows build runs through `SudokuDefense.exe` on Windows; the Linux build runs natively and should use a Linux launch option without a forced Proton override. Both can live in existing all-platform Steam depot 3721151 with operating-system-specific launch options. A single-platform ZIP must be uploaded using **Merge With Baseline** against the current live build so the other executable remains present. Standard replacement requires a complete package containing both executables. See the current shared-depot instructions at the top of [STEAM-RELEASE.md](STEAM-RELEASE.md).
 
-Build **26204484** supplies both platforms on the existing app's default branch.
+Build **26205570** supplies version **0.3.12** for both platforms on the existing app's default branch.
 The Windows64 and Linux64 launch options and common platform configuration
 (`oslist=windows,linux`, `osarch=64`) are published. The app remains unreleased;
 availability is for existing owners/testers with eligible override packages.
@@ -129,9 +129,11 @@ their existing click/drag behavior. Camera gestures do not place numbers or
 equip modules. Opening a menu or management panel, losing focus, pausing, or
 disconnecting the controller cancels camera input. New runs start at the
 default orientation. Physical Steam Deck and Windows input/performance checks
-remain separate from automated event and rendering tests. The live Steam
-build remains the **0.3.11** build recorded above until a new activation is
-verified and the release record is updated.
+remain separate from automated event and rendering tests. Version **0.3.12**
+is active on Steam's default branch as build **26205570**, verified against
+manifest **6626747563325911071**. Both executables came from the successful
+workflow **40245799289** at source commit
+`56f0295d5184809f34018f163ebcdbd7f14208e9`.
 
 Version **0.3.9** revises player-facing instructions, tooltips, loot descriptions, and menu copy. Runs, rounds, Gear, modules, boosts, and chests use consistent terms. Chest rewards show the same effect names as the inventory. Help explains Sudoku rules, reserve seeds, corruption, and progression directly; the slot machine lists actual credit returns. Loot tooltips derive current descriptions from item stats so saved gear uses the revised copy too. The battle HUD now reports enemies left in the current wave instead of comparing run-wide kills with a single wave total. A regression covers later-round and portrait counters.
 
