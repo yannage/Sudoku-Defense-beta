@@ -7,6 +7,7 @@ extends Node2D
 const FAMILY_COLORS: Array[Color] = [Color("6de8ff"), Color("a4c7ff"), Color("c6a0ff"), Color("ffae68"), Color("fb86c3"), Color("9be878"), Color("ffe188"), Color("bb9bff"), Color("dec3ed")]
 const MODULE_COLORS: Dictionary = {"rapid":Color("6de8ff"), "electric":Color("c6a0ff"), "frost":Color("a4c7ff"), "blast":Color("ffae68"), "venom":Color("9be878"), "range":Color("ffe188"), "power":Color("fb86c3"), "gravity":Color("bb9bff"), "nova":Color("ff7289")}
 const SeedPlanting = preload("res://scripts/seed_planting.gd")
+const BoardTransition = preload("res://scripts/board_transition.gd")
 
 var run: RefCounted
 var selected_cell: int = -1
@@ -62,7 +63,7 @@ func tick(dt: float) -> void:
 	if run == null: return
 	_clock += dt
 	var target: float = 0.0 if str(run.phase) == "solve" else 1.0
-	_morph = move_toward(_morph, target, dt * (4.0 if reduced_motion else 1.35))
+	_morph = BoardTransition.advance(_morph, target, dt, reduced_motion)
 	_update_projection()
 	_tick_seed_plantings(dt)
 	for cell: Variant in _equip_landings.keys():
@@ -146,15 +147,18 @@ func _tick_seed_plantings(dt: float) -> void:
 			_seed_plantings.erase(key)
 
 func _update_projection() -> void:
-	_blend = smoothstep(0.0,1.0,_morph)
+	_blend = BoardTransition.eased(_morph)
 	var rect: Rect2 = _board_rect
 	if not rect.has_area():
 		var size: Vector2 = get_viewport_rect().size
 		rect = Rect2(Vector2(16,16),size-Vector2(32,32))
 	var portrait: bool = get_viewport_rect().size.y > get_viewport_rect().size.x
 	var yaw: float = (0.12 if portrait else 0.32) * _blend
-	var flatten: float = lerpf(1.0,0.76 if portrait else 0.70,_blend)
-	var height: float = sqrt(maxf(0.0,1.0-flatten*flatten))
+	# Ease the pitch itself: deriving height from a flattened blend introduces
+	# a square-root slope at the overhead endpoint and starts the tilt abruptly.
+	var pitch: float = acos(0.76 if portrait else 0.70) * _blend
+	var flatten: float = cos(pitch)
+	var height: float = sin(pitch)
 	_axis_x = Vector2(cos(yaw),sin(yaw)*flatten)
 	_axis_z = Vector2(-sin(yaw),cos(yaw)*flatten)
 	_axis_y = Vector2(0,-height)

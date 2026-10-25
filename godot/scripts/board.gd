@@ -6,6 +6,7 @@ const FAMILY_COLORS: Array[Color] = [Color("6de8ff"), Color("a4c7ff"), Color("c6
 const MODULE_COLORS: Dictionary = {"rapid":Color("6de8ff"), "electric":Color("c6a0ff"), "frost":Color("a4c7ff"), "blast":Color("ffae68"), "venom":Color("9be878"), "range":Color("ffe188"), "power":Color("fb86c3"), "gravity":Color("bb9bff"), "nova":Color("ff7289")}
 const VoxelMaterial = preload("res://scripts/voxel_material.gd")
 const SeedPlanting = preload("res://scripts/seed_planting.gd")
+const BoardTransition = preload("res://scripts/board_transition.gd")
 
 var run: RefCounted
 var selected_cell: int = -1
@@ -232,25 +233,36 @@ func tick(dt: float) -> void:
 	_clock += dt
 	var phase: String = str(run.get("phase"))
 	var target: float = 0.0 if phase == "solve" else 1.0
-	_morph = move_toward(_morph, target, dt * (4.0 if reduced_motion else 1.35))
+	_morph = BoardTransition.advance(_morph, target, dt, reduced_motion)
 	_panel_blend = move_toward(_panel_blend, 1.0 if _panel_open else 0.0, dt * 4.0)
-	var eased: float = smoothstep(0.0, 1.0, _morph)
+	var eased: float = BoardTransition.eased(_morph)
 	# A gentler portrait yaw makes the grid larger and keeps rows easy to read
 	# on phones, while the Deck keeps the wider tactical diorama perspective.
 	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
 	var battle_pose: Vector3 = Vector3(2.4, 15.5, 10.4) if viewport_size.y > viewport_size.x else Vector3(10.5, 13.4, 13.2)
-	var target_position: Vector3 = Vector3(0, 16, 0.02).lerp(battle_pose, eased)
-	var focus: Vector3 = Vector3(0, -0.12 - eased * 0.25, 0)
+	var solve_pose: Vector3 = Vector3(0, 16, 0.02)
+	var solve_focus: Vector3 = Vector3(0, -0.12, 0)
+	var battle_focus: Vector3 = Vector3(0, -0.37, 0)
+	# Interpolate two stable endpoint orientations. Recomputing look_at near
+	# the overhead pole (and switching its up vector) made the first frames yaw
+	# sharply even though the camera position itself was eased.
+	var solve_basis: Basis = Basis.looking_at(solve_focus - solve_pose, Vector3(0, 0, -1))
+	var battle_basis: Basis = Basis.looking_at(battle_focus - battle_pose, Vector3.UP)
+	camera.basis = solve_basis.slerp(battle_basis, eased)
+	var focus: Vector3 = solve_focus.lerp(battle_focus, eased)
+	var distance: float = lerpf(solve_pose.distance_to(solve_focus), battle_pose.distance_to(battle_focus), eased)
 	_shake = maxf(0, _shake - dt * 2.4)
-	if _shake > 0.001 and not reduced_motion:
-		focus += Vector3(sin(_clock * 74.0), cos(_clock * 91.0), 0) * _shake * 0.06
-	camera.position = target_position
-	camera.look_at(focus, Vector3(0, 0, -1) if eased < 0.001 else Vector3.UP)
+	camera.position = focus + camera.basis.z * distance
 	camera.size = lerpf(11.65, 13.25, eased) + lerpf(0.30, 1.45, eased) * _panel_blend
 	camera.h_offset = lerpf(0.90, 1.05, eased) * _panel_blend
 	camera.v_offset = 0.0
 	if _board_rect.has_area():
 		_fit_board_rect(eased)
+	# Apply combat feedback after fitting so centering the board cannot cancel
+	# it. This never affects the orbit or builds up across frames.
+	if _shake > 0.001 and not reduced_motion:
+		camera.h_offset += sin(_clock * 74.0) * _shake * 0.06
+		camera.v_offset += cos(_clock * 91.0) * _shake * 0.06
 	_sync_board(false)
 	_sync_towers(dt)
 	_sync_attachment_targets()
@@ -277,7 +289,7 @@ func set_selected(cell: int, number: int = 0) -> void:
 	selected_number = clampi(number, 0, 9)
 	if camera == null:
 		return
-	_update_palette(smoothstep(0.0, 1.0, _morph))
+	_update_palette(BoardTransition.eased(_morph))
 	_refresh_range()
 
 func set_drop_preview(cell: int, number: int, allowed: bool) -> void:
@@ -349,7 +361,7 @@ func set_family_focus(number: int) -> void:
 	var value: int = clampi(number,0,9)
 	if _family_focus == value: return
 	_family_focus = value
-	if camera != null: _update_palette(smoothstep(0.0,1.0,_morph))
+	if camera != null: _update_palette(BoardTransition.eased(_morph))
 
 func set_panel_open(value: bool) -> void:
 	_panel_open = value
@@ -359,7 +371,7 @@ func set_board_rect(value: Rect2) -> void:
 	# the actual camera-space bounds keeps every tile reachable after rotation.
 	_board_rect = value
 	if camera != null and value.has_area():
-		_fit_board_rect(smoothstep(0.0, 1.0, _morph))
+		_fit_board_rect(BoardTransition.eased(_morph))
 
 func _fit_board_rect(blend: float) -> void:
 	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
@@ -435,7 +447,7 @@ func _sync_board(force: bool) -> void:
 		_last_board = signature
 		for i: int in range(81):
 			_labels[i].text = str(values[i]) if int(values[i]) > 0 else ""
-		_update_palette(smoothstep(0.0, 1.0, _morph))
+		_update_palette(BoardTransition.eased(_morph))
 	var route: Array = run.get("route")
 	var route_signature: String = str(route)
 	if force or route_signature != _route_signature:
@@ -936,7 +948,7 @@ func _update_seed_plantings(dt: float) -> void:
 			completed = true
 		else:
 			_animate_seed_planting(int(cell))
-	if completed: _update_palette(smoothstep(0.0,1.0,_morph))
+	if completed: _update_palette(BoardTransition.eased(_morph))
 
 func _clear_seed_plantings() -> void:
 	for cell: Variant in _seed_plantings:
@@ -945,7 +957,7 @@ func _clear_seed_plantings() -> void:
 		(entry.node as Node3D).queue_free()
 		_labels[cell].scale = Vector3.ONE
 	_seed_plantings.clear()
-	if not _labels.is_empty(): _update_palette(smoothstep(0.0,1.0,_morph))
+	if not _labels.is_empty(): _update_palette(BoardTransition.eased(_morph))
 
 func _burst(pos: Vector3, color: Color, count: int, strength: float) -> void:
 	if reduced_motion:

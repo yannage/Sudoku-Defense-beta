@@ -4,7 +4,7 @@ A native Godot 4.7.2 version of the pre-Unity Sudoku Defense game. The same GDSc
 
 ## Play
 
-Open the published Godot edition in a current WebGL 2 browser. Version 0.3.10 adapts to portrait phones, wide landscape phones, and the Steam Deck screen. Portrait keeps the grid above a large number bar and four quick tabs; Tools reveals notes, hints, and reserve seeds. Gear, Chests, and Camp use voxel icons with short labels and counts. Gear and the workshop open beside the board; Chests opens a dedicated loot table. The launch page offers fullscreen and desktop downloads. For Windows, extract the ZIP and run `SudokuDefense.exe`. For Linux, extract the archive and run `sudoku-defense.x86_64`; the tar.gz also preserves execute permissions.
+Open the published Godot edition in a current WebGL 2 browser. Version 0.3.11 adapts to portrait phones, wide landscape phones, and the Steam Deck screen. Portrait keeps the grid above a large number bar and four quick tabs; Tools reveals notes, hints, and reserve seeds. Gear, Chests, and Camp use voxel icons with short labels and counts. Gear and the workshop open beside the board; Chests opens a dedicated loot table. The launch page offers fullscreen and desktop downloads. For Windows, extract the ZIP and run `SudokuDefense.exe`. For Linux, extract the archive and run `sudoku-defense.x86_64`; the tar.gz also preserves execute permissions.
 
 The browser export now projects the voxel board and animated chests with ordinary Godot CanvasItem polygons. This bypasses the entire spatial rendering pass that continued to show black on the affected phone, even with simpler materials. The same GDScript run drives tower growth, aiming, routes, equipment, combat, and loot. Desktop builds retain the native 3D scene; pass `--canvas-graphics` to use the browser's compatible voxel view on desktop. The older `--safe-graphics` option only simplifies desktop 3D materials and is no longer the web default. The exact phone still needs a retest; local framebuffer checks cannot establish its GPU behavior.
 
@@ -24,6 +24,8 @@ Version 0.3.8 gives deployment a voxel diorama and illustrated mode tiles, separ
 Version 0.3.9 revises the player-facing instructions, item descriptions, upgrade explanations, and run summaries. Run, round, Gear, modules, and chests now use consistent names. Slot rewards and corruption describe the actual simulation. Correct solve placements now drop a voxel seed into the tile before revealing the number. The 0.64-second effect is cosmetic, supports overlapping placements, clears when the board changes, and shows numbers immediately in reduced-motion mode.
 
 Version 0.3.10 gives planting a tumbling voxel seed, a dark soil pocket, an impact squash, scattered soil, and a small sprout. Muted stone solve tiles and a darker battle floor improve separation; softer directional lighting preserves tower colors and shaded faces. The answer commits immediately, overlapping placements remain responsive, and reduced motion reveals it immediately.
+
+Version **0.3.11** smooths the camera movement between Sudoku and defense. Stable endpoint rotations remove the sudden turn out of the overhead view. Both renderers use a 1.05-second ease with zero velocity and acceleration at the ends; reduced motion retains its shorter transition. Combat shake remains visible after camera framing.
 
 ## Controls
 
@@ -63,6 +65,8 @@ Import `project.godot` with Godot 4.7.2 standard (GDScript) edition. The Compati
 ```sh
 godot --headless --path godot --script res://tests/test_run.gd
 godot --headless --path godot --script res://tests/test_sudoku.gd
+godot --headless --path godot --script res://tests/test_board_transition.gd
+godot --headless --path godot --script res://tests/test_board_transition.gd -- --canvas-graphics
 # Requires a real display (or Xvfb); checks the default native lighting at Deck size:
 godot --path godot --audio-driver Dummy --script res://tests/test_board_readability.gd
 godot --path godot --audio-driver Dummy --script res://tests/test_board_readability.gd -- --canvas-graphics
