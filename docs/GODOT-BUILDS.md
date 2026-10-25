@@ -43,11 +43,25 @@ Every desktop folder and browser distribution includes `GODOT-LICENSE.txt` and `
 
 `.github/workflows/godot.yml` builds the project on changes to the `godot-deck-edition` branch, on relevant pull requests, or by manual workflow dispatch. It downloads the official editor and templates and checks their published SHA-512 hashes before running them. Workflow artifacts contain Web, desktop, source, and validation logs.
 
+The dependent `windows-smoke` job runs the exported Windows executable on a
+native Windows runner. It requires a clean exit, no Godot errors, and the ready
+marker matching `project.godot`'s version, then records SHA-256 hashes for the
+tested executable and ZIP. Release uploads must use that exact validated
+artifact or match its executable hash; a separate local export can differ in
+generated scene data. Tagged releases wait for this Windows check as well as
+the export job. This startup check does not replace an installed Steam client
+and physical input/audio/performance test.
+
 Tags beginning with `godot-v` also create a GitHub release with the packages. Tag only a reviewed and tested commit; the workflow does not upload to Steam or change Steam's live build.
 
 ## Steam and Steam Deck
 
 The Windows and Linux builds are separate deliverables from the same project. The Windows build runs through `SudokuDefense.exe` on Windows; the Linux build runs natively and should use a Linux launch option without a forced Proton override. Both can live in existing all-platform Steam depot 3721151 with operating-system-specific launch options. A single-platform ZIP must be uploaded using **Merge With Baseline** against the current live build so the other executable remains present. Standard replacement requires a complete package containing both executables. See the current shared-depot instructions at the top of [STEAM-RELEASE.md](STEAM-RELEASE.md).
+
+Build **26204484** supplies both platforms on the existing app's default branch.
+The Windows64 and Linux64 launch options and common platform configuration
+(`oslist=windows,linux`, `osarch=64`) are published. The app remains unreleased;
+availability is for existing owners/testers with eligible override packages.
 
 For the existing Steam app 3721150/depot 3721151, run `python3 steam/prepare_godot_linux.py` after exporting. It copies the Godot ELF byte-for-byte to a staging directory with the stable Steam launch filename `sudoku-defense`, includes the license notices, tests the renamed executable, and creates a Linux-only ZIP. Its manifest specifies Merge With Baseline against the current live build to preserve Windows. The normal Linux download still uses `sudoku-defense.x86_64`. See [STEAM-RELEASE.md](STEAM-RELEASE.md) for the exact staging paths, current Steam upload record, and existing depot configuration. The Windows download uses `SudokuDefense.exe`. Verify launch, controls, audio, save/resume, and performance on an installed testing build before promoting it for a wider audience.
 

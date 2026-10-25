@@ -1,5 +1,47 @@
 # Sudoku Defense: Steam release target
 
+## Current Steam testing build — Godot 0.3.11 for Windows and Linux
+
+On **October 25, 2026 (America/New_York)**, build **26204484** was activated on
+the main app's **default** branch. It adds native Windows x86-64 alongside the
+existing Linux 0.3.11 executable, including the smooth board-camera transition.
+Steam's branch table and current-build row confirmed the active build.
+Windows/Linux launch and supported-platform configuration was published
+successfully. The app remains unreleased; this build is available to existing
+owners/testers whose packages permit access, not a public Steam launch.
+
+| Item | Value |
+| --- | --- |
+| Main Steam app | **3721150** |
+| Shared all-platform depot | **3721151** |
+| Active default BuildID | **26204484** |
+| Depot manifest | **2564642636447194378** |
+| Windows executable | `SudokuDefense.exe`, 109,920,416 bytes |
+| Linux executable | `sudoku-defense`, 74,171,344 bytes; unchanged |
+| Upload mode | Merge With Baseline |
+| Preserved Linux baseline | Build **26194379**, manifest **6413919482495814251** |
+| Launch/platform configuration | Published; Windows64 `SudokuDefense.exe` and Linux64 `sudoku-defense` |
+| Common supported platforms | OS list `windows,linux`; architecture `64` |
+
+The final Windows package is the **exact native-Windows-CI-tested artifact**
+from source commit `40e2d3b34490cd4a25e4360faa716239fb754798`, workflow
+[40239124656](https://github.com/yannage/Sudoku-Defense-beta/actions/runs/40239124656),
+Windows job **121308474297**. Startup passed with exit code 0, no Godot script
+errors, and `SUDOKU_DEFENSE_READY version=0.3.11`. Its executable SHA-256 is
+`c913a5d4bc8e8a2e4287bea842c5b106fe291beb483f197d6bd2b2832cf45a03`; SHA-1 is
+`4a767919272ca236f2336a08db20a0e3dea640eb`. The ZIP is **38,513,069 bytes**, SHA-256
+`9e4023940ef57f6a0fb131091f81de292508cedf3d60c383fece3219c2a3d59a`.
+
+The Steam manifest contains exactly both executables and the two Godot license
+notices. Its Windows SHA-1 and size match the CI artifact. Its Linux SHA-1 remains
+`1b1f0c7e8b699013825d51ff4623c70fc054afc0`, matching the prior live build. Independent
+package inspection validated the Windows PE format, all 135 embedded resource
+checksums, and version 0.3.11. All 24 local headless regression suites passed;
+all 45 compiled scripts match the CI artifact. The first local-only candidate,
+build **26204388**, was superseded without activation when CI produced a different
+generated scene binary. Native Windows CI establishes startup, not a complete
+Steam client/controller/audio performance pass on the owner's PC.
+
 ## Windows addition and shared depot uploads
 
 The Windows build uses the same Godot project and version as Linux. Export it
@@ -12,8 +54,8 @@ launch option.
 On October 25, 2026, Steamworks inspection confirmed that existing depot
 **3721151** is configured for **All platforms**. The Windows addition uses that
 shared depot, rather than a separate Windows depot. The Linux baseline before
-the addition is build **26194379**, manifest **6413919482495814251**, version
-**0.3.11**. Actual activation IDs belong in the release record after upload.
+the addition was build **26194379**, manifest **6413919482495814251**, version
+**0.3.11**. The current activation and source hashes are recorded above.
 
 **For every future single-platform upload to this shared depot, choose Merge
 With Baseline and select the current live build as the baseline.** A Standard
