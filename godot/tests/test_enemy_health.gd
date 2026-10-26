@@ -29,6 +29,12 @@ func projected_rect(board, enemy: Dictionary) -> Rect2:
 	var bottom_right: Vector2 = board.camera.unproject_position(bar.to_global(Vector3(size.x*0.5,-size.y*0.5,0)))
 	return Rect2(top_left,bottom_right-top_left)
 
+func matches_color(actual: Color, expected: Color) -> bool:
+	# Canvas rectangles are opaque and pixel-snapped. Allow only byte rounding,
+	# not other warm scene art such as the route or the runner's orange shell.
+	var tolerance := 1.5/255.0
+	return absf(actual.r-expected.r)<=tolerance and absf(actual.g-expected.g)<=tolerance and absf(actual.b-expected.b)<=tolerance
+
 func check_pixels(board, enemy: Dictionary, label: String) -> void:
 	await process_frame
 	await process_frame
@@ -42,8 +48,22 @@ func check_pixels(board, enemy: Dictionary, label: String) -> void:
 	var bright: Array[int] = []
 	for x in range(floori(rect.position.x)-2,ceili(rect.end.x)+2):
 		var pixel := image.get_pixel(clampi(x,0,image.get_width()-1),clampi(y,0,image.get_height()-1))
-		if pixel.r > 0.65 and pixel.r > pixel.b*1.15:
+		var is_fill := matches_color(pixel,Health.color_for(ratio)) if canvas else pixel.r > 0.65 and pixel.r > pixel.b*1.15
+		if is_fill:
 			bright.append(x)
+	if canvas:
+		# Verify the whole actual bar, including every border pixel and the empty
+		# portion. The old scan accepted any warm pixel, so route arrows just
+		# outside a correct bar looked like overflowing or residual health.
+		var parts := Health.canvas_rects(rect.get_center(),board._scale,enemy.kind,ratio)
+		var mismatch := ""
+		for row in range(int(rect.position.y),int(rect.end.y)):
+			for column in range(int(rect.position.x),int(rect.end.x)):
+				var expected: Color = Health.color_for(ratio) if (parts.fill as Rect2).has_point(Vector2(column+0.5,row+0.5)) else Health.TRACK
+				var actual := image.get_pixel(column,row)
+				if not matches_color(actual,expected) and mismatch.is_empty():
+					mismatch = " at (%d,%d): %s instead of %s" % [column,row,actual.to_html(),expected.to_html()]
+		check(mismatch.is_empty(),label+": every fill, empty-track, and border pixel matches"+mismatch)
 	if ratio == 0.0:
 		check(bright.is_empty(),label+": zero health has no residual foreground sliver")
 	else:
