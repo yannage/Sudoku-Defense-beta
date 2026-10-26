@@ -37,10 +37,10 @@ Placement passed 966 native / 954 Canvas assertions, health-bar geometry passed
 226 native / 194 Canvas checks, and preference persistence passed 21 per
 renderer. Existing camera, input, UI, loot, and campaign regressions passed.
 
-Local GLES capture is unavailable because Xvfb cannot open its display sockets.
-The existing CI workflow includes both new suites and rendered health/placement
-captures, but GitHub source publication was blocked by automatic approval review
-requesting direct user authorization. No new CI run, Windows execution validation,
-or Steam upload/activation has occurred. The previous Steam build remains the
-last verified live build. Physical Steam Deck/controller/phone checks remain
-separate from automated validation.
+At initial delivery, local GLES capture was unavailable because Xvfb could not
+open its display sockets, and automatic approval review required direct user
+authorization for public source publication. The user subsequently authorized
+publication; all 0.3.13 changes are included in 0.3.14. See
+`docs/ITERATION-0.3.14.md` and `docs/STEAM-RELEASE.md` for the current CI and Steam
+delivery record. Physical Steam Deck/controller/phone checks remain separate
+from automated validation.
