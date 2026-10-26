@@ -63,6 +63,10 @@ jobs:
             godot/build/seed-checks/
             godot/build/health-checks/
             godot/build/tactics-checks/
+            godot/build/readability-checks/
+            godot/build/menu-checks/
+            godot/build/controller-cursor-checks/
+            godot/build/loot-gear-checks/
           retention-days: 14
 
   windows-smoke:

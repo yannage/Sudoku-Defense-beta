@@ -217,6 +217,7 @@ def main() -> None:
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_loot_gear_flow.gd"], logs / "loot-gear-flow-tests.log", expected="LOOT_GEAR_FLOW_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_loot_gear_flow.gd", "--", "--canvas-graphics"], logs / "canvas-loot-gear-flow-tests.log", expected="LOOT_GEAR_FLOW_PASS")
     if args.render_check:
+        render_failures: list[str] = []
         for script, flag, logfile, marker in [
             ("test_tactics_ui.gd", "", "native-tactics-render-tests.log", "TACTICS_UI_PASS"),
             ("test_tactics_ui.gd", "--canvas-graphics", "canvas-tactics-render-tests.log", "TACTICS_UI_PASS"),
@@ -252,7 +253,15 @@ def main() -> None:
                 if not xvfb:
                     raise SystemExit("The render check requires a display or xvfb-run; headless rendering cannot validate pixels.")
                 command = [xvfb, "-a", "-s", "-screen 0 1920x1600x24"] + command
-            run(command, logs / logfile, expected=marker)
+            try:
+                run(command, logs / logfile, expected=marker)
+            except SystemExit as error:
+                # Collect independent render failures and their screenshots in
+                # one CI run, but never export a candidate unless every check passes.
+                render_failures.append(logfile)
+                print(error, flush=True)
+        if render_failures:
+            raise SystemExit("Rendering checks failed: " + ", ".join(render_failures))
     export_releases(args, build, downloads, logs)
 
 

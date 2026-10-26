@@ -67,7 +67,10 @@ func check_solve(board, model, image: Image) -> void:
 	var tile_values: Array[float] = []
 	var lowest_ratio := INF
 	for cell in range(81):
-		var floor_color := sample(image,project(board,cell_origin(cell)+Vector3(0.28,0.02,0.28)))
+		# Sample plain tile beside the numeral. The old diagonal point (0.28,
+		# 0.28) is inside two settled foundation brackets on every planted cell,
+		# so it measured decoration-to-ink contrast instead of tile-to-ink.
+		var floor_color := sample(image,project(board,cell_origin(cell)+Vector3(0.36,0.02,0.0)))
 		tile_values.append((floor_color.r+floor_color.g+floor_color.b)/3.0)
 		if model.board[cell] <= 0: continue
 		var center: Vector2 = board.cell_screen_position(cell)
