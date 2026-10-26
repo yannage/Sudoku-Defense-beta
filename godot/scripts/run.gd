@@ -10,6 +10,8 @@ const DIFFICULTIES: Dictionary = {
 	"hard":{"clues":27, "duration":100.0, "hp":1.3, "speed":1.1, "count":1.18, "reward":1.25}
 }
 const CHEST_PRICES: Dictionary = {"common":30,"uncommon":50,"rare":90,"epic":160,"legendary":280}
+const TARGET_PRIORITIES: Array[String] = ["first", "strongest", "nearest"]
+const ENEMY_KINDS: Array[String] = ["grunt", "runner", "swarm", "tank", "boss"]
 
 var phase: String = "solve"
 var round_no: int = 1
@@ -166,7 +168,7 @@ func place(cell: int, number: int) -> Dictionary:
 		if inventory[number] <= 0: return _fail("Buy a reserve seed for 6 credits first.", cell)
 		inventory[number] -= 1
 	board[cell] = number
-	towers[cell] = {"id":_id(),"cell":cell,"number":number,"illegal":illegal,"level":1,"attachments":[],"growth":0.0,"cooldown":rng.randf_range(0.0,0.20),"aim":cell_position(cell) + Vector2(0,-1)}
+	towers[cell] = {"id":_id(),"cell":cell,"number":number,"illegal":illegal,"level":1,"attachments":[],"growth":0.0,"cooldown":rng.randf_range(0.0,0.20),"aim":cell_position(cell) + Vector2(0,-1),"target_priority":"first"}
 	_emit("plant", {"cell":cell,"pos":cell_position(cell),"number":number,"illegal":illegal,"color":color_for(number),"text":"Emergency seed" if illegal else "Seed planted"})
 	if illegal:
 		corruption += 1
@@ -289,6 +291,13 @@ func tower_stats(cell: int) -> Dictionary:
 func upgrade_cost(cell: int) -> int:
 	if not towers.has(cell): return 0
 	return roundi(12.0 + 10.0 * pow(float(towers[cell].level), 1.25))
+
+func set_target_priority(cell: int, priority: String) -> Dictionary:
+	if not towers.has(cell): return _fail("Select a planted tower.",cell)
+	if not ["solve","prep","battle","loot"].has(phase): return _fail("Change targeting during an active run.")
+	if not TARGET_PRIORITIES.has(priority): return _fail("Choose First, Strongest, or Nearest.",cell)
+	towers[cell].target_priority = priority
+	return _ok("Target priority: %s." % priority.capitalize())
 
 func family_upgrade_cost(number: int) -> int:
 	if number < 1 or number > 9: return 0
@@ -513,21 +522,64 @@ func wave_stats() -> Dictionary:
 	var difficulty: Dictionary = DIFFICULTIES[combat_difficulty]
 	return {"health":28.0 * (1.0 + 0.12 * stage) * pow(1.025,stage) * float(difficulty.hp),"speed":(1.0 + minf(0.55,stage*0.011)) * float(difficulty.speed),"count":roundi((12.0 + floorf(round_no * 0.58)) * float(difficulty.count)),"spawn_interval":maxf(0.35,0.94 - stage*0.0105),"boss":round_no%5 == 0}
 
-func _spawn() -> void:
+func wave_forecast() -> Dictionary:
 	var stats: Dictionary = wave_stats()
-	var index: int = spawned
-	spawned += 1
+	var grouped: Dictionary = {}
+	for index in range(int(stats.count)):
+		var blueprint: Dictionary = _enemy_blueprint(index,int(stats.count),stats)
+		var kind: String = blueprint.kind
+		if not grouped.has(kind):
+			grouped[kind] = blueprint
+			grouped[kind].count = 0
+		grouped[kind].count += 1
+	var groups: Array[Dictionary] = []
+	for kind in ENEMY_KINDS:
+		if grouped.has(kind): groups.append(grouped[kind])
+	return {"count":int(stats.count),"boss":bool(stats.boss),"corruption_multiplier":1.0+corruption*0.075,"groups":groups,"spawn_interval":float(stats.spawn_interval)}
+
+# One deterministic description feeds both the preview and live spawning.
+# In particular, the boss replaces the final enemy rather than adding one.
+func _enemy_blueprint(index: int, total: int, stats: Dictionary) -> Dictionary:
 	var kind: String = "grunt"
-	if bool(stats.boss) and index == spawn_total-1: kind = "boss"
+	if bool(stats.boss) and index == total-1: kind = "boss"
 	elif index%7 == 5: kind = "tank"
 	elif index%4 == 2: kind = "runner"
 	elif index%5 == 3: kind = "swarm"
 	var hp_factors: Dictionary = {"boss":5.0,"tank":2.3,"runner":0.72,"swarm":0.58,"grunt":1.0}
 	var speed_factors: Dictionary = {"boss":0.47,"tank":0.57,"runner":1.4,"swarm":0.95,"grunt":0.82}
 	var hp: float = float(stats.health) * float(hp_factors[kind]) * (1.0 + corruption*0.075)
-	var enemy: Dictionary = {"id":_id(),"pos":route[0],"hp":hp,"max_hp":hp,"progress":0.0,"speed":float(stats.speed)*float(speed_factors[kind]),"kind":kind,"slow":1.0,"slow_time":0.0,"poison_time":0.0,"poison_dps":0.0}
+	return {"kind":kind,"health":hp,"speed":float(stats.speed)*float(speed_factors[kind]),"core_damage":_core_damage(kind)}
+
+func _core_damage(kind: String) -> int:
+	return 6 if kind == "boss" else (2 if kind == "tank" else 1)
+
+func _spawn() -> void:
+	var blueprint: Dictionary = _enemy_blueprint(spawned,spawn_total,wave_stats())
+	spawned += 1
+	var kind: String = blueprint.kind
+	var hp: float = float(blueprint.health)
+	var enemy: Dictionary = {"id":_id(),"pos":route[0],"hp":hp,"max_hp":hp,"progress":0.0,"speed":blueprint.speed,"kind":kind,"slow":1.0,"slow_time":0.0,"poison_time":0.0,"poison_dps":0.0}
 	enemies.append(enemy)
 	_emit("spawn", {"pos":enemy.pos,"kind":kind,"color":Color("ff547d") if kind == "boss" else Color("f2a273")})
+
+func _select_target(tower: Dictionary, stats: Dictionary) -> Dictionary:
+	var origin: Vector2 = cell_position(int(tower.cell))
+	var priority: String = str(tower.get("target_priority","first"))
+	var target: Dictionary = {}
+	var best_metric: float = -INF
+	for enemy in enemies:
+		if float(enemy.hp) <= 0.0: continue
+		var distance: float = (enemy.pos as Vector2).distance_to(origin)
+		if distance > float(stats.range): continue
+		var metric: float = float(enemy.progress)
+		if priority == "strongest": metric = float(enemy.hp)
+		elif priority == "nearest": metric = -distance
+		var tied: bool = not target.is_empty() and metric == best_metric
+		var leads: bool = tied and ["strongest","nearest"].has(priority) and (float(enemy.progress) > float(target.progress) or (float(enemy.progress) == float(target.progress) and int(enemy.id) < int(target.id)))
+		if target.is_empty() or metric > best_metric or leads:
+			target = enemy
+			best_metric = metric
+	return target
 
 func _damage(enemy: Dictionary, amount: float, color: Color, quiet: bool = false) -> void:
 	if float(enemy.hp) <= 0.0 or amount <= 0.0 or not is_finite(amount): return
@@ -645,7 +697,7 @@ func _step(dt: float) -> void:
 		enemy.pos = position_on_route(float(enemy.progress))
 		if float(enemy.progress) >= route_length:
 			enemy.hp = 0.0
-			health -= 6.0 if str(enemy.kind)=="boss" else (2.0 if str(enemy.kind)=="tank" else 1.0)
+			health -= _core_damage(str(enemy.kind))
 			_emit("leak", {"pos":enemy.pos,"text":"CORE HIT","color":Color("ff7289")})
 	if health <= 0.0:
 		health = 0.0
@@ -656,14 +708,8 @@ func _step(dt: float) -> void:
 		if float(tower.growth)<1.0: continue
 		tower.cooldown = float(tower.cooldown)-dt
 		if float(tower.cooldown)>0.0: continue
-		var origin: Vector2 = cell_position(int(tower.cell))
 		var stats: Dictionary = tower_stats(int(tower.cell))
-		var target: Dictionary = {}
-		var progress: float = -1.0
-		for enemy in enemies:
-			if float(enemy.hp)>0.0 and (enemy.pos as Vector2).distance_to(origin)<=float(stats.range) and float(enemy.progress)>progress:
-				target = enemy
-				progress = float(enemy.progress)
+		var target: Dictionary = _select_target(tower,stats)
 		if not target.is_empty():
 			_fire(tower,target,stats)
 			# Carry elapsed time past the shot boundary into the next interval,
@@ -811,6 +857,8 @@ func load_data(data: Dictionary) -> bool:
 		tower.number = int(tower.number)
 		tower.level = int(tower.level)
 		tower.aim = Vector2(float(tower.aim[0]),float(tower.aim[1]))
+		var priority: String = str(tower.get("target_priority","first"))
+		tower.target_priority = priority if TARGET_PRIORITIES.has(priority) else "first"
 		towers[int(tower.cell)] = tower
 	enemies.clear()
 	for value in state.enemies:

@@ -9,6 +9,7 @@ const MODULE_COLORS: Dictionary = {"rapid":Color("6de8ff"), "electric":Color("c6
 const SeedPlanting = preload("res://scripts/seed_planting.gd")
 const BoardTransition = preload("res://scripts/board_transition.gd")
 const CameraOrbit = preload("res://scripts/camera_orbit.gd")
+const EnemyHealth = preload("res://scripts/enemy_health.gd")
 
 var run: RefCounted
 var selected_cell: int = -1
@@ -246,7 +247,6 @@ func _draw() -> void:
 	if _blend > 0.05: _draw_gates()
 	for key: Variant in run.towers:
 		_draw_tower(int(key),run.towers[key])
-	_draw_planting_seeds()
 	for enemy: Dictionary in run.enemies: _draw_enemy(enemy)
 	_draw_attachment_preview()
 	_flush_faces()
@@ -340,64 +340,18 @@ func _draw_seed_ground() -> void:
 	for key: Variant in _seed_plantings:
 		var planting: Dictionary = _seed_plantings[key]
 		var age: float = float(planting.age)
-		var pos: Vector3 = _cell_pos(int(key))
-		var opening: float = SeedPlanting.socket_scale(age)
-		if opening * _scale * 0.165 >= 0.5:
-			# Skip the subpixel start/end of the socket: tiny translated polygons
-			# lose area at screen coordinates and cannot be triangulated reliably.
-			# A dark cut in the tile gives the seed a destination and visible depth.
-			draw_colored_polygon(_quad(pos,0.225*opening,0.015),Color("685540"))
-			draw_colored_polygon(_quad(pos+Vector3(0,0,-0.018),0.165*opening,0.018),Color("26342d"))
-		var shadow: float = SeedPlanting.shadow_scale(age)
-		if shadow * _scale * 0.50 >= 0.5 and age < SeedPlanting.REVEAL_AT:
-			var offset: Vector3 = SeedPlanting.seed_offset(age)
-			# The cast shadow contracts into the socket as the seed approaches.
-			var shadow_pos: Vector3 = pos+Vector3(offset.x*0.45+0.045,0,offset.z*0.45+0.055)
-			draw_colored_polygon(_quad(shadow_pos,0.50*shadow,0.022),Color(0.045,0.065,0.055,0.32+0.25*clampf(age/SeedPlanting.LAND_AT,0.0,1.0)))
 		var alpha: float = SeedPlanting.impact_alpha(age)
-		if alpha > 0.001:
-			var radius: float = 0.12 + 0.25 * SeedPlanting.impact_scale(age)
-			_polyline_closed(_quad(pos,radius,0.025),Color(Color("4e725b"),alpha*0.60),maxf(1.0,_scale*0.020))
-
-func _draw_planting_seeds() -> void:
-	for key: Variant in _seed_plantings:
-		var planting: Dictionary = _seed_plantings[key]
-		var age: float = float(planting.age)
-		var origin: Vector3 = _cell_pos(int(key))
-		var amount: float = SeedPlanting.seed_scale(age)
 		var family: Color = FAMILY_COLORS[clampi(int(planting.number)-1,0,8)]
-		if amount > 0.001:
-			var pos: Vector3 = origin + SeedPlanting.seed_offset(age)
-			var rotation: Vector3 = SeedPlanting.seed_rotation(age)
-			var tilt: Basis = Basis.from_euler(rotation)
-			var stretch: Vector3 = SeedPlanting.seed_stretch(age)*amount
-			# Pitch exposes the chunky side faces even in the straight-down solve view.
-			_planting_cube(pos,Vector3(0.32,0.25,0.36)*stretch,Color("634327"),tilt)
-			_planting_cube(pos+tilt*(Vector3(0,0.045,0)*stretch),Vector3(0.25,0.22,0.40)*stretch,Color("a3733e"),tilt)
-			_planting_cube(pos+tilt*(Vector3(0,0.165,0)*stretch),Vector3(0.065,0.035,0.32)*stretch,Color("d4ab66"),tilt)
-			_planting_cube(pos+tilt*(Vector3(0.05,0.19,-0.09)*stretch),Vector3(0.10,0.07,0.11)*stretch,family.darkened(0.30),tilt)
-		var soil: float = SeedPlanting.soil_scale(age)
-		if soil > 0.001:
-			for index: int in range(6):
-				var piece: Vector3 = origin+SeedPlanting.soil_offset(age,index)
-				var spin: Basis = Basis.from_euler(Vector3(age*3.0,index*0.8,age*2.0))
-				_planting_cube(piece,Vector3(0.095,0.065,0.085)*soil,Color("765536") if index%2 == 0 else Color("443527"),spin)
+		if alpha > 0.001:
+			var radius: float = SeedPlanting.impact_scale(age) * 0.5
+			_polyline_closed(_quad(_cell_pos(int(key)),radius,0.026),Color(family.darkened(0.30),alpha),maxf(1.0,_scale*0.020))
 
-func _planting_cube(center: Vector3, size: Vector3, color: Color, tilt: Basis) -> void:
-	if size.x <= 0.0001 or size.y <= 0.0001 or size.z <= 0.0001: return
-	var half: Vector3 = size*0.5
-	var faces: Array = [
-		[Vector3.UP,[Vector3(-half.x,half.y,-half.z),Vector3(half.x,half.y,-half.z),Vector3(half.x,half.y,half.z),Vector3(-half.x,half.y,half.z)],color.lightened(0.055)],
-		[Vector3.DOWN,[Vector3(-half.x,-half.y,-half.z),Vector3(-half.x,-half.y,half.z),Vector3(half.x,-half.y,half.z),Vector3(half.x,-half.y,-half.z)],color.darkened(0.40)],
-		[Vector3(0,0,1),[Vector3(-half.x,-half.y,half.z),Vector3(-half.x,half.y,half.z),Vector3(half.x,half.y,half.z),Vector3(half.x,-half.y,half.z)],color.darkened(0.19)],
-		[Vector3(0,0,-1),[Vector3(half.x,-half.y,-half.z),Vector3(half.x,half.y,-half.z),Vector3(-half.x,half.y,-half.z),Vector3(-half.x,-half.y,-half.z)],color.darkened(0.29)],
-		[Vector3(1,0,0),[Vector3(half.x,-half.y,half.z),Vector3(half.x,half.y,half.z),Vector3(half.x,half.y,-half.z),Vector3(half.x,-half.y,-half.z)],color.darkened(0.34)],
-		[Vector3(-1,0,0),[Vector3(-half.x,-half.y,-half.z),Vector3(-half.x,half.y,-half.z),Vector3(-half.x,half.y,half.z),Vector3(-half.x,-half.y,half.z)],color.darkened(0.24)]
-	]
-	for face: Array in faces:
-		var corners: Array = []
-		for corner: Vector3 in face[1]: corners.append(tilt*corner)
-		_face(center,corners,tilt*Vector3(face[0]),Color(face[2]),0.0)
+func _draw_foundation(origin: Vector3, family: Color, age: float, size: float) -> void:
+	for index: int in range(4):
+		var corner: Vector3 = SeedPlanting.corner_offset(age,index) * size
+		var scale3: float = SeedPlanting.corner_scale(age,index) * size
+		for part: Dictionary in SeedPlanting.corner_blocks(index,family):
+			_cube(origin+corner+Vector3(part.offset)*scale3,Vector3(part.size)*scale3,Color(part.color))
 
 func _draw_tower_badges() -> void:
 	if _blend <= 0.60: return
@@ -518,14 +472,8 @@ func _draw_tower(cell: int, tower: Dictionary) -> void:
 	var growth: float = smoothstep(0.12,0.85,_morph)*maxf(0.10,float(tower.get("growth",1.0)))
 	if bool(tower.illegal): family = family.lerp(Color("ff747e"),0.45)
 	if growth < 0.75:
-		var seed: Vector3 = pos+Vector3(0.28,0.025,-0.30)
-		var size: float = 1.0-growth
-		var sprout: float = SeedPlanting.sprout_scale(float(_seed_plantings[cell].age)) if _seed_plantings.has(cell) else 1.0
-		var sprout_size: Vector3 = Vector3(sqrt(sprout),sprout,sqrt(sprout))*size
-		_cube(seed,Vector3(0.15,0.07,0.15)*sprout_size,Color("896c4b"))
-		_cube(seed+Vector3(0,0.07,0)*sprout_size,Vector3(0.035,0.13,0.035)*sprout_size,Color("438b70"))
-		_cube(seed+Vector3(-0.06,0.11,0)*sprout_size,Vector3(0.13,0.04,0.06)*sprout_size,family.darkened(0.16),-0.5)
-		_cube(seed+Vector3(0.055,0.14,0)*sprout_size,Vector3(0.11,0.04,0.06)*sprout_size,family,0.5)
+		var age: float = float(_seed_plantings[cell].age) if _seed_plantings.has(cell) else SeedPlanting.DURATION
+		_draw_foundation(pos,family,age,1.0-growth)
 	if growth < 0.015: return
 	var width: float = lerpf(0.45,1.0,growth)
 	var scale3: Vector3 = Vector3(width,growth,width)
@@ -621,13 +569,13 @@ func _draw_entity_labels() -> void:
 			var dot: Vector2 = p+Vector2((float(i)-float(mini(4,level-1)-1)*0.5)*_scale*0.085,0)
 			draw_rect(Rect2(dot-Vector2.ONE*1.3,Vector2.ONE*2.6),Color("ffdf93"))
 	for enemy: Dictionary in run.enemies:
-		var ratio: float = clampf(float(enemy.hp)/maxf(1.0,float(enemy.max_hp)),0.0,1.0)
-		var height: float = 1.00 if str(enemy.kind) == "boss" else 0.64
+		var ratio: float = EnemyHealth.ratio(enemy)
+		var height: float = EnemyHealth.height_for(str(enemy.kind))
 		var pos: Vector2 = project_point(_world_pos(enemy.pos,height))
-		var width: float = _scale*(0.66 if str(enemy.kind) == "boss" else 0.48)
-		var thickness: float = maxf(2.0,_scale*0.047)
-		draw_rect(Rect2(pos-Vector2(width*0.5,thickness*0.5)-Vector2.ONE,Vector2(width,thickness)+Vector2.ONE*2.0),Color("122630"))
-		draw_rect(Rect2(pos-Vector2(width*0.5,thickness*0.5),Vector2(width*ratio,thickness)),Color("ffc395").lerp(Color("ff7989"),1.0-ratio))
+		var rects: Dictionary = EnemyHealth.canvas_rects(pos,_scale,str(enemy.kind),ratio)
+		draw_rect(rects.track,EnemyHealth.TRACK)
+		if (rects.fill as Rect2).size.x > 0.0:
+			draw_rect(rects.fill,EnemyHealth.color_for(ratio))
 
 func play_event(event: Dictionary) -> void:
 	var type: String = str(event.get("type",""))
@@ -649,7 +597,7 @@ func play_event(event: Dictionary) -> void:
 			_burst(pos,color,6,0.45)
 			_add_effect({"kind":"ring","pos":pos,"color":color,"radius":0.65,"life":0.45})
 	elif type == "plant" and _begin_seed_planting(event):
-		pass # The impact pulse belongs to the seed landing, not to the click.
+		pass # The shared foundation assembly provides the placement feedback.
 	elif type == "plant" or type == "upgrade":
 		if pos.x > -90:
 			_burst(pos,color,9,0.7)

@@ -15,6 +15,7 @@ const GearFeedbackScript = preload("res://scripts/gear_feedback.gd")
 const UISkin = preload("res://scripts/ui_skin.gd")
 const MenuChoice = preload("res://scripts/menu_choice.gd")
 const MenuArt = preload("res://scripts/menu_diorama.gd")
+const PreferencesScript = preload("res://scripts/preferences.gd")
 const INK := Color("0a1722")
 const PANEL := Color("112634")
 const MINT := Color("83e7c1")
@@ -40,6 +41,7 @@ var manual_pause := false
 var muted := false
 var reduced_motion := false
 var board_notes := true
+var preferences = PreferencesScript.new()
 var game_speed := 1.0
 var last_phase := ""
 var ui_elapsed := 0.0
@@ -90,13 +92,19 @@ const CAMERA_SPEED := 1.65
 
 func _ready() -> void:
 	get_tree().auto_accept_quit = false
+	var settings: Dictionary = preferences.read_settings()
+	muted = settings.muted
+	reduced_motion = settings.reduced_motion
+	board_notes = settings.board_notes
 	run.new_run(784217, {"mode":"campaign", "puzzle_difficulty":"easy", "combat_difficulty":"easy"})
 	get_viewport().disable_3d = RenderProfile.uses_canvas()
 	world = CanvasBoardScript.new() if RenderProfile.uses_canvas() else BoardScript.new()
 	add_child(world)
 	world.setup(run)
+	world.set_reduced_motion(reduced_motion)
 	sound = SoundScript.new()
 	add_child(sound)
+	sound.set_muted(muted)
 	_build_ui()
 	controller = ControllerScript.new()
 	controller.activity.connect(_controller_activity)
@@ -217,6 +225,9 @@ func _build_ui() -> void:
 	phase_detail = label("",15,MUTED)
 	phase_detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	positioned(phase_detail,Rect2(30,184,216,115))
+	var intel: Button = hud("intel",button("Wave intel",_show_wave_intel))
+	intel.tooltip_text = "Inspect the incoming wave (I). Controller: Start → Wave intel."
+	positioned(intel,Rect2(30,260,174,44))
 	progress = ProgressBar.new()
 	progress.show_percentage = false
 	progress.add_theme_stylebox_override("background",style(Color("1a333f"),Color.TRANSPARENT,3))
@@ -227,9 +238,8 @@ func _build_ui() -> void:
 	candidate_label = label("",17)
 	candidate_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	positioned(candidate_label,Rect2(30,383,193,100))
-	var notes_btn: Button = hud("notes", button("Notes ON",func(): board_notes = not board_notes; _refresh()))
+	var notes_btn: Button = hud("notes", button("Notes ON",_toggle_notes))
 	positioned(notes_btn,Rect2(30,509,174,44))
-	notes_btn.pressed.connect(func(): notes_btn.text = "Notes  ON" if board_notes else "Notes  OFF")
 	var hint_btn: Button = hud("hint", button("Reveal / 6",func(): _action(run.hint(selected_cell))))
 	hint_btn.tooltip_text = "Reveal selected square, costs credits (H)"
 	positioned(hint_btn,Rect2(30,563,174,44))
@@ -394,6 +404,7 @@ func _layout_ui() -> void:
 		resources.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_place(phase_label,Rect2(20,156,260,42)); _font(phase_label,27)
 		_place(phase_detail,Rect2(292,153,w-312,50)); _font(phase_detail,24)
+		_place(hud_nodes.intel,Rect2(292,133,w-312,72)); _font(hud_nodes.intel,22)
 		_place(progress,Rect2(20,207,w-40,5))
 		board_rect = Rect2(16,228,w-32,minf(w-32,h-600))
 		var info_y := board_rect.end.y+10
@@ -445,6 +456,7 @@ func _layout_ui() -> void:
 		_place(hud_nodes.journey,Rect2(28,93,480,28))
 		_place(phase_label,Rect2(28,135,240,44)); _font(phase_label,31)
 		_place(phase_detail,Rect2(30,184,216,115)); _font(phase_detail,15)
+		_place(hud_nodes.intel,Rect2(30,260,174,46)); _font(hud_nodes.intel,17)
 		_place(progress,Rect2(30,313,174,5))
 		_place(selected_label,Rect2(30,352,200,24)); _font(selected_label,13)
 		_place(candidate_label,Rect2(30,383,193,100)); _font(candidate_label,17)
@@ -483,6 +495,7 @@ func _layout_ui() -> void:
 			_place(hud_nodes.menu,Rect2(w-114,9,92,46)); _font(hud_nodes.menu,19)
 			_place(phase_label,Rect2(20,86,192,34)); _font(phase_label,24)
 			_place(phase_detail,Rect2(20,128,184,105)); _font(phase_detail,17)
+			_place(hud_nodes.intel,Rect2(20,196,174,46)); _font(hud_nodes.intel,17)
 			_place(progress,Rect2(20,248,174,5))
 			_place(selected_label,Rect2(20,270,184,26)); _font(selected_label,14)
 			_place(candidate_label,Rect2(20,307,184,96)); _font(candidate_label,19)
@@ -526,7 +539,7 @@ func _refresh_portrait_text() -> void:
 	phase_label.text = "ROUND %02d / %02d" % [run.round_no,run.max_rounds]
 	match run.phase:
 		"solve": phase_detail.text = "SOLVE  %02d:%02d" % [int(run.timer)/60,int(run.timer)%60]
-		"prep": phase_detail.text = "PREPARE  /  %d towers" % run.towers.size()
+		"prep": phase_detail.text = "PREPARE"
 		"battle": phase_detail.text = "DEFEND  ·  %d enemies left" % _wave_enemies_remaining()
 		"loot": phase_detail.text = "LOOT"
 		_: phase_detail.text = "RUN COMPLETE"
@@ -625,6 +638,7 @@ func _cycle_speed() -> void:
 	_refresh()
 
 func _refresh() -> void:
+	hud_nodes.notes.text = "Notes  ON" if board_notes else "Notes  OFF"
 	hud_nodes.speed.text = "%dx" % int(game_speed)
 	resources.text = "CORE %d/%d   CREDITS %d   FRAGMENTS %d" % [int(run.health),int(run.max_health),run.credits,run.fragments]
 	var phases := ["solve","prep","battle","loot"]
@@ -637,7 +651,8 @@ func _refresh() -> void:
 			progress.value = 100.0*run.timer/maxf(1,run.solve_duration)
 			next_button.text = "Prepare defense"
 		"prep":
-			phase_detail.text = "PREPARE YOUR TOWERS\n\nEquip modules.\nBuy upgrades.\nLaunch when ready."
+			var forecast: Dictionary = run.wave_forecast()
+			phase_detail.text = "%d ENEMIES NEXT\n%s" % [int(forecast.count),"BOSS IN THIS WAVE" if bool(forecast.boss) else "Choose tower targets."]
 			progress.value = 100
 			next_button.text = "Launch wave"
 		"battle":
@@ -652,6 +667,13 @@ func _refresh() -> void:
 			phase_detail.text = "RUN COMPLETE"
 			next_button.text = "New run"
 	next_button.disabled = run.phase == "battle"
+	hud_nodes.intel.visible = run.phase == "prep"
+	phase_detail.visible = not (portrait_layout and run.phase == "prep")
+	phase_detail.size.y = 50 if portrait_layout else 64 if run.phase == "prep" else 105 if layout_size.y < 700 else 115
+	if run.phase == "prep":
+		var forecast: Dictionary = run.wave_forecast()
+		hud_nodes.intel.text = ("%d incoming%s\nWave intel" % [int(forecast.count)," · BOSS" if bool(forecast.boss) else ""]) if portrait_layout else "Wave intel"
+		hud_nodes.intel.add_theme_color_override("font_color",AMBER if bool(forecast.boss) else WHITE)
 	reserve_button.text = "Seed %d  +1  ·  6" % selected_number if selected_number>0 else "Buy seed 1  ·  6"
 	reserve_button.disabled = run.credits<6
 	bag_button.text = "Gear %d" % run.items.size()
@@ -910,6 +932,22 @@ func _toggle_sound() -> void:
 	muted = not muted
 	sound.set_muted(muted)
 	_toast("Sound off" if muted else "Sound on")
+	_save_preferences()
+
+func _toggle_reduced_motion() -> void:
+	reduced_motion = not reduced_motion
+	world.set_reduced_motion(reduced_motion)
+	dock.set_reduced_motion(reduced_motion)
+	_save_preferences()
+
+func _toggle_notes() -> void:
+	board_notes = not board_notes
+	_refresh()
+	_save_preferences()
+
+func _save_preferences() -> void:
+	if not preferences.write_settings({"muted": muted, "reduced_motion": reduced_motion, "board_notes": board_notes}):
+		_toast("Settings apply now, but could not be saved on this device.",false)
 
 func _toggle_pause() -> void:
 	if menu_open: return
@@ -1147,17 +1185,61 @@ func _show_pause_menu() -> void:
 	var resume := button("Resume run",_close_overlay,true)
 	resume.set_meta("menu_height",54)
 	actions.add_child(resume)
+	if run.phase in ["solve","prep"]:
+		var intel := button("Wave intel",_show_wave_intel)
+		intel.set_meta("focus_id","wave:intel")
+		actions.add_child(intel)
 	actions.add_child(button("Manage gear",func(): _close_overlay(); _toggle_dock("bag")))
 	actions.add_child(button("How to play",_help))
 	actions.add_child(button("New run",func(): _show_menu(true)))
 	resume.grab_focus()
+
+func _show_wave_intel() -> void:
+	if not has_active_run or run.phase not in ["solve","prep"]: return
+	var forecast: Dictionary = run.wave_forecast()
+	var box := _modal(620,660)
+	overlay.set_meta("wave_intel",true)
+	box.add_child(label("WAVE INTEL  /  ROUND %02d" % run.round_no,26,MINT))
+	var summary := label("%d enemies incoming" % int(forecast.count),24,WHITE)
+	summary.set_meta("forecast_total",int(forecast.count))
+	box.add_child(summary)
+	if bool(forecast.boss):
+		var warning := label("BOSS IN THIS WAVE · arrives last",18,AMBER)
+		warning.set_meta("forecast_boss",true)
+		box.add_child(warning)
+	box.add_child(label("Current corruption: %d  ·  Enemy health ×%.2f\nOne enemy arrives every %.2f seconds." % [int(run.corruption),float(forecast.corruption_multiplier),float(forecast.spawn_interval)],16,MUTED))
+	var back := button("Back to preparation" if run.phase == "prep" else "Back to puzzle",_close_overlay,true)
+	back.set_meta("focus_id","wave:close")
+	back.tooltip_text = "Close wave intel · B / Escape"
+	box.add_child(back)
+	box.add_child(label("D-pad / left stick: scroll · A / B: back",14,MINT))
+	var names := {"grunt":"Grunts","runner":"Runners","swarm":"Swarm","tank":"Tanks","boss":"Boss"}
+	var roles := {"grunt":"Steady pressure on your defenses.","runner":"Fast movers. Cover the route to the exit.","swarm":"Low health. Rapid fire clears them quickly.","tank":"High health. Strongest targeting concentrates fire.","boss":"Heavy health and core damage. Prepare concentrated fire."}
+	for group: Dictionary in forecast.groups:
+		var card := PanelContainer.new()
+		card.add_theme_stylebox_override("panel",style(PANEL,AMBER if str(group.kind) == "boss" else Color("304955")))
+		card.set_meta("forecast_kind",str(group.kind))
+		card.set_meta("forecast_group",group.duplicate(true))
+		box.add_child(card)
+		var details := VBoxContainer.new()
+		details.add_theme_constant_override("separation",5)
+		card.add_child(details)
+		details.add_child(label("%d × %s" % [int(group.count),str(names.get(str(group.kind),str(group.kind).capitalize()))],20,AMBER if str(group.kind) == "boss" else WHITE))
+		details.add_child(label("%.1f HP  ·  %.2f speed  ·  %d core damage" % [float(group.health),float(group.speed),int(group.core_damage)],15,MINT))
+		details.add_child(label(str(roles.get(str(group.kind),"")),15,MUTED))
+	box.add_child(label("Stats reflect current corruption. Planting a wrong number increases enemy health. Set each tower's target in its workshop.\n\nB / Escape closes this panel. Launch the wave from the board when ready.",15,MUTED))
+	box.add_child(label("D-pad / left stick: scroll · A / B: back",14,MINT))
+	var bottom_back := button(back.text,_close_overlay)
+	bottom_back.set_meta("focus_id","wave:close_bottom")
+	box.add_child(bottom_back)
+	back.grab_focus()
 
 func _help() -> void:
 	var box := _modal(720,652)
 	box.add_child(label("HOW TO PLAY",26,MINT))
 	for text in [
 		"01  SOLVE  ·  Fill each row, column and 3×3 box with 1–9, without repeats. Tap a square, then a number, or drag a number onto the board. Correct answers grow towers and earn credits. You can move on before finishing the puzzle.",
-		"02  PREPARE  ·  Select a tower to upgrade it, or upgrade every tower with that number. Open Gear to drag modules onto towers. Each tower has five slots; matching module effects add together. Opening Gear pauses the game.",
+		"02  PREPARE  ·  Read Wave intel before launching. Select a tower to upgrade it and choose First (nearest exit), Strongest (highest current health), or Nearest (closest to tower). Open Gear to fit modules; each tower has five slots. Menus pause the game.",
 		"03  DEFEND  ·  Your recent answers shape the route before battle. During the wave, use reserve seeds to add towers. Wrong numbers are allowed, but add corruption: later enemies have more health, and those towers disappear after the wave.",
 		"04  LOOT  ·  Defeated enemies drop fragments to open chests. Collect gear, buy upgrades in Camp, then start the next round. Credits, gear and number upgrades carry over. Equipped modules return to Gear when the board resets."
 	]:
@@ -1173,10 +1255,10 @@ Controller: press L3, use the right stick, R3 to reset, B to finish.",15,MUTED)
 	box.add_child(label("CONTROLLER",12,MINT))
 	var input_label := label("Left stick / D-pad: grid or menu focus  ·  LB / RB: number / tab\nRight stick: free cursor  ·  R3: click  ·  Hold RT: click / drag\nHold LT: precise cursor  ·  Hover at list edges to scroll\nA: confirm / plant  ·  X: gear  ·  Y: next phase  ·  B: back\nStart: pause menu  ·  View: help",15,MUTED)
 	box.add_child(input_label)
-	var reduce := button("Reduced motion: " + ("ON" if reduced_motion else "OFF"),func(): reduced_motion=not reduced_motion; world.set_reduced_motion(reduced_motion); dock.set_reduced_motion(reduced_motion); _help())
+	var reduce := button("Reduced motion: " + ("ON" if reduced_motion else "OFF"),func(): _toggle_reduced_motion(); _help())
 	box.add_child(reduce)
 	box.add_child(button("Sound: " + ("OFF" if muted else "ON"),func(): _toggle_sound(); _help()))
-	box.add_child(button("Notes: " + ("ON" if board_notes else "OFF"),func(): board_notes=not board_notes; _help()))
+	box.add_child(button("Notes: " + ("ON" if board_notes else "OFF"),func(): _toggle_notes(); _help()))
 	box.add_child(button("Battle speed: %dx" % int(game_speed),func(): _cycle_speed(); _help()))
 	if has_active_run and selected_cell >= 0 and not run.givens[selected_cell] and not run.towers.has(selected_cell):
 		box.add_child(button("Reveal selected square · 6 credits",func(): _action(run.hint(selected_cell)); _close_overlay()))
@@ -1246,9 +1328,13 @@ func _unhandled_input(event: InputEvent) -> void:
 			else: _show_menu(false)
 			return
 		if menu_open: return
+		if event.keycode == KEY_I:
+			_show_wave_intel()
+			get_viewport().set_input_as_handled()
+			return
 		if event.keycode == KEY_TAB: _toggle_dock("bag"); return
 		if event.keycode == KEY_P: _toggle_pause(); return
-		if event.keycode == KEY_M: muted=not muted; sound.set_muted(muted); return
+		if event.keycode == KEY_M: _toggle_sound(); return
 		if dock.is_open() or camera_mode: return
 		controller_used = false
 		if event.keycode >= KEY_1 and event.keycode <= KEY_9: _choose_number(event.keycode-KEY_0)
@@ -1379,6 +1465,17 @@ func _controller_buttons(scope: Control) -> Array[Control]:
 
 func _controller_navigate(direction: Vector2i) -> void:
 	if camera_mode: return
+	if menu_open and is_instance_valid(overlay) and bool(overlay.get_meta("wave_intel",false)) and direction.y != 0:
+		# Intel is an informational list. Let the stick / D-pad scroll its text,
+		# without turning every enemy description into a nonfunctional button.
+		var scroll: ScrollContainer = overlay.find_children("*","ScrollContainer",true,false)[0]
+		var limit: int = maxi(0,int(scroll.get_v_scroll_bar().max_value-scroll.size.y))
+		scroll.scroll_vertical = clampi(scroll.scroll_vertical+direction.y*maxi(80,int(scroll.size.y*0.3)),0,limit)
+		if scroll.scroll_vertical == 0 or scroll.scroll_vertical >= limit:
+			var id := "wave:close" if scroll.scroll_vertical == 0 else "wave:close_bottom"
+			for control in _controller_buttons(overlay):
+				if str(control.get_meta("focus_id","")) == id: control.grab_focus()
+		return
 	var scope: Control = _controller_scope()
 	if scope == null:
 		if has_active_run and not manual_pause: _move_selection(direction)

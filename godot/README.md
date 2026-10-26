@@ -4,6 +4,21 @@ A native Godot 4.7.2 version of the pre-Unity Sudoku Defense game. The same GDSc
 
 ## Play
 
+Version **0.3.14** adds Wave intel: inspect the exact enemy counts, health, speed,
+core damage, and boss warning before launching. Corruption is included in the
+forecast. Each tower can prioritize **First** (furthest along the route),
+**Strongest** (highest remaining health), or **Nearest** (closest to that tower).
+Choose in the workshop at no credit cost. Targeting choices survive save/resume;
+older saves retain First. Opening Wave intel or the workshop pauses combat.
+
+Version **0.3.13** shows a correct number immediately while four family-colored
+voxel brackets assemble its tower foundation. The same foundation becomes the
+tower during preparation. The half-second effect never blocks rapid placement;
+reduced motion shows the finished foundation immediately. Enemy health bars use
+a single camera-facing surface with an inset fill, keeping the border aligned
+as enemies turn and the board rotates. Sound, reduced motion, and notes choices
+are remembered locally across restarts, independently of run saves.
+
 Open the published Godot edition in a current WebGL 2 browser. Version 0.3.11 adapts to portrait phones, wide landscape phones, and the Steam Deck screen. Portrait keeps the grid above a large number bar and four quick tabs; Tools reveals notes, hints, and reserve seeds. Gear, Chests, and Camp use voxel icons with short labels and counts. Gear and the workshop open beside the board; Chests opens a dedicated loot table. The launch page offers fullscreen and desktop downloads. For Windows, extract the ZIP and run `SudokuDefense.exe`. For Linux, extract the archive and run `sudoku-defense.x86_64`; the tar.gz also preserves execute permissions.
 
 The browser export now projects the voxel board and animated chests with ordinary Godot CanvasItem polygons. This bypasses the entire spatial rendering pass that continued to show black on the affected phone, even with simpler materials. The same GDScript run drives tower growth, aiming, routes, equipment, combat, and loot. Desktop builds retain the native 3D scene; pass `--canvas-graphics` to use the browser's compatible voxel view on desktop. The older `--safe-graphics` option only simplifies desktop 3D materials and is no longer the web default. The exact phone still needs a retest; local framebuffer checks cannot establish its GPU behavior.
@@ -35,6 +50,7 @@ Version **0.3.11** smooths the camera movement between Sudoku and defense. Stabl
 | Choose number / highlight matches | Number bar / 1–9 | LB / RB; A plants |
 | Plant / inspect / confirm | Tap square then number; drag number to square; tap tower to inspect | A |
 | Open gear | Tab / Gear | X |
+| Inspect upcoming wave | Wave intel / I during Solve or Prepare | Start → Wave intel |
 | Move a free cursor anywhere on screen | Mouse / touch | Right stick |
 | Cursor click / drag | Click / hold and drag | R3 or hold RT; release to drop |
 | Precise cursor movement | Move slowly | Hold LT while moving right stick |
@@ -65,6 +81,9 @@ Import `project.godot` with Godot 4.7.2 standard (GDScript) edition. The Compati
 ```sh
 godot --headless --path godot --script res://tests/test_run.gd
 godot --headless --path godot --script res://tests/test_sudoku.gd
+godot --headless --path godot --script res://tests/test_tactics.gd
+godot --headless --path godot --script res://tests/test_tactics_ui.gd
+godot --headless --path godot --script res://tests/test_tactics_ui.gd -- --canvas-graphics
 godot --headless --path godot --script res://tests/test_board_transition.gd
 godot --headless --path godot --script res://tests/test_board_transition.gd -- --canvas-graphics
 # Requires a real display (or Xvfb); checks the default native lighting at Deck size:

@@ -1,5 +1,24 @@
 # Sudoku Defense
 
+## Current Godot edition — 0.3.14
+
+The maintained game on this branch is **`godot/`**, built with Godot 4.7.2 for
+native Windows, Linux / Steam Deck, and browser play. Start with
+[the Godot README](godot/README.md) and [build instructions](docs/GODOT-BUILDS.md).
+[Play the Godot edition](https://sudoku-defense-godot.yakstudios.chatgpt.site).
+
+Version 0.3.14 adds wave forecasts and per-tower target priorities. Inspect the
+incoming enemy mix before launching, then choose First, Strongest, or Nearest in
+the tower workshop. It includes 0.3.13's aligned health bars, voxel foundation
+assembly, and remembered preferences. The existing Steam target remains
+app **3721150**, shared depot **3721151**; consult [the release record](docs/STEAM-RELEASE.md)
+for the actually activated build.
+
+The following sections describe the retained **legacy web/Electron reference**.
+Do not use its `dist/` or Electron packaging as the current native game source.
+
+## Legacy web reference
+
 A Sudoku tower-defense roguelite alpha by Yak Studios. Solve a traditional grid, grow numbered seeds into voxel towers, fit them with loot, and defend an enemy route shaped by your recent answers.
 
 [Play Sudoku Defense](https://gridfall.yakstudios.chatgpt.site) · [Player guide](docs/ROGUELITE-GUIDE.md)

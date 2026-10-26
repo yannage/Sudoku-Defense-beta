@@ -8,6 +8,8 @@ const VoxelMaterial = preload("res://scripts/voxel_material.gd")
 const SeedPlanting = preload("res://scripts/seed_planting.gd")
 const BoardTransition = preload("res://scripts/board_transition.gd")
 const CameraOrbit = preload("res://scripts/camera_orbit.gd")
+const EnemyHealth = preload("res://scripts/enemy_health.gd")
+const EnemyHealthShader = preload("res://assets/enemy_health.gdshader")
 
 var run: RefCounted
 var selected_cell: int = -1
@@ -582,8 +584,8 @@ func _sync_towers(dt: float) -> void:
 		var growth: float = clampf(float(tower.get("growth", 1.0)), 0.0, 1.0)
 		var show_amount: float = smoothstep(0.12, 0.8, _morph) * maxf(0.1, growth)
 		body.scale = Vector3(lerpf(0.45, 1.0, show_amount), maxf(0.015, show_amount), lerpf(0.45, 1.0, show_amount))
-		seed_node.visible = _morph < 0.7 and not _seed_plantings.has(key)
-		seed_node.scale = Vector3.ONE * lerpf(1.0, 0.2, smoothstep(0.2, 0.72, _morph))
+		seed_node.visible = show_amount < 0.75 and not _seed_plantings.has(key)
+		seed_node.scale = Vector3.ONE * maxf(0.001,1.0-show_amount)
 		body.visible = show_amount > 0.01
 		node.position = _cell_pos(int(key))
 		var origin2: Vector2 = Vector2(float(int(key) % 9), float(int(key) / 9))
@@ -601,12 +603,11 @@ func _build_tower(cell: int, tower: Dictionary, signature: String) -> Dictionary
 	_world.add_child(node)
 	node.position = _cell_pos(cell)
 	var seed_node: Node3D = Node3D.new()
+	seed_node.name = "TowerFoundation"
 	node.add_child(seed_node)
-	seed_node.position = Vector3(0.29, 0.05, -0.30)
-	_box(seed_node, Vector3.ZERO, Vector3(0.14, 0.08, 0.14), Color("997f53"))
-	_box(seed_node, Vector3(0, 0.07, 0), Vector3(0.035, 0.12, 0.035), Color("4c8d65"))
-	_box(seed_node, Vector3(-0.05, 0.12, 0), Vector3(0.12, 0.04, 0.06), color)
-	_box(seed_node, Vector3(0.05, 0.15, 0), Vector3(0.10, 0.04, 0.06), color.lightened(0.2))
+	for index: int in range(4):
+		var corner: Node3D = _foundation_corner(seed_node,index,color)
+		corner.position = SeedPlanting.corner_offset(SeedPlanting.DURATION,index)
 	var body: Node3D = Node3D.new()
 	node.add_child(body)
 	# Stable contact shading anchors the stack even when real-time shadows are off.
@@ -692,10 +693,14 @@ func _sync_enemies(dt: float) -> void:
 		var movement: Vector3 = target - previous
 		if movement.length_squared() > 0.000001:
 			node.rotation.y = lerp_angle(node.rotation.y, atan2(movement.x, movement.z), minf(1.0, dt * 12.0))
-		var ratio: float = clampf(float(enemy.get("hp", 1.0)) / maxf(1.0, float(enemy.get("max_hp", 1.0))), 0.0, 1.0)
-		var bar: Node3D = entry["bar"]
-		bar.scale.x = maxf(0.001, ratio)
-		bar.position.x = -(1.0 - ratio) * 0.19
+		var ratio: float = EnemyHealth.ratio(enemy)
+		var bar: MeshInstance3D = entry["bar"]
+		# Keep one shared surface square to the camera, independent of enemy yaw.
+		# Track and fill are pixels in the same quad, never overlapping 3D boxes.
+		bar.global_basis = camera.global_basis.orthonormalized()
+		var health_material: ShaderMaterial = bar.material_override
+		health_material.set_shader_parameter("fill_ratio",ratio)
+		health_material.set_shader_parameter("fill_color",EnemyHealth.color_for(ratio))
 		var body: Node3D = entry["body"]
 		body.rotation.z = 0.0 if reduced_motion else sin(_clock * 11.0 + float(id)) * 0.035
 	for key: Variant in _enemy_nodes.keys():
@@ -729,11 +734,22 @@ func _build_enemy(enemy: Dictionary) -> Dictionary:
 		body.scale = Vector3.ONE * 1.45
 		for x: float in [-0.16, 0.16]:
 			_box(body, Vector3(x, 0.5, 0), Vector3(0.09, 0.25, 0.09), Color("f6d5ff"), true)
-	var health: Node3D = Node3D.new()
-	node.add_child(health)
-	health.position.y = 0.68 if kind == "boss" else 0.53
-	_box(health, Vector3.ZERO, Vector3(0.43, 0.035, 0.075), Color("13252e"), true)
-	var bar: MeshInstance3D = _box(health, Vector3.ZERO, Vector3(0.38, 0.045, 0.055), color.lightened(0.25), true)
+	var bar := MeshInstance3D.new()
+	bar.name = "HealthBar"
+	var quad := QuadMesh.new()
+	quad.size = EnemyHealth.size_for(kind)
+	bar.mesh = quad
+	bar.position.y = EnemyHealth.height_for(kind)
+	bar.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var health_material := ShaderMaterial.new()
+	health_material.shader = EnemyHealthShader
+	health_material.set_shader_parameter("bar_size",quad.size)
+	health_material.set_shader_parameter("border",EnemyHealth.BORDER)
+	health_material.set_shader_parameter("track_color",EnemyHealth.TRACK)
+	health_material.set_shader_parameter("fill_ratio",EnemyHealth.ratio(enemy))
+	health_material.set_shader_parameter("fill_color",EnemyHealth.color_for(EnemyHealth.ratio(enemy)))
+	bar.material_override = health_material
+	node.add_child(bar)
 	return {"node":node, "body":body, "bar":bar}
 
 func _build_route(route: Array) -> void:
@@ -870,80 +886,44 @@ func play_event(event: Dictionary) -> void:
 			if str(run.get("phase")) == "battle":
 				_ring(Vector3.ZERO, Color("78dcc3"), 6.0, 0.8)
 
+func _foundation_corner(parent: Node3D, index: int, color: Color) -> Node3D:
+	var corner := Node3D.new()
+	corner.name = "FoundationCorner%d" % index
+	parent.add_child(corner)
+	for part: Dictionary in SeedPlanting.corner_blocks(index,color):
+		_box(corner,part.offset,part.size,part.color)
+	return corner
+
 func _start_seed_planting(cell: int, number: int) -> void:
 	if reduced_motion or cell < 0 or cell >= 81 or number < 1 or number > 9: return
 	if bool(run.givens[cell]) or int(run.board[cell]) != number or not run.towers.has(cell): return
 	if _seed_plantings.has(cell): return
 	var node := Node3D.new()
+	node.name = "NumberToTowerAssembly"
 	_fx_root.add_child(node)
 	node.position = _cell_pos(cell)
-	var shadow := Node3D.new()
-	node.add_child(shadow)
-	_box(shadow, Vector3.ZERO, Vector3(1.0,0.008,0.72), Color("38483d"), true)
-	_box(shadow, Vector3.ZERO, Vector3(0.72,0.009,1.0), Color("38483d"), true)
-	var socket := Node3D.new()
-	node.add_child(socket)
-	_box(socket, Vector3(0,0.004,0), Vector3(0.48,0.012,0.34), Color("705539"), true)
-	_box(socket, Vector3(0,0.005,0), Vector3(0.34,0.012,0.48), Color("705539"), true)
-	_box(socket, Vector3(0,0.012,0), Vector3(0.34,0.012,0.28), Color("2b241e"), true)
-	var seed := Node3D.new()
-	node.add_child(seed)
-	# A stepped walnut silhouette, pale seam, and colored bud remain distinct
-	# from both the muted square and the dark planting socket.
-	_box(seed, Vector3.ZERO, Vector3(0.32,0.25,0.36), Color("634327"))
-	_box(seed, Vector3(0,0.045,0), Vector3(0.25,0.22,0.40), Color("a3733e"))
-	_box(seed, Vector3(0,0.165,0), Vector3(0.065,0.035,0.32), Color("d4ab66"))
-	_box(seed, Vector3(0.05,0.19,-0.09), Vector3(0.10,0.07,0.11), _family(number).darkened(0.30))
-	var soil := Node3D.new()
-	node.add_child(soil)
-	for index: int in range(6):
-		_box(soil,Vector3.ZERO,Vector3.ONE,Color("765536") if index % 2 == 0 else Color("443527"))
-	var sprout := Node3D.new()
-	node.add_child(sprout)
-	sprout.position = Vector3(0.29,0.05,-0.30)
-	_box(sprout, Vector3.ZERO, Vector3(0.14,0.08,0.14), Color("997f53"))
-	_box(sprout, Vector3(0,0.07,0), Vector3(0.035,0.12,0.035), Color("4c8d65"))
-	_box(sprout, Vector3(-0.05,0.12,0), Vector3(0.12,0.04,0.06), _family(number))
-	_box(sprout, Vector3(0.05,0.15,0), Vector3(0.10,0.04,0.06), _family(number).lightened(0.2))
+	var corners := Node3D.new()
+	node.add_child(corners)
+	for index: int in range(4):
+		_foundation_corner(corners,index,_family(number))
 	var pulse := Node3D.new()
 	node.add_child(pulse)
-	_square_frame(pulse,1.0,0.022,_family(number).darkened(0.40),0.026)
-	_seed_plantings[cell] = {"age":0.0,"number":number,"node":node,"seed":seed,"soil":soil,"pulse":pulse,"shadow":shadow,"socket":socket,"sprout":sprout}
+	_square_frame(pulse,1.0,0.022,_family(number).darkened(0.30),0.026)
+	_seed_plantings[cell] = {"age":0.0,"number":number,"node":node,"corners":corners,"pulse":pulse}
 	_animate_seed_planting(cell)
 	if _tower_nodes.has(cell): (_tower_nodes[cell].seed as Node3D).visible = false
 
 func _animate_seed_planting(cell: int) -> void:
 	var entry: Dictionary = _seed_plantings[cell]
 	var age: float = float(entry.age)
-	var seed: Node3D = entry.seed
-	seed.position = SeedPlanting.seed_offset(age)
-	seed.scale = SeedPlanting.seed_stretch(age) * maxf(0.001,SeedPlanting.seed_scale(age))
-	seed.visible = age < SeedPlanting.REVEAL_AT
-	seed.rotation = SeedPlanting.seed_rotation(age)
-	var shadow: Node3D = entry.shadow
-	var shadow_width: float = SeedPlanting.shadow_scale(age)
-	shadow.visible = shadow_width > 0.005
-	shadow.position = Vector3(seed.position.x * 0.45 + 0.045,0.001,seed.position.z * 0.45 + 0.055)
-	shadow.scale = Vector3(maxf(0.001,shadow_width),1.0,maxf(0.001,shadow_width))
-	var socket: Node3D = entry.socket
-	var socket_width: float = SeedPlanting.socket_scale(age)
-	socket.visible = socket_width > 0.005
-	socket.scale = Vector3(maxf(0.001,socket_width),1.0,maxf(0.001,socket_width))
-	var soil: Node3D = entry.soil
-	soil.visible = age >= SeedPlanting.LAND_AT and age < 0.52
-	for index: int in range(soil.get_child_count()):
-		var chunk: Node3D = soil.get_child(index)
-		chunk.position = SeedPlanting.soil_offset(age,index)
-		chunk.scale = Vector3(0.09,0.065,0.08) * maxf(0.001,SeedPlanting.soil_scale(age))
-		chunk.rotation = Vector3(float(index) * 0.4 + age * 4.0, float(index), age * 3.0)
-	var sprout: Node3D = entry.sprout
-	var growth: float = SeedPlanting.sprout_scale(age)
-	sprout.visible = growth > 0.005
-	sprout.scale = Vector3(maxf(0.001,sqrt(growth)),maxf(0.001,growth),maxf(0.001,sqrt(growth)))
+	var corners: Node3D = entry.corners
+	for index: int in range(corners.get_child_count()):
+		var corner: Node3D = corners.get_child(index)
+		corner.position = SeedPlanting.corner_offset(age,index)
+		corner.scale = Vector3.ONE * SeedPlanting.corner_scale(age,index)
 	var pulse: Node3D = entry.pulse
 	var width: float = SeedPlanting.impact_scale(age)
 	var weight: float = maxf(0.001,SeedPlanting.impact_alpha(age))
-	pulse.visible = age >= SeedPlanting.LAND_AT
 	pulse.scale = Vector3(width,1.0,width)
 	for index: int in range(pulse.get_child_count()):
 		var edge: Node3D = pulse.get_child(index)
@@ -970,6 +950,7 @@ func _update_seed_plantings(dt: float) -> void:
 			(entry.node as Node3D).queue_free()
 			_labels[cell].scale = Vector3.ONE
 			_seed_plantings.erase(cell)
+			if _tower_nodes.has(cell): (_tower_nodes[cell].seed as Node3D).visible = true
 			completed = true
 		else:
 			_animate_seed_planting(int(cell))

@@ -394,6 +394,22 @@ func _tower_panel(content: VBoxContainer) -> void:
 	_stat(stats_row, "DAMAGE", "%.0f" % float(stats.get("damage", 0)))
 	_stat(stats_row, "FIRE / SEC", "%.1f" % (1.0 / maxf(0.05, float(stats.get("interval", 1)))))
 	_stat(stats_row, "RANGE", "%.1f" % float(stats.get("range", 0)))
+	_section(content, "TARGET PRIORITY", "IN RANGE")
+	var priority: String = str(tower.get("target_priority","first"))
+	var target_row := HBoxContainer.new()
+	target_row.add_theme_constant_override("separation",4)
+	content.add_child(target_row)
+	var descriptions := {"first":"First: nearest the exit.","strongest":"Strongest: highest current health.","nearest":"Nearest: closest to this tower."}
+	for mode: String in ["first","strongest","nearest"]:
+		var target_mode: String = mode
+		var target_cell: int = selected_cell
+		var choice := _button(mode.capitalize(),func(): _act("set_target_priority",[target_cell,target_mode]),false,false,44,"target:"+mode)
+		choice.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		choice.tooltip_text = str(descriptions[mode])
+		choice.set_meta("selected_priority",priority == mode)
+		_selection_style(choice,priority == mode,6)
+		target_row.add_child(choice)
+	_note(content,"First = nearest exit\nStrongest = highest current HP\nNearest = closest to this tower")
 	var attachments: Array = tower.get("attachments", [])
 	_section(content, "MODULE SOCKETS", "%d / 5 used" % attachments.size())
 	_socket_strip(content, selected_cell)

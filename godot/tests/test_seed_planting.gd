@@ -1,5 +1,5 @@
 extends SceneTree
-## A planted answer commits immediately; the seed and numeral are presentation.
+## An answer and numeral appear immediately; tower-foundation assembly is cosmetic.
 ## Runs headlessly for behavior and with GLES for framebuffer evidence.
 
 const NativeBoard = preload("res://scripts/board.gd")
@@ -126,10 +126,10 @@ func integrated_inputs() -> void:
 		# Mouse and touch also reach the same normal event-drain path.
 		scene._process(0.0)
 		check(scene.run.board[cell] == number, "%s immediately commits the correct answer" % kind)
-		check(scene.world._seed_plantings.has(cell), "%s uses the seed planting presentation" % kind)
-	check(scene.world._seed_plantings.size() == 4, "Four input methods can plant while prior seeds are still animating")
+		check(scene.world._seed_plantings.has(cell), "%s uses the foundation assembly presentation" % kind)
+	check(scene.world._seed_plantings.size() == 4, "Four input methods can plant while prior foundations are still assembling")
 	scene.world.tick(0.80)
-	check(scene.world._seed_plantings.is_empty(), "Integrated seed presentations finish without further player input")
+	check(scene.world._seed_plantings.is_empty(), "Integrated foundation presentations finish without further player input")
 	scene.queue_free()
 	await frames(3)
 
@@ -150,6 +150,20 @@ func exercise() -> void:
 	board.tick(0.0)
 	await frames(4)
 	check(board._seed_plantings.is_empty(), "New puzzle and fixed clues do not replay planting animations")
+	check(Planting.DURATION <= 0.60,"Placement feedback completes quickly")
+	for step: int in range(51):
+		var age: float = float(step)*0.01
+		check(Planting.number_alpha(age) == 1.0,"Answer remains opaque at %.2f seconds" % age)
+		for index: int in range(4):
+			var corner: Vector3 = Planting.corner_offset(age,index)
+			var scale3: float = Planting.corner_scale(age,index)
+			for part: Dictionary in Planting.corner_blocks(index,Color.CYAN):
+				var center: Vector3 = corner+Vector3(part.offset)*scale3
+				var half: Vector3 = Vector3(part.size)*scale3*0.5
+				check(absf(center.x)-half.x > 0.15 or absf(center.z)-half.z > 0.15,"Foundation never covers the central numeral")
+	for index: int in range(4):
+		check(Planting.corner_offset(Planting.SETTLE_AT,index).is_equal_approx(Planting.corner_offset(Planting.DURATION,index)),"Assembled corners match their permanent foundation position")
+
 	var first: int = blank(model)
 	var second: int = blank(model,[first])
 	var third: int = blank(model,[first,second])
@@ -164,37 +178,47 @@ func exercise() -> void:
 	check(model.place(first,model.solution[first]).ok,"Correct answer is accepted")
 	events(model,board)
 	board.tick(0.0)
-	check(model.board[first] == model.solution[first] and model.towers.has(first),"The board and tower commit before the seed animation finishes")
+	check(model.board[first] == model.solution[first] and model.towers.has(first),"The board and tower commit before the foundation assembly finishes")
 	check(model.credits > credit_before,"Solve reward is immediate, not animation-dependent")
-	check(board._seed_plantings.has(first),"Successful placement begins a per-cell seed animation")
+	check(board._seed_plantings.has(first),"Successful placement begins a per-cell foundation assembly")
 	var native_seed_nodes: Array[Node] = []
 	if not canvas: native_seed_nodes.append(board._seed_plantings[first].node)
-	check(alpha(board,first) <= 0.01,"Numeral waits until the seed lands")
+	check(alpha(board,first) >= 0.99,"Numeral is fully readable on the first placement frame")
+	if not canvas:
+		check(board._seed_plantings[first].corners.get_child_count() == 4,"Four mechanical corners assemble around the answer")
+		check(not board._seed_plantings[first].has("soil") and not board._seed_plantings[first].has("seed"),"No soil or free-floating seed model remains")
 	board.tick(0.10)
 	await frames()
-	var approach: Image = capture("01-seed-approach")
-	if rendered: check(changed_pixels(baseline,approach,position) > 8,"Voxel seed is visible above its target square")
+	var approach: Image = capture("01-foundation-assembly")
+	if rendered: check(changed_pixels(baseline,approach,position) > 8,"Number and assembling foundation visibly respond on the target square")
 	check(model.place(second,model.solution[second]).ok,"A second answer is accepted during the first animation")
 	events(model,board)
 	board.tick(0.0)
 	check(board._seed_plantings.has(first) and board._seed_plantings.has(second),"Rapid placements animate independently")
 	if not canvas: native_seed_nodes.append(board._seed_plantings[second].node)
-	check(float(board._seed_plantings[first].age) > float(board._seed_plantings[second].age),"A new seed does not restart the previous seed")
+	check(float(board._seed_plantings[first].age) > float(board._seed_plantings[second].age),"A new foundation does not restart the previous assembly")
 	var invalid_number: int = 1 + int(model.solution[third]) % 9
 	check(not model.place(third,invalid_number).ok,"Incorrect solve placement is rejected")
 	events(model,board)
-	check(not board._seed_plantings.has(third) and model.board[third] == 0,"Rejected move does not plant a seed or change the square")
+	check(not board._seed_plantings.has(third) and model.board[third] == 0,"Rejected move does not assemble a foundation or change the square")
 	check(not model.place(fixed,model.solution[fixed]).ok,"Fixed clue cannot be replanted")
 	events(model,board)
 	check(not board._seed_plantings.has(fixed),"Fixed clue never gains planting animation state")
 	board.tick(0.17)
 	await frames()
-	capture("02-seed-landed")
-	check(alpha(board,first) <= 0.01,"The landed seed is shown before the numeral appears")
+	capture("02-foundation-locking")
+	check(alpha(board,first) >= 0.99,"Numeral stays readable throughout foundation assembly")
 	board.tick(0.25)
 	await frames()
-	capture("03-number-reveal")
-	check(alpha(board,first) >= 0.99,"Numeral is fully readable within half a second")
+	capture("03-foundation-complete")
+	check(alpha(board,first) >= 0.99,"Numeral is fully readable after the foundation locks")
+	if not canvas:
+		var foundation: Node3D = board._tower_nodes[first].seed
+		check(foundation.visible,"Permanent foundation is visible on the assembly cleanup frame")
+		check(foundation.name == "TowerFoundation" and foundation.get_child_count() == 4,"Completed answer retains its four tower foundation corners")
+		for index: int in range(4):
+			check(foundation.get_child(index).position.is_equal_approx(Planting.corner_offset(Planting.DURATION,index)),"Completed corner stays at its assembly endpoint")
+
 	board.tick(0.30)
 	await frames()
 	var settled: Image = capture("04-settled")
@@ -208,7 +232,7 @@ func exercise() -> void:
 	if not canvas: native_seed_nodes.append(board._seed_plantings[third].node)
 	board.set_reduced_motion(true)
 	board.tick(0.0)
-	check(board._seed_plantings.is_empty() and alpha(board,third) >= 0.99,"Reduced motion restores a digit when enabled during its seed animation")
+	check(board._seed_plantings.is_empty() and alpha(board,third) >= 0.99,"Reduced motion restores a digit when enabled during its foundation assembly")
 	var fourth: int = blank(model)
 	model.place(fourth,model.solution[fourth]); events(model,board); board.tick(0.0)
 	check(board._seed_plantings.is_empty() and alpha(board,fourth) >= 0.99,"Reduced motion plants answers immediately without hiding numerals")
@@ -221,15 +245,15 @@ func exercise() -> void:
 	check(board._seed_plantings.is_empty() and alpha(board,fifth) > 0.5,"Immediate Prepare transition cannot leave a digit hidden")
 	await frames(2)
 	for node in native_seed_nodes:
-		check(not is_instance_valid(node),"Completed, accessibility-canceled, and phase-canceled native seeds free their temporary nodes")
+		check(not is_instance_valid(node),"Completed, accessibility-canceled, and phase-canceled native assemblies free their temporary nodes")
 	board.setup(model); board.tick(0.0)
-	check(board._seed_plantings.is_empty(),"Setup of an existing board does not replay seeds")
+	check(board._seed_plantings.is_empty(),"Setup of an existing board does not replay assemblies")
 	model.new_run(7319,{"puzzle_difficulty":"easy"}); model.drain_events(); board.setup(model); board.tick(0.0)
 	var reset_cell: int = blank(model)
 	model.place(reset_cell,model.solution[reset_cell]); events(model,board)
-	check(board._seed_plantings.has(reset_cell),"Fresh run can create a seed")
+	check(board._seed_plantings.has(reset_cell),"Fresh run can assemble a foundation")
 	model.new_run(7320,{"puzzle_difficulty":"easy"}); model.drain_events(); board.setup(model); board.tick(0.0)
-	check(board._seed_plantings.is_empty(),"Starting a new board clears active seed animations")
+	check(board._seed_plantings.is_empty(),"Starting a new board clears active foundation assemblies")
 	board.queue_free()
 	await frames(3)
 	await integrated_inputs()

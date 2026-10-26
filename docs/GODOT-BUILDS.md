@@ -112,6 +112,19 @@ Headless import and executable boot checks detect packaging and script errors. T
 
 ## Current source and verification
 
+Version **0.3.14** adds an exact forecast based on the same deterministic enemy
+blueprint used by spawning, plus per-tower First / Strongest / Nearest priorities.
+The forecast leaves RNG and combat state unchanged; existing difficulty tuning
+and boss replacement behavior are preserved. Older saves default to First.
+Validation and delivery status are recorded in `docs/ITERATION-0.3.14.md`.
+
+Version **0.3.13** replaces the seed/soil/sprout placement effect with immediate
+number feedback and a short voxel foundation assembly shared by native and
+Canvas rendering. Enemy health bars now use a single camera-facing native quad
+and matching inset Canvas rectangles. User sound, reduced-motion, and notes
+preferences persist separately from run saves. Validation and deployment details
+for this iteration are recorded in `docs/ITERATION-0.3.13.md`.
+
 Version **0.3.12** adds manual board rotation in the native and Canvas renderers.
 The camera keeps the board framed throughout a full turn, carries the chosen
 angle through phase changes, and eases back to the default angle with Reset

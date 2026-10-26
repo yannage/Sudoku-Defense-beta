@@ -60,6 +60,9 @@ jobs:
           path: |
             godot/build/logs/
             godot/build/render-checks/
+            godot/build/seed-checks/
+            godot/build/health-checks/
+            godot/build/tactics-checks/
           retention-days: 14
 
   windows-smoke:

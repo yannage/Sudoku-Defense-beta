@@ -58,6 +58,10 @@ def make_web_shell(web: Path) -> None:
     (web / "engine-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     engine_path.unlink()
     shell = (PROJECT / "scripts" / "web_shell.html").read_text()
+    version_match = re.search(r'^config/version="([^\"]+)"$', (PROJECT / "project.godot").read_text(), re.MULTILINE)
+    if not version_match:
+        raise RuntimeError("Project version is required for the web launch page")
+    shell = shell.replace("__GAME_VERSION__", version_match.group(1))
     shell = shell.replace("__GODOT_CONFIG__", json.dumps(config, separators=(",", ":")))
     shell = shell.replace("__WASM_PARTS__", json.dumps(parts, separators=(",", ":")))
     shell = shell.replace("__WASM_BYTES__", str(len(payload)))
@@ -186,9 +190,10 @@ def main() -> None:
         run([args.godot, "--headless", "--path", str(PROJECT), "--editor", "--import", "--quit"], logs / "import.log")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_run.gd"], logs / "simulation-tests.log", expected="PASS:")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_sudoku.gd"], logs / "sudoku-tests.log", expected="SUDOKU_PASS")
+    run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_tactics.gd"], logs / "tactics-tests.log", expected="TACTICS_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_board_transition.gd"], logs / "board-transition-tests.log", expected="BOARD_TRANSITION_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_board_transition.gd", "--", "--canvas-graphics"], logs / "canvas-board-transition-tests.log", expected="BOARD_TRANSITION_PASS")
-    for script, marker in [("test_camera_orbit.gd", "CAMERA_ORBIT_PASS"), ("test_camera_controls.gd", "CAMERA_CONTROLS_PASS")]:
+    for script, marker in [("test_camera_orbit.gd", "CAMERA_ORBIT_PASS"), ("test_camera_controls.gd", "CAMERA_CONTROLS_PASS"), ("test_enemy_health.gd", "ENEMY_HEALTH_PASS"), ("test_preferences.gd", "PREFERENCES_PASS"), ("test_tactics_ui.gd", "TACTICS_UI_PASS")]:
         for renderer, flags in [("native", []), ("canvas", ["--", "--canvas-graphics"])]:
             run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/" + script] + flags, logs / f"{renderer}-{script.removesuffix('.gd')}.log", expected=marker)
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_ui_flow.gd"], logs / "ui-flow-tests.log", expected="UI_FLOW_PASS")
@@ -213,6 +218,10 @@ def main() -> None:
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_loot_gear_flow.gd", "--", "--canvas-graphics"], logs / "canvas-loot-gear-flow-tests.log", expected="LOOT_GEAR_FLOW_PASS")
     if args.render_check:
         for script, flag, logfile, marker in [
+            ("test_tactics_ui.gd", "", "native-tactics-render-tests.log", "TACTICS_UI_PASS"),
+            ("test_tactics_ui.gd", "--canvas-graphics", "canvas-tactics-render-tests.log", "TACTICS_UI_PASS"),
+            ("test_enemy_health.gd", "", "native-enemy-health-render-tests.log", "ENEMY_HEALTH_PASS"),
+            ("test_enemy_health.gd", "--canvas-graphics", "canvas-enemy-health-render-tests.log", "ENEMY_HEALTH_PASS"),
             ("test_board_readability.gd", "", "native-readability-tests.log", "READABILITY_PASS"),
             ("test_board_readability.gd", "--canvas-graphics", "canvas-readability-tests.log", "READABILITY_PASS"),
             ("test_rendering.gd", "--safe-graphics", "rendering-tests.log", "RENDER_PASS"),
@@ -234,6 +243,10 @@ def main() -> None:
                 command += ["--", flag]
             if script == "test_camera_controls.gd":
                 command += ["--capture-camera"]
+            if script == "test_tactics_ui.gd":
+                if not flag:
+                    command += ["--"]
+                command += ["--capture-tactics"]
             if not os.environ.get("DISPLAY"):
                 xvfb = shutil.which("xvfb-run")
                 if not xvfb:

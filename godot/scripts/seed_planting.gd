@@ -1,66 +1,42 @@
 extends RefCounted
-## Shared cosmetic timing for a solved square. The run model never waits for it.
+## Shared number-to-tower foundation assembly. Gameplay commits immediately.
+## Retains the resource path for existing projects; there is no seed model.
 
-const DURATION: float = 0.72
-const LAND_AT: float = 0.24
-const REVEAL_AT: float = 0.34
-const REVEAL_END: float = 0.48
+const DURATION: float = 0.50
+const SETTLE_AT: float = 0.36
 
-static func seed_offset(age: float) -> Vector3:
-	if age < LAND_AT:
-		# Brief lift, then an accelerating diagonal plunge. Height alone disappears
-		# in the overhead solve camera, so the approach also travels across the tile.
-		var windup: float = smoothstep(0.0, 0.06, age)
-		var fall: float = pow(clampf((age - 0.06) / (LAND_AT - 0.06), 0.0, 1.0), 2.0)
-		return Vector3(-0.30 * (1.0 - fall), lerpf(0.70 + 0.14 * windup, 0.09, fall), -0.40 * (1.0 - fall))
-	var bury: float = smoothstep(LAND_AT, REVEAL_AT, age)
-	return Vector3(0.0, lerpf(0.09, -0.12, bury), 0.0)
+static func corner_sign(index: int) -> Vector3:
+	return Vector3(-1.0 if index % 2 == 0 else 1.0, 1.0, -1.0 if index < 2 else 1.0)
 
-static func seed_scale(age: float) -> float:
-	if age >= REVEAL_AT: return 0.0
-	if age >= LAND_AT: return lerpf(1.0, 0.0, smoothstep(LAND_AT, REVEAL_AT, age))
-	return 0.92 + 0.08 * smoothstep(0.0, 0.06, age)
+static func corner_offset(age: float, index: int) -> Vector3:
+	var sign3: Vector3 = corner_sign(index)
+	var progress: float = smoothstep(float(index) * 0.025, SETTLE_AT, age)
+	var radius: float = lerpf(0.39, 0.31, progress)
+	return Vector3(sign3.x * radius, lerpf(0.13, 0.045, progress), sign3.z * radius)
 
-static func seed_rotation(age: float) -> Vector3:
-	var fall: float = smoothstep(0.06, LAND_AT, age)
-	# Tilt exposes the walnut's three voxel faces even when viewed straight down.
-	return Vector3(lerpf(-0.48, 0.15, fall), lerpf(-0.65, 0.30, fall), lerpf(0.38, -0.12, fall))
+static func corner_scale(age: float, index: int) -> float:
+	return lerpf(0.65, 1.0, smoothstep(float(index) * 0.025, SETTLE_AT, age))
 
-static func seed_stretch(age: float) -> Vector3:
-	var hit: float = 0.0
-	if age >= LAND_AT: hit = 1.0 - smoothstep(LAND_AT, LAND_AT + 0.065, age)
-	return Vector3(1.0 + hit * 0.30, 1.0 - hit * 0.42, 1.0 + hit * 0.20)
+static func corner_blocks(index: int, family: Color) -> Array[Dictionary]:
+	# L-shaped mechanical brackets leave the numeral's center completely open.
+	# Native meshes and Canvas voxels consume the exact same local geometry.
+	var sign3: Vector3 = corner_sign(index)
+	return [
+		{"offset":Vector3(-0.045 * sign3.x,0,0),"size":Vector3(0.18,0.07,0.085),"color":Color("315056")},
+		{"offset":Vector3(0,0,-0.045 * sign3.z),"size":Vector3(0.085,0.07,0.18),"color":Color("315056")},
+		{"offset":Vector3(-0.045 * sign3.x,0.043,0),"size":Vector3(0.16,0.018,0.043),"color":family.darkened(0.18)},
+		{"offset":Vector3(0,0.043,-0.045 * sign3.z),"size":Vector3(0.043,0.018,0.16),"color":family.darkened(0.18)}
+	]
 
-static func shadow_scale(age: float) -> float:
-	return lerpf(0.70, 0.38, smoothstep(0.06, LAND_AT, age)) * (1.0 - smoothstep(LAND_AT, REVEAL_AT, age))
-
-static func socket_scale(age: float) -> float:
-	return smoothstep(0.04, 0.18, age) * (1.0 - smoothstep(REVEAL_AT, REVEAL_END, age))
-
-static func soil_offset(age: float, index: int) -> Vector3:
-	var flight: float = clampf((age - LAND_AT) / 0.25, 0.0, 1.0)
-	var angle: float = float(index) * TAU / 6.0 + 0.35
-	var radius: float = lerpf(0.13, 0.36, flight)
-	return Vector3(cos(angle) * radius, 0.04 + sin(flight * PI) * (0.17 + float(index % 2) * 0.08), sin(angle) * radius)
-
-static func sprout_scale(age: float) -> float:
-	var growth: float = smoothstep(0.30, 0.54, age)
-	return growth + sin(growth * PI) * 0.16
-
-static func number_alpha(age: float) -> float:
-	return smoothstep(REVEAL_AT, REVEAL_END, age)
+static func number_alpha(_age: float) -> float:
+	# The answer is the player's action: never conceal it behind presentation.
+	return 1.0
 
 static func number_scale(age: float) -> float:
-	var reveal: float = smoothstep(REVEAL_AT, REVEAL_END, age)
-	return lerpf(0.88, 1.0, reveal) + sin(reveal * PI) * 0.045
+	return 1.0 + sin(smoothstep(0.0, 0.24, age) * PI) * 0.04
 
 static func impact_scale(age: float) -> float:
-	return lerpf(0.40, 0.82, smoothstep(LAND_AT, DURATION, age))
+	return lerpf(0.70, 0.88, smoothstep(0.0, DURATION, age))
 
 static func impact_alpha(age: float) -> float:
-	if age < LAND_AT: return 0.0
-	return 1.0 - smoothstep(LAND_AT, DURATION, age)
-
-static func soil_scale(age: float) -> float:
-	if age < LAND_AT: return 0.0
-	return 1.0 - smoothstep(REVEAL_AT, 0.52, age)
+	return 1.0 - smoothstep(0.10, DURATION, age)
