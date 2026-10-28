@@ -251,7 +251,9 @@ func exercise() -> void:
 		if scene.selected_number == answer: break
 		await press_pad(JOY_BUTTON_RIGHT_SHOULDER)
 	await press_pad(JOY_BUTTON_A)
-	check(scene.run.board[cell] == answer, "Controller A still plants after touch use")
+	check(scene._controller_number_cell == cell and scene.run.board[cell] == 0, "Controller A opens the number tray after touch use")
+	await press_pad(JOY_BUTTON_A)
+	check(scene.run.board[cell] == answer and scene.selected_cell == cell and scene._controller_number_cell == -1, "Controller number confirmation plants and returns to the same square after touch use")
 
 	# Pick locations after each real viewport resize; exercise both tap and drag.
 	for window_size in [Vector2i(390, 844), Vector2i(844, 390), Vector2i(1280, 800)]:

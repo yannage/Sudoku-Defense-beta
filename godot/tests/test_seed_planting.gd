@@ -115,13 +115,16 @@ func integrated_inputs() -> void:
 			else:
 				scene.selected_number = number
 				scene._release_ui_focus()
-				for pressed in [true,false]:
-					var event := InputEventJoypadButton.new()
-					event.device = 42
-					event.button_index = JOY_BUTTON_A
-					event.pressed = pressed
-					Input.parse_input_event(event)
-					await frames(1)
+				for stage in range(2):
+					for pressed in [true,false]:
+						var event := InputEventJoypadButton.new()
+						event.device = 42
+						event.button_index = JOY_BUTTON_A
+						event.pressed = pressed
+						Input.parse_input_event(event)
+						await frames(1)
+					if stage == 0:
+						check(scene.run.board[cell] == 0 and scene._controller_number_cell == cell, "Controller first A focuses the number tray before foundation assembly")
 			scene._process(0.0)
 		# Mouse and touch also reach the same normal event-drain path.
 		scene._process(0.0)

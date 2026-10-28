@@ -4,6 +4,13 @@ A native Godot 4.7.2 version of the pre-Unity Sudoku Defense game. The same GDSc
 
 ## Play
 
+Version **0.3.15** adds a controller placement loop: press **A** on an empty
+square to focus the number tray, choose with the D-pad / left stick or LB / RB,
+then press **A** to plant and return to that same square. **B** returns without
+planting. Rejected answers keep the tray open for another choice. Completed
+numbers are skipped during Solve; Battle offers numbers with reserves remaining.
+Mouse, touch, and right-stick cursor click/drag continue to work as before.
+
 Version **0.3.14** adds Wave intel: inspect the exact enemy counts, health, speed,
 core damage, and boss warning before launching. Corruption is included in the
 forecast. Each tower can prioritize **First** (furthest along the route),
@@ -47,7 +54,7 @@ Version **0.3.11** smooths the camera movement between Sudoku and defense. Stabl
 | Action | Touch / keyboard / mouse | Controller |
 | --- | --- | --- |
 | Select square / navigate controls | Tap / click / arrows | D-pad / left stick |
-| Choose number / highlight matches | Number bar / 1–9 | LB / RB; A plants |
+| Choose number / highlight matches | Number bar / 1–9 | A on empty square → D-pad / stick or LB / RB → A places and returns |
 | Plant / inspect / confirm | Tap square then number; drag number to square; tap tower to inspect | A |
 | Open gear | Tab / Gear | X |
 | Inspect upcoming wave | Wave intel / I during Solve or Prepare | Start → Wave intel |

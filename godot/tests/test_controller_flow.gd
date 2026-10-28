@@ -175,10 +175,13 @@ func exercise() -> void:
 	for index in range(2):
 		var cell: int = cells[index]
 		await move_to(cell)
+		await press(JOY_BUTTON_A)
+		check(scene._controller_number_cell == cell and scene.run.board[cell] == 0, "A selects an empty square and moves focus to the number tray")
 		await choose_number(int(scene.run.solution[cell]))
 		check(scene.run.board[cell] == 0, "Cycling numbers does not plant before A")
 		await press(JOY_BUTTON_A)
 		check(scene.run.towers.has(cell), "A plants the chosen correct answer")
+		check(scene._controller_number_cell == -1 and scene.selected_cell == cell, "Planting returns controller focus to the original square")
 	# Inventory selection uses a confirmable board target, not a drag requirement.
 	var item_count: int = scene.run.items.size()
 	var first_item: String = await arm_first_module()

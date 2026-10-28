@@ -50,6 +50,8 @@ var _pointer_hint_owner := -2 # -1 mouse, >=0 native touch, -2 no pending handof
 var controller
 var controller_cursor
 var _cursor_gesture_canceled := false
+var _controller_number_cell := -1
+var _controller_number_phase := ""
 var seed_pointer
 var board_input
 var gear_feedback
@@ -129,6 +131,7 @@ func _ready() -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
 		_camera_window_focused = false
+		_close_controller_numbers()
 		_cancel_camera_controls()
 	elif what == NOTIFICATION_WM_WINDOW_FOCUS_IN:
 		_camera_window_focused = true
@@ -622,6 +625,8 @@ func _process(dt: float) -> void:
 		_refresh()
 	if run.phase != last_phase:
 		last_phase = run.phase
+		_close_controller_numbers()
+		_refresh()
 		_save()
 		if run.phase == "loot" and not menu_open:
 			_toast("WAVE CLEAR  ·  Open your chests and prepare for the next round.")
@@ -638,6 +643,8 @@ func _cycle_speed() -> void:
 	_refresh()
 
 func _refresh() -> void:
+	if _controller_number_cell >= 0 and (not _number_placement_allowed() or run.phase != _controller_number_phase or selected_cell != _controller_number_cell or run.board[_controller_number_cell] != 0):
+		_close_controller_numbers()
 	hud_nodes.notes.text = "Notes  ON" if board_notes else "Notes  OFF"
 	hud_nodes.speed.text = "%dx" % int(game_speed)
 	resources.text = "CORE %d/%d   CREDITS %d   FRAGMENTS %d" % [int(run.health),int(run.max_health),run.credits,run.fragments]
@@ -703,15 +710,19 @@ func _refresh() -> void:
 		# Completed families remain selectable for matching-number highlights,
 		# and their reserve seeds still work during the defense phase.
 		b.disabled = not _number_input_allowed()
+		b.focus_mode = Control.FOCUS_ALL if _controller_number_cell >= 0 else Control.FOCUS_NONE
 		b.add_theme_color_override("font_color",tint)
 		b.add_theme_color_override("font_hover_color",tint.lightened(0.15))
 		b.add_theme_color_override("font_pressed_color",tint)
 		var selected_bg: Color = Color("253740") if complete else Color("315950")
 		b.add_theme_stylebox_override("normal",style(selected_bg if selected_number==i+1 else PANEL, tint if selected_number==i+1 else Color("35505a")))
 	if portrait_layout: _refresh_portrait_text()
-	controls_label.text = "D-PAD grid   RS cursor   L3 camera   LB/RB number   A plant   X gear   Y advance" if controller_used else "TAP / DRAG to plant   RIGHT-DRAG / Q E rotate   HOME reset   ESC menu"
+	controls_label.text = "D-PAD grid   A choose number   RS cursor   L3 camera   X gear   Y advance" if controller_used else "TAP / DRAG to plant   RIGHT-DRAG / Q E rotate   HOME reset   ESC menu"
 	if controller_used and not armed_item.is_empty(): controls_label.text = "D-PAD / STICK choose tower     A attach module     B cancel"
 	if _controller_pointer_active(): controls_label.text = "RS cursor   R3 click   RT drag   LT precision   L3 camera   D-PAD grid"
+	hud_nodes.plant_caption.text = "CHOOSE A NUMBER" if _controller_number_cell >= 0 else "PLANT A NUMBER"
+	if _controller_number_cell >= 0:
+		controls_label.text = "D-PAD / STICK number   LB / RB number   A place   B back to square"
 	hud_nodes.camera.text = "Done" if camera_mode else "Camera"
 	hud_nodes.camera.disabled = not camera_mode and not _camera_available()
 	hud_nodes.camera_reset.disabled = not _camera_available() or not world.camera_is_rotated()
@@ -767,6 +778,7 @@ func _number_placement_allowed() -> bool:
 
 func _pointer_activity(pointer_owner: int = -2) -> void:
 	if controller_cursor != null and controller_cursor.is_dispatching(): return
+	_close_controller_numbers()
 	if _controller_pointer_active(): controller_cursor.deactivate()
 	if pointer_owner == -2 and _pointer_hint_owner != -2: _finish_pointer_activity.call_deferred()
 	if controller_used:
@@ -789,7 +801,7 @@ func _finish_pointer_activity() -> void:
 func _tap_board(cell: int) -> void:
 	if camera_mode or menu_open or manual_pause or (seed_pointer != null and seed_pointer.is_active()): return
 	# Pointer taps choose an empty square; only a number tap/drop commits it.
-	# Controller A still uses _select(..., true) for deliberate planting.
+	# Controller A has a separate board -> number tray -> board focus flow.
 	_select(cell,run.towers.has(cell),true)
 
 func _drop_number(cell: int, number: int) -> void:
@@ -806,8 +818,55 @@ func _choose_number(number: int) -> void:
 	selected_number = number
 	world.set_selected(selected_cell,selected_number)
 	if _number_placement_allowed() and not (run.phase == "solve" and _number_complete(number)) and selected_cell >= 0 and not run.givens[selected_cell] and not run.towers.has(selected_cell):
-		_action(run.place(selected_cell,number))
+		var result: Dictionary = run.place(selected_cell,number)
+		if bool(result.get("ok",false)): _close_controller_numbers()
+		_action(result)
 	_refresh()
+
+func _controller_number_choices() -> Array[int]:
+	var choices: Array[int] = []
+	for number in range(1,10):
+		# Availability is separate from Sudoku legality: keep wrong-answer feedback.
+		if run.phase == "solve" and not _number_complete(number): choices.append(number)
+		elif run.phase == "battle" and run.inventory[number] > 0: choices.append(number)
+	return choices
+
+func _open_controller_numbers(cell: int) -> bool:
+	if not _number_placement_allowed() or cell < 0 or cell >= 81 or run.board[cell] != 0: return false
+	var choices: Array[int] = _controller_number_choices()
+	if choices.is_empty():
+		_toast("No reserve numbers available. Buy a reserve first." if run.phase == "battle" else "All numbers are complete.",false)
+		return false
+	_controller_number_cell = cell
+	_controller_number_phase = run.phase
+	selected_cell = cell
+	if not choices.has(selected_number): selected_number = choices[0]
+	controller.reset_navigation()
+	world.set_selected(cell,selected_number)
+	_refresh()
+	number_buttons[selected_number-1].grab_focus()
+	return true
+
+func _close_controller_numbers() -> void:
+	if _controller_number_cell < 0: return
+	_controller_number_cell = -1
+	_controller_number_phase = ""
+	var focused: Control = get_viewport().gui_get_focus_owner()
+	if number_buttons.has(focused): focused.release_focus()
+	for b in number_buttons: b.focus_mode = Control.FOCUS_NONE
+	if controller != null: controller.reset_navigation()
+
+func _cycle_controller_number(step: int) -> void:
+	var choices: Array[int] = _controller_number_choices()
+	if choices.is_empty():
+		_close_controller_numbers()
+		_refresh()
+		return
+	var index: int = choices.find(selected_number)
+	selected_number = choices[posmod(index+step,choices.size())] if index >= 0 else choices[0]
+	world.set_selected(_controller_number_cell,selected_number)
+	_refresh()
+	if _controller_number_cell >= 0: number_buttons[selected_number-1].grab_focus()
 
 func _inspect_tower(cell: int) -> void:
 	# Workshop mini-grid selection is explicit inspection, unlike moving the
@@ -913,6 +972,7 @@ func _action(result: Dictionary) -> void:
 	_refresh()
 
 func _advance() -> void:
+	_close_controller_numbers()
 	if run.phase == "loot":
 		dock.close_panel()
 		_show_next_round()
@@ -923,6 +983,7 @@ func _advance() -> void:
 
 func _toggle_dock(kind: String) -> void:
 	if menu_open: return
+	_close_controller_numbers()
 	_cancel_camera_controls()
 	if dock.is_open() and dock.current_panel == kind: dock.close_panel()
 	else: dock.open_panel(kind,selected_cell)
@@ -951,6 +1012,7 @@ func _save_preferences() -> void:
 
 func _toggle_pause() -> void:
 	if menu_open: return
+	_close_controller_numbers()
 	_cancel_camera_controls()
 	manual_pause = not manual_pause
 	_refresh()
@@ -1011,6 +1073,7 @@ func _close_overlay() -> void:
 	_refresh()
 
 func _modal(width: float = 650, height: float = 640) -> VBoxContainer:
+	_close_controller_numbers()
 	_cancel_camera_controls()
 	if seed_pointer != null: seed_pointer.cancel()
 	if board_input != null: board_input.cancel_pointer()
@@ -1253,7 +1316,7 @@ Controller: press L3, use the right stick, R3 to reset, B to finish.",15,MUTED)
 	camera_help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(camera_help)
 	box.add_child(label("CONTROLLER",12,MINT))
-	var input_label := label("Left stick / D-pad: grid or menu focus  ·  LB / RB: number / tab\nRight stick: free cursor  ·  R3: click  ·  Hold RT: click / drag\nHold LT: precise cursor  ·  Hover at list edges to scroll\nA: confirm / plant  ·  X: gear  ·  Y: next phase  ·  B: back\nStart: pause menu  ·  View: help",15,MUTED)
+	var input_label := label("Left stick / D-pad: grid, numbers or menu  ·  LB / RB: number / tab\nA on an empty square: choose a number below\nA on a number: plant and return to that square  ·  B: back\nRight stick: free cursor  ·  R3: click  ·  Hold RT: click / drag\nHold LT: precise cursor  ·  Hover at list edges to scroll\nX: gear  ·  Y: next phase  ·  Start: pause menu  ·  View: help",15,MUTED)
 	box.add_child(input_label)
 	var reduce := button("Reduced motion: " + ("ON" if reduced_motion else "OFF"),func(): _toggle_reduced_motion(); _help())
 	box.add_child(reduce)
@@ -1366,6 +1429,7 @@ func _toggle_camera_mode() -> void:
 
 func _set_camera_mode(value: bool) -> void:
 	if camera_mode == value: return
+	_close_controller_numbers()
 	camera_mode = value
 	_camera_axis = Vector2.ZERO
 	_camera_keys.clear()
@@ -1420,6 +1484,7 @@ func _controller_pointer_active() -> bool:
 	return controller_cursor != null and controller_cursor.is_active()
 
 func _controller_pointer_activity() -> void:
+	_close_controller_numbers()
 	_pointer_hint_owner = -2
 	if camera_mode:
 		var changed_mode: bool = not controller_used
@@ -1465,6 +1530,9 @@ func _controller_buttons(scope: Control) -> Array[Control]:
 
 func _controller_navigate(direction: Vector2i) -> void:
 	if camera_mode: return
+	if _controller_number_cell >= 0:
+		_cycle_controller_number(1 if direction.x > 0 or direction.y > 0 else -1)
+		return
 	if menu_open and is_instance_valid(overlay) and bool(overlay.get_meta("wave_intel",false)) and direction.y != 0:
 		# Intel is an informational list. Let the stick / D-pad scroll its text,
 		# without turning every enemy description into a nonfunctional button.
@@ -1507,6 +1575,22 @@ func _controller_confirm_ui() -> void:
 		focused.pressed.emit()
 
 func _controller_action(action: String) -> void:
+	# Validate before dispatch too: a solve timeout must not leave a stale picker.
+	if _controller_number_cell >= 0:
+		_refresh()
+		if _controller_number_cell < 0 and action == "confirm": return
+		if _controller_number_cell >= 0:
+			if action == "confirm":
+				if _controller_number_choices().has(selected_number): _choose_number(selected_number)
+				else: _cycle_controller_number(1)
+				return
+			if action in ["previous","next"]:
+				_cycle_controller_number(-1 if action == "previous" else 1)
+				return
+			_close_controller_numbers()
+			if action == "cancel":
+				_refresh()
+				return
 	if action == "camera":
 		_toggle_camera_mode()
 		return
@@ -1560,6 +1644,7 @@ func _controller_action(action: String) -> void:
 			_refresh()
 		"confirm":
 			if selected_cell < 0: _select(40,false,false)
+			elif run.board[selected_cell] == 0 and _number_placement_allowed(): _open_controller_numbers(selected_cell)
 			else: _select(selected_cell,true)
 		"advance": _advance()
 
