@@ -1,6 +1,51 @@
 # Sudoku Defense: Steam release target
 
-## Current Steam testing build — Godot 0.3.14 tactics and placement
+## Current Steam testing build — Godot 0.3.15 controller number selection
+
+On **October 28, 2026 (America/New_York)**, build **26283775** was activated on
+the main app's **default** branch for Windows and Linux. Pressing controller A
+on an empty square now focuses the number tray. D-pad / left stick and LB / RB
+choose an available number; A places it and returns to that same square.
+B cancels, and a rejected Solve answer stays in the tray for another attempt.
+
+| Item | Value |
+| --- | --- |
+| Main Steam app / shared depot | **3721150 / 3721151** |
+| Active default BuildID | **26283775** |
+| Depot manifest | **8369338940309472302** |
+| Windows executable | `SudokuDefense.exe`, 110,006,888 bytes |
+| Windows SHA-1 | `61ad1efebaa00df26364cded5fb17a4553f711a1` |
+| Linux executable | `sudoku-defense`, 74,257,816 bytes |
+| Linux SHA-1 | `ba96aa059ab079cd8fc9589c1189aca1c67dd2ef` |
+| Upload mode | Standard replacement of the complete four-file shared depot |
+| Previous default / rollback | Build **26208702**, manifest **5771364799624707360** |
+
+Both platform packages come from source commit
+`f9b8b7175932c3bb5a1429da7d0f45d29caa6c0b`, workflow
+[40781236912](https://github.com/yannage/Sudoku-Defense-beta/actions/runs/40781236912).
+Exports/regression job **123143148330** and native Windows startup job
+**123147874016** passed. All **37 headless suites** and **21 real GLES render
+suites** passed. The new number-picker suite passes **292 checks** per renderer,
+both headlessly and with real GLES, covering Deck-size and portrait layouts.
+Eight controller captures were visually reviewed. Both exact packaged
+executables report **0.3.15** at startup.
+
+The combined archive is **67,584,793 bytes**, SHA-256
+`e6cfe77328c6bf8402f116329677773aa1a10a33ba3e6af7cf759e85060df273`.
+Steam's manifest contains exactly both executables and the two Godot license
+notices. Every file size and SHA-1 matches the staging manifest. The default
+branch and current-build row confirmed activation. Steam's preview reported a
+**1.8 MB** update from the previous default build.
+
+Existing launch paths, supported platforms, and Steam Input settings remain in
+use. The app remains unreleased and available to eligible existing owners/testers;
+the separate Playtest app was not changed. The local browser preview displayed
+the launch shell but reported missing WebGL2 and secure-context support, so
+interactive browser rendering was not verified there. CI-rendered evidence and
+automated startup checks do not replace physical Steam Deck/Windows controller,
+audio, performance, suspend/resume, or Steam-client install/update testing.
+
+## Previous Steam testing build — Godot 0.3.14 tactics and placement
 
 On **October 25, 2026 (America/New_York)**, build **26208702** was activated on
 the main app's **default** branch for Windows and Linux. It adds exact upcoming

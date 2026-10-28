@@ -58,7 +58,7 @@ Tags beginning with `godot-v` also create a GitHub release with the packages. Ta
 
 The Windows and Linux builds are separate deliverables from the same project. The Windows build runs through `SudokuDefense.exe` on Windows; the Linux build runs natively and should use a Linux launch option without a forced Proton override. Both can live in existing all-platform Steam depot 3721151 with operating-system-specific launch options. A single-platform ZIP must be uploaded using **Merge With Baseline** against the current live build so the other executable remains present. Standard replacement requires a complete package containing both executables. See the current shared-depot instructions at the top of [STEAM-RELEASE.md](STEAM-RELEASE.md).
 
-Build **26208702** supplies version **0.3.14** for both platforms on the existing app's default branch.
+Build **26283775** supplies version **0.3.15** for both platforms on the existing app's default branch.
 The Windows64 and Linux64 launch options and common platform configuration
 (`oslist=windows,linux`, `osarch=64`) are published. The app remains unreleased;
 availability is for existing owners/testers with eligible override packages.
@@ -112,6 +112,16 @@ Headless import and executable boot checks detect packaging and script errors. T
 
 ## Current source and verification
 
+Version **0.3.15** moves controller focus from an empty Sudoku square to the
+number tray on A, then returns to the original square after a successful A
+confirmation. D-pad / left stick and LB / RB cycle available numbers; B cancels.
+Wrong Solve answers stay in the tray for retry. Phase changes, overlays, focus
+loss, disconnection, and input handoffs discard pending selection. The new
+regression passes 292 checks per renderer, both headlessly and with real GLES.
+All 37 headless and 21 render suites passed; eight Deck-size and portrait
+controller captures were visually reviewed. See [ITERATION-0.3.15.md](ITERATION-0.3.15.md)
+for the tested source, CI evidence, browser-preview limit, and device checks.
+
 Version **0.3.14** adds an exact forecast based on the same deterministic enemy
 blueprint used by spawning, plus per-tower First / Strongest / Nearest priorities.
 The forecast leaves RNG and combat state unchanged; existing difficulty tuning
@@ -146,8 +156,8 @@ remain separate from automated event and rendering tests. Version **0.3.12**
 was previously active on Steam's default branch as build **26205570**, verified
 against manifest **6626747563325911071**. Both executables came from the successful
 workflow **40245799289** at source commit
-`56f0295d5184809f34018f163ebcdbd7f14208e9`. That build is retained for rollback;
-the current default is 0.3.14, build **26208702**.
+`56f0295d5184809f34018f163ebcdbd7f14208e9`. This is historical build evidence;
+see [STEAM-RELEASE.md](STEAM-RELEASE.md) for the current default and rollback.
 
 Version **0.3.9** revises player-facing instructions, tooltips, loot descriptions, and menu copy. Runs, rounds, Gear, modules, boosts, and chests use consistent terms. Chest rewards show the same effect names as the inventory. Help explains Sudoku rules, reserve seeds, corruption, and progression directly; the slot machine lists actual credit returns. Loot tooltips derive current descriptions from item stats so saved gear uses the revised copy too. The battle HUD now reports enemies left in the current wave instead of comparing run-wide kills with a single wave total. A regression covers later-round and portrait counters.
 

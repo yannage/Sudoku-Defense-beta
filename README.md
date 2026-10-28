@@ -1,16 +1,18 @@
 # Sudoku Defense
 
-## Current Godot edition — 0.3.14
+## Current Godot edition — 0.3.15
 
 The maintained game on this branch is **`godot/`**, built with Godot 4.7.2 for
 native Windows, Linux / Steam Deck, and browser play. Start with
 [the Godot README](godot/README.md) and [build instructions](docs/GODOT-BUILDS.md).
 [Play the Godot edition](https://sudoku-defense-godot.yakstudios.chatgpt.site).
 
-Version 0.3.14 adds wave forecasts and per-tower target priorities. Inspect the
-incoming enemy mix before launching, then choose First, Strongest, or Nearest in
-the tower workshop. It includes 0.3.13's aligned health bars, voxel foundation
-assembly, and remembered preferences. The existing Steam target remains
+Version 0.3.15 adds a controller placement loop: press A on an empty square to
+focus the number tray, choose with D-pad / left stick or LB / RB, then press A
+to place the number and return to the original square. B returns without
+placing; rejected answers keep the tray open for another choice. Wave forecasts,
+tower priorities, aligned health bars, voxel foundations, and remembered
+preferences remain included. The existing Steam target remains
 app **3721150**, shared depot **3721151**; consult [the release record](docs/STEAM-RELEASE.md)
 for the actually activated build.
 
