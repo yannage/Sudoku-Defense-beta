@@ -55,11 +55,14 @@ func check_content(scope: Control, description: String) -> void:
 	for scroll in scope.find_children("*","ScrollContainer",true,false):
 		if not scroll.is_visible_in_tree(): continue
 		var rect: Rect2 = scroll.get_global_rect()
+		var bar: VScrollBar = scroll.get_v_scroll_bar()
+		var content_right: float = bar.get_global_rect().position.x if bar.visible else rect.end.x
 		for child in scroll.find_children("*","Control",true,false):
 			if not child.is_visible_in_tree(): continue
+			if child == bar or child is MarginContainer: continue
 			# Vertical scrolling is intentional; horizontal clipping is not.
 			var child_rect: Rect2 = child.get_global_rect()
-			check(child_rect.position.x >= rect.position.x-2 and child_rect.end.x <= rect.end.x+2,
+			check(child_rect.position.x >= rect.position.x-2 and child_rect.end.x <= content_right+1,
 				description+" content fits horizontally: "+str(child.get_class())+" "+str(child_rect))
 	for node in scope.find_children("*","Label",true,false):
 		if not node.is_visible_in_tree() or node.text.length() < 9: continue

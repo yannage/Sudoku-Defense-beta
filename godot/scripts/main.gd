@@ -1231,10 +1231,16 @@ func _modal(width: float = 650, height: float = 640) -> VBoxContainer:
 	scroll.follow_focus = true
 	UISkin.scroll(scroll)
 	margin.add_child(scroll)
+	# Godot's visible scrollbar can overlay its content. Leave a gutter so
+	# the right edge of choices and actions stays visible in scrolling dialogs.
+	var content_margin := MarginContainer.new()
+	content_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content_margin.add_theme_constant_override("margin_right",12)
+	scroll.add_child(content_margin)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation",12)
 	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(box)
+	content_margin.add_child(box)
 	_layout_modal.call_deferred()
 	return box
 

@@ -231,6 +231,8 @@ def main() -> None:
     if args.render_check:
         render_failures: list[str] = []
         for script, flag, logfile, marker in [
+            ("test_prerelease_render.gd", "", "native-prerelease-render-tests.log", "PRERELEASE_RENDER_PASS"),
+            ("test_prerelease_render.gd", "--canvas-graphics", "canvas-prerelease-render-tests.log", "PRERELEASE_RENDER_PASS"),
             ("test_controller_number_picker.gd", "", "native-controller-number-picker-render-tests.log", "CONTROLLER_NUMBER_PICKER_PASS"),
             ("test_controller_number_picker.gd", "--canvas-graphics", "canvas-controller-number-picker-render-tests.log", "CONTROLLER_NUMBER_PICKER_PASS"),
             ("test_tactics_ui.gd", "", "native-tactics-render-tests.log", "TACTICS_UI_PASS"),
