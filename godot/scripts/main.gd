@@ -17,6 +17,7 @@ const MenuChoice = preload("res://scripts/menu_choice.gd")
 const MenuArt = preload("res://scripts/menu_diorama.gd")
 const PreferencesScript = preload("res://scripts/preferences.gd")
 const FirstRoundGuide = preload("res://scripts/first_round_guide.gd")
+const RunSaveScript = preload("res://scripts/run_save.gd")
 const INK := Color("0a1722")
 const PANEL := Color("112634")
 const MINT := Color("83e7c1")
@@ -44,6 +45,9 @@ var reduced_motion := false
 var board_notes := true
 var preferences = PreferencesScript.new()
 var tutorial = FirstRoundGuide.new()
+var run_save = RunSaveScript.new()
+var save_failed := false
+var save_recovered := false
 var game_speed := 1.0
 var last_phase := ""
 var ui_elapsed := 0.0
@@ -142,8 +146,8 @@ func _notification(what: int) -> void:
 		seed_pointer.cancel()
 		_finish_pointer_activity.call_deferred()
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
-		_save()
-		get_tree().quit()
+		if _save(): get_tree().quit()
+		else: _show_unsaved_quit()
 
 func style(bg: Color, border: Color = Color.TRANSPARENT, radius: int = 8) -> StyleBoxFlat:
 	return UISkin.panel(bg,border,mini(radius,8),14,border.a > 0)
@@ -647,6 +651,11 @@ func _cycle_speed() -> void:
 	_refresh()
 
 func _refresh() -> void:
+	# Keep a compact warning reachable at every layout without occupying the
+	# selected-square/candidate area or suppressing ordinary action feedback.
+	hud_nodes.menu.text = "Save!" if save_failed else "Menu"
+	hud_nodes.menu.tooltip_text = "Latest progress is not saved. Open to retry saving." if save_failed else "Pause / run menu"
+	hud_nodes.menu.add_theme_color_override("font_color",AMBER if save_failed else WHITE)
 	if _controller_number_cell >= 0 and (not _number_placement_allowed() or run.phase != _controller_number_phase or selected_cell != _controller_number_cell or run.board[_controller_number_cell] != 0):
 		_close_controller_numbers()
 	hud_nodes.notes.text = "Notes  ON" if board_notes else "Notes  OFF"
@@ -1034,21 +1043,40 @@ func _toast(text: String, success: bool = true) -> void:
 		_layout_ui()
 	_update_context_visibility()
 
-func _save() -> void:
-	if tutorial.active: return
-	if not has_active_run: return
-	var file := FileAccess.open("user://sudoku-defense-run.json",FileAccess.WRITE)
-	if file: file.store_string(JSON.stringify(run.save_data()))
+func _save() -> bool:
+	if tutorial.active: return true
+	if not has_active_run: return true
+	var was_failed := save_failed
+	save_failed = not run_save.write_run(run.save_data())
+	if save_failed: _toast("PROGRESS NOT SAVED. Open Menu to retry saving.",false)
+	elif was_failed: _toast("Progress saved. You can safely close the game.")
+	_refresh()
+	return not save_failed
 
 func _load() -> bool:
-	if not FileAccess.file_exists("user://sudoku-defense-run.json"): return false
-	var file := FileAccess.open("user://sudoku-defense-run.json",FileAccess.READ)
-	if not file: return false
-	var data = JSON.parse_string(file.get_as_text())
-	if not data is Dictionary: return false
-	var loaded: bool = run.load_data(data)
-	if loaded: has_active_run = true
+	var saved: Dictionary = run_save.read_run()
+	if saved.is_empty(): return false
+	var loaded: bool = run.load_data(saved.data)
+	if loaded:
+		has_active_run = true
+		save_recovered = bool(saved.recovered)
+		save_failed = false
 	return loaded
+
+func _show_unsaved_quit() -> void:
+	var box := _modal(610,400)
+	overlay.set_meta("unsaved_quit",true)
+	box.add_child(label("Progress could not be saved",25,AMBER))
+	var explanation := label("Any earlier saved progress has been kept. Retry saving, keep playing, or close without the latest changes.",17,WHITE)
+	explanation.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(explanation)
+	var retry := button("Retry save and quit",func():
+		if _save(): get_tree().quit()
+	)
+	box.add_child(retry)
+	box.add_child(button("Keep playing",_close_overlay,true))
+	box.add_child(button("Quit without saving",func(): get_tree().quit()))
+	retry.grab_focus()
 
 func _start_run() -> void:
 	if tutorial.active: tutorial.restore()
@@ -1066,8 +1094,7 @@ func _start_run() -> void:
 	world.set_selected(-1,0)
 	_close_overlay()
 	last_phase = run.phase
-	_save()
-	_toast("Plant 6–8 correct answers, then prepare your defense.")
+	if _save(): _toast("Plant 6-8 correct answers, then prepare your defense.")
 
 func _close_overlay() -> void:
 	if not has_active_run:
@@ -1224,14 +1251,14 @@ func _show_menu(initial: bool = false) -> void:
 		var resume := button("Resume run",_close_overlay)
 		resume.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(resume)
-	elif FileAccess.file_exists("user://sudoku-defense-run.json"):
+	elif run_save.has_save():
 		var resume := button("Continue saved run",func():
 			if _load():
 				world.setup(run)
 				_close_overlay()
 				last_phase = run.phase
-				_toast("Saved run loaded.")
-			else: _toast("Could not load this save. Start a new run.",false)
+				_toast("Save recovered. Some recent actions may need replaying." if save_recovered else "Saved run loaded.")
+			else: _toast("Could not read the saved run or its backup. The files have been kept.",false)
 		)
 		resume.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(resume)
@@ -1255,7 +1282,9 @@ func _show_pause_menu() -> void:
 	actions.add_child(label("RUN PAUSED",11,MINT))
 	actions.add_child(label("Paused",32,WHITE))
 	actions.add_child(label("ROUND %02d / %02d  ·  %s" % [run.round_no,run.max_rounds,str({"solve":"Solve", "prep":"Prepare", "battle":"Defend", "loot":"Loot", "won":"Victory", "lost":"Defeat"}.get(run.phase,run.phase)).to_upper()],13,AMBER))
-	actions.add_child(label("Your progress is saved on this device.",13,MUTED))
+	actions.add_child(label("Latest progress is NOT saved." if save_failed else "Your progress is saved on this device.",13,AMBER if save_failed else MUTED))
+	if save_failed:
+		actions.add_child(button("Retry saving",func(): _save(); _show_pause_menu(),true))
 	var resume := button("Resume run",_close_overlay,true)
 	resume.set_meta("menu_height",54)
 	actions.add_child(resume)
