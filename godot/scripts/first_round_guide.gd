@@ -80,7 +80,7 @@ func observe() -> void:
 	else: show_step.call_deferred()
 
 func event_seen(event: Dictionary) -> void:
-	if active and str(event.get("type","")) == "chest_open": reward_opened = true
+	if active and host.run.phase in ["loot","won"] and str(event.get("type","")) == "chest_open": reward_opened = true
 
 func can_advance() -> bool:
 	if not active: return true

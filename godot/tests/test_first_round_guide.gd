@@ -63,6 +63,8 @@ func exercise() -> void:
 		scene.tutorial.observe()
 		await frames()
 		check(scene.tutorial.step == 1,"First tower advances to route lesson")
+		scene.tutorial.event_seen({"type":"chest_open"})
+		check(not scene.tutorial.reward_opened,"Opening an early chest cannot skip the post-wave reward lesson")
 		scene.tutorial.continue_step()
 		scene._advance()
 		check(scene.run.phase == "solve","Guided route lesson cannot be accidentally skipped with Y")
