@@ -22,8 +22,17 @@ STATIC_FILE_LIMIT = 25 * 1024 * 1024
 
 
 def run(command: list[str], log: Path, expected: str | None = None) -> None:
-    result = subprocess.run(command, cwd=PROJECT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=180)
-    log.write_text(result.stdout)
+    # UI regressions exercise real save paths. A fresh profile per suite keeps
+    # the developer's actual campaign untouched, including journal sidecars.
+    environment = os.environ.copy()
+    with tempfile.TemporaryDirectory(prefix="sudoku-test-profile-") as profile:
+        if "--script" in command or "--smoke-test" in command:
+            for key in (["APPDATA", "LOCALAPPDATA"] if os.name == "nt" else ["XDG_DATA_HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME"]):
+                folder = Path(profile) / key.lower()
+                folder.mkdir()
+                environment[key] = str(folder)
+        result = subprocess.run(command, cwd=PROJECT, env=environment, text=True, encoding="utf-8", errors="replace", stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=180)
+    log.write_text(result.stdout, encoding="utf-8")
     problems = [line for line in result.stdout.splitlines() if "ERROR:" in line or "Parse Error:" in line]
     if result.returncode or problems or (expected is not None and expected not in result.stdout):
         print(result.stdout)
@@ -193,7 +202,7 @@ def main() -> None:
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_tactics.gd"], logs / "tactics-tests.log", expected="TACTICS_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_board_transition.gd"], logs / "board-transition-tests.log", expected="BOARD_TRANSITION_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_board_transition.gd", "--", "--canvas-graphics"], logs / "canvas-board-transition-tests.log", expected="BOARD_TRANSITION_PASS")
-    for script, marker in [("test_camera_orbit.gd", "CAMERA_ORBIT_PASS"), ("test_camera_controls.gd", "CAMERA_CONTROLS_PASS"), ("test_enemy_health.gd", "ENEMY_HEALTH_PASS"), ("test_preferences.gd", "PREFERENCES_PASS"), ("test_tactics_ui.gd", "TACTICS_UI_PASS"), ("test_controller_number_picker.gd", "CONTROLLER_NUMBER_PICKER_PASS")]:
+    for script, marker in [("test_camera_orbit.gd", "CAMERA_ORBIT_PASS"), ("test_camera_controls.gd", "CAMERA_CONTROLS_PASS"), ("test_enemy_health.gd", "ENEMY_HEALTH_PASS"), ("test_preferences.gd", "PREFERENCES_PASS"), ("test_tactics_ui.gd", "TACTICS_UI_PASS"), ("test_controller_number_picker.gd", "CONTROLLER_NUMBER_PICKER_PASS"), ("test_first_round_guide.gd", "FIRST_ROUND_GUIDE_PASS")]:
         for renderer, flags in [("native", []), ("canvas", ["--", "--canvas-graphics"])]:
             run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/" + script] + flags, logs / f"{renderer}-{script.removesuffix('.gd')}.log", expected=marker)
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_ui_flow.gd"], logs / "ui-flow-tests.log", expected="UI_FLOW_PASS")

@@ -16,6 +16,7 @@ const UISkin = preload("res://scripts/ui_skin.gd")
 const MenuChoice = preload("res://scripts/menu_choice.gd")
 const MenuArt = preload("res://scripts/menu_diorama.gd")
 const PreferencesScript = preload("res://scripts/preferences.gd")
+const FirstRoundGuide = preload("res://scripts/first_round_guide.gd")
 const INK := Color("0a1722")
 const PANEL := Color("112634")
 const MINT := Color("83e7c1")
@@ -42,6 +43,7 @@ var muted := false
 var reduced_motion := false
 var board_notes := true
 var preferences = PreferencesScript.new()
+var tutorial = FirstRoundGuide.new()
 var game_speed := 1.0
 var last_phase := ""
 var ui_elapsed := 0.0
@@ -604,15 +606,17 @@ func _process(dt: float) -> void:
 		_dock_was_open = dock.is_open()
 		_layout_ui()
 	var blocked: bool = menu_open or manual_pause or dock.is_open() or not armed_item.is_empty()
-	if not blocked:
+	if not blocked and not (tutorial.active and run.phase == "solve"):
 		run.update(minf(dt,0.05)*game_speed if run.phase == "battle" else minf(dt,0.05))
 	if world.has_method("set_panel_open"): world.set_panel_open(dock.is_open())
 	_update_attachment_preview()
 	world.tick(minf(dt,0.05))
 	for event in run.drain_events():
+		tutorial.event_seen(event)
 		world.play_event(event)
 		sound.play_event(event)
 		if str(event.get("type", "")) == "loot": gear_feedback.chest_recovered(event)
+	tutorial.observe()
 	if notice_time > 0:
 		notice_time -= dt
 		notice.modulate.a = minf(1,notice_time*2)
@@ -628,10 +632,10 @@ func _process(dt: float) -> void:
 		_close_controller_numbers()
 		_refresh()
 		_save()
-		if run.phase == "loot" and not menu_open:
+		if run.phase == "loot" and not menu_open and not tutorial.active:
 			_toast("WAVE CLEAR  ·  Open your chests and prepare for the next round.")
 			dock.open_panel("loot",selected_cell)
-		elif run.phase in ["won","lost"] and not menu_open:
+		elif run.phase in ["won","lost"] and not menu_open and not tutorial.active:
 			_show_result()
 	save_elapsed += dt
 	if save_elapsed > 15 and not menu_open:
@@ -742,6 +746,7 @@ Done to return to planting"
 		for quick: Button in [bag_button,loot_button,hud_nodes.camp,hud_nodes.tools,hud_nodes.camera,hud_nodes.camera_reset]:
 			_fit_quick_label(quick)
 	_update_family_focus()
+	tutorial.apply_hud()
 
 func _fit_quick_label(quick: Button) -> void:
 	# Keep ordinary phone labels at 20 px; only long counters need less space.
@@ -972,6 +977,7 @@ func _action(result: Dictionary) -> void:
 	_refresh()
 
 func _advance() -> void:
+	if not tutorial.can_advance(): return
 	_close_controller_numbers()
 	if run.phase == "loot":
 		dock.close_panel()
@@ -1029,6 +1035,7 @@ func _toast(text: String, success: bool = true) -> void:
 	_update_context_visibility()
 
 func _save() -> void:
+	if tutorial.active: return
 	if not has_active_run: return
 	var file := FileAccess.open("user://sudoku-defense-run.json",FileAccess.WRITE)
 	if file: file.store_string(JSON.stringify(run.save_data()))
@@ -1044,6 +1051,7 @@ func _load() -> bool:
 	return loaded
 
 func _start_run() -> void:
+	if tutorial.active: tutorial.restore()
 	_cancel_camera_controls()
 	var input_seed: String = seed_input.text.strip_edges() if seed_input else ""
 	var chosen_seed: int = input_seed.to_int() if input_seed.is_valid_int() else int(Time.get_unix_time_from_system())%2147483647
@@ -1206,6 +1214,9 @@ func _show_menu(initial: bool = false) -> void:
 	var start := button("Start run",_start_run,true)
 	start.set_meta("menu_height",52)
 	setup.add_child(start)
+	var guide := button("Guided first round",func(): tutorial.start(self))
+	guide.set_meta("focus_id","guide:start")
+	setup.add_child(guide)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation",8)
 	setup.add_child(row)
@@ -1248,6 +1259,7 @@ func _show_pause_menu() -> void:
 	var resume := button("Resume run",_close_overlay,true)
 	resume.set_meta("menu_height",54)
 	actions.add_child(resume)
+	if tutorial.active: actions.add_child(button("Skip guide / return",tutorial.finish))
 	if run.phase in ["solve","prep"]:
 		var intel := button("Wave intel",_show_wave_intel)
 		intel.set_meta("focus_id","wave:intel")
@@ -1298,8 +1310,12 @@ func _show_wave_intel() -> void:
 	back.grab_focus()
 
 func _help() -> void:
+	if tutorial.active:
+		tutorial.show_step()
+		return
 	var box := _modal(720,652)
 	box.add_child(label("HOW TO PLAY",26,MINT))
+	box.add_child(button("Play guided first round",func(): tutorial.start(self),true))
 	for text in [
 		"01  SOLVE  ·  Fill each row, column and 3×3 box with 1–9, without repeats. Tap a square, then a number, or drag a number onto the board. Correct answers grow towers and earn credits. You can move on before finishing the puzzle.",
 		"02  PREPARE  ·  Read Wave intel before launching. Select a tower to upgrade it and choose First (nearest exit), Strongest (highest current health), or Nearest (closest to tower). Open Gear to fit modules; each tower has five slots. Menus pause the game.",
