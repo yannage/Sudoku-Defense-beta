@@ -59,6 +59,38 @@ var _rewarded_units: Array[String] = []
 var _locked_puzzle: String = "easy"
 var _locked_combat: String = "easy"
 var _hinting: bool = false
+var combat_report: Dictionary = {"complete":true,"damage":0.0,"core_damage":0,"leaks":{},"towers":{}}
+
+func _empty_combat_report(complete: bool) -> Dictionary:
+	return {"complete":complete,"damage":0.0,"core_damage":0,"leaks":{},"towers":{}}
+
+# Combat accounting is optional. Old saves remain playable and clearly label
+# partial reports; malformed optional history is discarded rather than trusted.
+func _read_combat_report(value: Variant) -> Dictionary:
+	var empty: Dictionary = _empty_combat_report(false)
+	if not value is Dictionary: return empty
+	if not value.get("complete") is bool or not value.get("leaks") is Dictionary or not value.get("towers") is Dictionary: return empty
+	for key in ["damage","core_damage"]:
+		if not value.get(key) is float and not value.get(key) is int: return empty
+		if not is_finite(float(value[key])) or float(value[key]) < 0.0: return empty
+	for kind: Variant in value.leaks:
+		if not ENEMY_KINDS.has(str(kind)): return empty
+		var count: Variant = value.leaks[kind]
+		if not count is int and not count is float: return empty
+		if not is_finite(float(count)) or float(count) < 0.0 or float(count) != floorf(float(count)): return empty
+	if value.towers.size() > 4050: return empty
+	for key: Variant in value.towers:
+		var record: Variant = value.towers[key]
+		if not record is Dictionary: return empty
+		for field in ["round","cell","number","damage","kills"]:
+			if not record.get(field) is int and not record.get(field) is float: return empty
+			if not is_finite(float(record[field])) or float(record[field]) < 0.0: return empty
+		if int(record.round) < 1 or int(record.round) > 50 or int(record.cell) > 80 or int(record.number) < 1 or int(record.number) > 9: return empty
+		if str(key) != "%d:%d" % [int(record.round),int(record.cell)]: return empty
+	return value.duplicate(true)
+
+func retry_options() -> Dictionary:
+	return {"mode":mode,"puzzle_difficulty":_difficulty(_locked_puzzle),"combat_difficulty":_difficulty(_locked_combat)}
 
 func new_run(run_seed: int, options: Dictionary = {}) -> void:
 	seed_value = run_seed
@@ -77,6 +109,7 @@ func new_run(run_seed: int, options: Dictionary = {}) -> void:
 	max_health = 30.0
 	score = 0
 	kills = 0
+	combat_report = _empty_combat_report(true)
 	_next_id = 1
 	family_levels.clear()
 	inventory.clear()
@@ -273,14 +306,16 @@ func buy_seed(number: int) -> Dictionary:
 	inventory[number] += 1
 	return _ok("Seed %d reserve added. Plant it during battle." % number)
 
-func tower_stats(cell: int) -> Dictionary:
+func tower_stats(cell: int, extra_levels: int = 0) -> Dictionary:
 	if not towers.has(cell): return {}
-	var tower: Dictionary = towers[cell]
+	return _stats_for_tower(towers[cell],extra_levels)
+
+func _stats_for_tower(tower: Dictionary, extra_levels: int = 0) -> Dictionary:
 	var effects: Dictionary = {}
 	for item: Dictionary in tower.attachments:
 		var kind: String = str(item.kind)
 		effects[kind] = float(effects.get(kind, 0.0)) + float(item.power)
-	var level: int = int(tower.level) + family_levels[int(tower.number)] - 1
+	var level: int = int(tower.level) + family_levels[int(tower.number)] - 1 + extra_levels
 	var damage: float = 9.0 * (1.0 + 0.32 * (level - 1)) * (1.0 + 0.25 * float(effects.get("power",0.0))) * (1.0 + 0.09 * int(passives.power))
 	if bool(tower.illegal): damage *= 0.84
 	if _has_effect("overcharge"): damage *= 1.6
@@ -480,27 +515,32 @@ func spin_slots() -> Dictionary:
 	return _ok(str(result.label),{"outcome_id":result.id,"reels":result.reels,"credits":result.credits,"cost":10,"net_credits":int(result.credits)-10,"reward":reward})
 
 func _build_route() -> void:
-	route.clear()
+	route = route_for_moves(recent_moves)
+	_cache_route()
+
+# Preview and simulation share the route rules without changing the live board.
+func route_for_moves(moves: Array[int]) -> Array[Vector2]:
+	var points: Array[Vector2] = []
 	var entry: float = 0.5
-	if not recent_moves.is_empty(): entry = clampf(float(recent_moves.back() % 9) - 0.5,0.5,7.5)
-	route.append(Vector2(entry,-0.5))
+	if not moves.is_empty(): entry = clampf(float(moves.back() % 9) - 0.5,0.5,7.5)
+	points.append(Vector2(entry,-0.5))
 	var x: float = entry
 	for band in range(3):
 		var move: int = -1
-		for i in range(recent_moves.size()-1,-1,-1):
-			if recent_moves[i] / 27 == band:
-				move = recent_moves[i]
+		for i in range(moves.size()-1,-1,-1):
+			if moves[i] / 27 == band:
+				move = moves[i]
 				break
 		var y: float = float(band * 3) + 1.5 if move < 0 else float(move / 9) + 0.5
 		var base: int = (7 if band % 2 == 0 else 1) if move < 0 else move % 9
 		var next_x: float = float(base) + 0.5
 		if absf(next_x-x) < 2.0: next_x = 7.5 if x < 4.0 else 0.5
-		_add_route_point(Vector2(x,y))
-		_add_route_point(Vector2(next_x,y))
+		for point: Vector2 in [Vector2(x,y),Vector2(next_x,y)]:
+			if points.back() != point: points.append(point)
 		x = next_x
-	_add_route_point(Vector2(x,8.5))
-	_add_route_point(Vector2(8.5,8.5))
-	_cache_route()
+	for point: Vector2 in [Vector2(x,8.5),Vector2(8.5,8.5)]:
+		if points.back() != point: points.append(point)
+	return points
 
 func _add_route_point(point: Vector2) -> void:
 	if route.is_empty() or route.back() != point: route.append(point)
@@ -581,8 +621,16 @@ func _select_target(tower: Dictionary, stats: Dictionary) -> Dictionary:
 			best_metric = metric
 	return target
 
-func _damage(enemy: Dictionary, amount: float, color: Color, quiet: bool = false) -> void:
+func _damage(enemy: Dictionary, amount: float, color: Color, quiet: bool = false, source_cell: int = -1) -> void:
 	if float(enemy.hp) <= 0.0 or amount <= 0.0 or not is_finite(amount): return
+	var effective_damage: float = minf(float(enemy.hp),amount)
+	combat_report.damage += effective_damage
+	if towers.has(source_cell):
+		var key: String = "%d:%d" % [round_no,source_cell]
+		if not combat_report.towers.has(key):
+			combat_report.towers[key] = {"round":round_no,"cell":source_cell,"number":int(towers[source_cell].number),"damage":0.0,"kills":0}
+		combat_report.towers[key].damage += effective_damage
+		if amount >= float(enemy.hp): combat_report.towers[key].kills += 1
 	enemy.hp = float(enemy.hp) - amount
 	if not quiet: _emit("hit", {"pos":enemy.pos,"color":color,"amount":amount})
 	if float(enemy.hp) > 0.0: return
@@ -612,7 +660,7 @@ func _fire(tower: Dictionary, target: Dictionary, stats: Dictionary) -> void:
 	tower.aim = target.pos
 	var impact: Vector2 = target.pos
 	_emit("shot", {"cell":cell,"pos":origin,"target":impact,"number":tower.number,"kind":kind,"color":color,"height":0.5+tower.attachments.size()*0.18})
-	_damage(target,float(stats.damage),color)
+	_damage(target,float(stats.damage),color,false,cell)
 	var frost: float = float(effects.get("frost",0.0))
 	if frost > 0.0 and float(target.hp)>0.0:
 		target.slow_time = 2.0
@@ -620,7 +668,10 @@ func _fire(tower: Dictionary, target: Dictionary, stats: Dictionary) -> void:
 	var venom: float = float(effects.get("venom",0.0))
 	if venom > 0.0 and float(target.hp)>0.0:
 		target.poison_time = 3.0
-		target.poison_dps = maxf(float(target.poison_dps),0.30*venom*float(stats.damage))
+		var poison_damage: float = 0.30*venom*float(stats.damage)
+		if poison_damage >= float(target.poison_dps):
+			target.poison_dps = poison_damage
+			target.poison_source = cell
 	var electric: float = float(effects.get("electric",0.0))
 	if electric > 0.0:
 		var last: Dictionary = target
@@ -636,7 +687,7 @@ func _fire(tower: Dictionary, target: Dictionary, stats: Dictionary) -> void:
 					next = enemy
 			if next.is_empty(): break
 			_emit("shot", {"pos":last.pos,"target":next.pos,"color":Color("c6a0ff"),"kind":"electric","height":0.25})
-			_damage(next,float(stats.damage)*minf(1.0,0.30+0.12*electric)*pow(0.75,jump),Color("c6a0ff"))
+			_damage(next,float(stats.damage)*minf(1.0,0.30+0.12*electric)*pow(0.75,jump),Color("c6a0ff"),false,cell)
 			used.append(int(next.id))
 			last = next
 	var blast: float = float(effects.get("blast",0.0))
@@ -644,7 +695,7 @@ func _fire(tower: Dictionary, target: Dictionary, stats: Dictionary) -> void:
 		var radius: float = minf(2.3,0.65+0.12*blast)
 		for enemy in enemies:
 			if int(enemy.id) != int(target.id) and float(enemy.hp)>0.0 and (enemy.pos as Vector2).distance_to(impact)<radius:
-				_damage(enemy,float(stats.damage)*minf(3.0,0.35*blast),Color("ffae68"))
+				_damage(enemy,float(stats.damage)*minf(3.0,0.35*blast),Color("ffae68"),false,cell)
 		_emit("explosion", {"pos":impact,"radius":radius,"color":Color("ffae68"),"kind":"blast"})
 	var gravity: float = float(effects.get("gravity",0.0))
 	if gravity > 0.0:
@@ -657,7 +708,7 @@ func _fire(tower: Dictionary, target: Dictionary, stats: Dictionary) -> void:
 	if nova > 0.0:
 		for enemy in enemies:
 			if float(enemy.hp)>0.0 and (enemy.pos as Vector2).distance_to(origin)<=1.4:
-				_damage(enemy,float(stats.damage)*minf(2.5,0.20*nova),Color("ff7289"))
+				_damage(enemy,float(stats.damage)*minf(2.5,0.20*nova),Color("ff7289"),false,cell)
 		_emit("explosion", {"pos":origin,"radius":1.4,"color":Color("ff7289"),"kind":"nova"})
 
 func update(dt: float) -> void:
@@ -688,7 +739,7 @@ func _step(dt: float) -> void:
 		if float(enemy.hp) <= 0.0: continue
 		if float(enemy.poison_time)>0.0:
 			enemy.poison_time = maxf(0.0,float(enemy.poison_time)-dt)
-			_damage(enemy,float(enemy.poison_dps)*dt,Color("9be878"),true)
+			_damage(enemy,float(enemy.poison_dps)*dt,Color("9be878"),true,int(enemy.get("poison_source",-1)))
 		if float(enemy.hp)<=0.0: continue
 		var slow: float = minf(global_slow,float(enemy.slow) if float(enemy.slow_time)>0.0 else 1.0)
 		enemy.slow_time = maxf(0.0,float(enemy.slow_time)-dt)
@@ -697,8 +748,12 @@ func _step(dt: float) -> void:
 		enemy.pos = position_on_route(float(enemy.progress))
 		if float(enemy.progress) >= route_length:
 			enemy.hp = 0.0
-			health -= _core_damage(str(enemy.kind))
-			_emit("leak", {"pos":enemy.pos,"text":"CORE HIT","color":Color("ff7289")})
+			var kind: String = str(enemy.kind)
+			var core_damage: int = _core_damage(kind)
+			combat_report.core_damage += core_damage
+			combat_report.leaks[kind] = int(combat_report.leaks.get(kind,0))+1
+			health -= core_damage
+			_emit("leak", {"pos":enemy.pos,"text":"%s: -%d CORE" % [kind.to_upper(),core_damage],"color":Color("ff7289")})
 	if health <= 0.0:
 		health = 0.0
 		phase = "lost"
@@ -751,7 +806,7 @@ func save_data() -> Dictionary:
 		"corruption":corruption,"combo":combo,"round_solved":round_solved,"solve_duration":solve_duration,
 		"last_wave_bonus":last_wave_bonus,"battle_time":battle_time,"next_id":_next_id,"spawn_clock":_spawn_clock,
 		"settled":_settled,"rewarded_units":_rewarded_units.duplicate(),"locked_puzzle":_locked_puzzle,"locked_combat":_locked_combat,
-		"towers":[],"enemies":[],"route":[]
+		"towers":[],"enemies":[],"route":[],"combat_report":combat_report.duplicate(true)
 	}
 	for tower: Dictionary in towers.values():
 		var saved: Dictionary = tower.duplicate(true)
@@ -850,6 +905,7 @@ func load_data(data: Dictionary) -> bool:
 	_rewarded_units.assign(state.rewarded_units)
 	_locked_puzzle = str(state.locked_puzzle)
 	_locked_combat = str(state.locked_combat)
+	combat_report = _read_combat_report(state.get("combat_report"))
 	towers.clear()
 	for value in state.towers:
 		var tower: Dictionary = value.duplicate(true)

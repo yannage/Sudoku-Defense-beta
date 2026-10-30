@@ -1,6 +1,8 @@
 class_name DefenseDock
 extends Control
 
+const StrategyFeedback = preload("res://scripts/strategy_feedback.gd")
+
 signal changed(result: Dictionary)
 signal closed()
 signal cell_requested(cell: int)
@@ -417,6 +419,8 @@ func _tower_panel(content: VBoxContainer) -> void:
 	content.add_child(_button("Fit a module", func(): open_panel("bag", selected_cell), false, false, 38, "gear:open"))
 	var cost: int = int(run.upgrade_cost(selected_cell))
 	var cell: int = selected_cell
+	var upgrade_preview: Dictionary = StrategyFeedback.upgrade(run,cell)
+	_note(content,"Damage per hit: %.1f -> %.1f\nThis tower upgrade lasts for this board." % [float(upgrade_preview.before),float(upgrade_preview.after)],MINT)
 	content.add_child(_button("Upgrade this tower   ·   %d" % cost, func(): _act("upgrade_tower", [cell]), true, int(run.credits) < cost, 42, "upgrade:tower"))
 	var family_cost: int = int(run.family_upgrade_cost(number))
 	var family_count: int = _family_tower_count(number)
@@ -428,6 +432,7 @@ func _tower_panel(content: VBoxContainer) -> void:
 	family_button.focus_entered.connect(func(): _preview_family(number, true, true))
 	family_button.focus_exited.connect(func(): _preview_family(number, true, false))
 	content.add_child(family_button)
+	_note(content,"+%.1f combined damage per volley across %d current towers. Range and fire rate stay the same." % [float(upgrade_preview.total_gain),int(upgrade_preview.count)],MINT)
 	_note(content, "Highlighted: your %d towers. Future %ds get this upgrade too." % [number, number], FAMILY_COLORS[number])
 	_mini_grid(content)
 

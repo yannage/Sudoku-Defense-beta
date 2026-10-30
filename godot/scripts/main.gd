@@ -18,6 +18,7 @@ const MenuArt = preload("res://scripts/menu_diorama.gd")
 const PreferencesScript = preload("res://scripts/preferences.gd")
 const FirstRoundGuide = preload("res://scripts/first_round_guide.gd")
 const RunSaveScript = preload("res://scripts/run_save.gd")
+const StrategyFeedback = preload("res://scripts/strategy_feedback.gd")
 const INK := Color("0a1722")
 const PANEL := Color("112634")
 const MINT := Color("83e7c1")
@@ -245,6 +246,7 @@ func _build_ui() -> void:
 	selected_label = label("SELECT A SQUARE",13,MINT)
 	positioned(selected_label,Rect2(30,352,200,24))
 	candidate_label = label("",17)
+	candidate_label.mouse_filter = Control.MOUSE_FILTER_PASS
 	candidate_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	positioned(candidate_label,Rect2(30,383,193,100))
 	var notes_btn: Button = hud("notes", button("Notes ON",_toggle_notes))
@@ -685,7 +687,7 @@ func _refresh() -> void:
 			next_button.text = "Next round"
 		_:
 			phase_detail.text = "RUN COMPLETE"
-			next_button.text = "New run"
+			next_button.text = "Run results"
 	next_button.disabled = run.phase == "battle"
 	hud_nodes.intel.visible = run.phase == "prep"
 	phase_detail.visible = not (portrait_layout and run.phase == "prep")
@@ -730,6 +732,7 @@ func _refresh() -> void:
 		var selected_bg: Color = Color("253740") if complete else Color("315950")
 		b.add_theme_stylebox_override("normal",style(selected_bg if selected_number==i+1 else PANEL, tint if selected_number==i+1 else Color("35505a")))
 	if portrait_layout: _refresh_portrait_text()
+	_refresh_strategy_preview()
 	controls_label.text = "D-PAD grid   A choose number   RS cursor   L3 camera   X gear   Y advance" if controller_used else "TAP / DRAG to plant   RIGHT-DRAG / Q E rotate   HOME reset   ESC menu"
 	if controller_used and not armed_item.is_empty(): controls_label.text = "D-PAD / STICK choose tower     A attach module     B cancel"
 	if _controller_pointer_active(): controls_label.text = "RS cursor   R3 click   RT drag   LT precision   L3 camera   D-PAD grid"
@@ -756,6 +759,19 @@ Done to return to planting"
 			_fit_quick_label(quick)
 	_update_family_focus()
 	tutorial.apply_hud()
+
+func _refresh_strategy_preview() -> void:
+	candidate_label.tooltip_text = ""
+	var preview: Dictionary = StrategyFeedback.placement(run,selected_cell,maxi(1,selected_number))
+	if preview.is_empty(): return
+	var route_text: String = "If correct: route %+.1f" % float(preview.delta)
+	if portrait_layout:
+		selected_label.text += "  /  " + route_text
+	else:
+		var candidates_text: String = "  ".join(run.candidates(selected_cell).map(func(v): return str(v))) if board_notes else "Choose a number"
+		candidate_label.text = "%s\n%s\n%.1f tiles in range" % [candidates_text,route_text,float(preview.coverage)]
+	candidate_label.tooltip_text = "%s. The new tower reaches %.1f tiles of the proposed route. Other towers may gain or lose coverage. This preview does not confirm the answer." % [route_text,float(preview.coverage)]
+	if selected_number > 0: candidate_label.tooltip_text += " Number %d: %.1f damage per hit, %.1f range." % [selected_number,float(preview.damage),float(preview.range)]
 
 func _fit_quick_label(quick: Button) -> void:
 	# Keep ordinary phone labels at 20 px; only long counters need less space.
@@ -991,7 +1007,7 @@ func _advance() -> void:
 	if run.phase == "loot":
 		dock.close_panel()
 		_show_next_round()
-	elif run.phase in ["won","lost"]: _show_menu(true)
+	elif run.phase in ["won","lost"]: _show_result()
 	elif run.phase != "battle":
 		dock.close_panel()
 		_action(run.advance_phase())
@@ -1317,6 +1333,13 @@ func _show_wave_intel() -> void:
 	back.tooltip_text = "Close wave intel · B / Escape"
 	box.add_child(back)
 	box.add_child(label("D-pad / left stick: scroll · A / B: back",14,MINT))
+	var coverage := label(StrategyFeedback.defense_summary(run),17,MINT)
+	coverage.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	coverage.set_meta("defense_coverage",true)
+	box.add_child(coverage)
+	var route_note := label("Only correct answers during Solve reshape the route. Battle placements keep it fixed. Route length gives enemies more travel time, but coverage determines when towers can fire.",15,MUTED)
+	route_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(route_note)
 	var names := {"grunt":"Grunts","runner":"Runners","swarm":"Swarm","tank":"Tanks","boss":"Boss"}
 	var roles := {"grunt":"Steady pressure on your defenses.","runner":"Fast movers. Cover the route to the exit.","swarm":"Low health. Rapid fire clears them quickly.","tank":"High health. Strongest targeting concentrates fire.","boss":"Heavy health and core damage. Prepare concentrated fire."}
 	for group: Dictionary in forecast.groups:
@@ -1404,14 +1427,51 @@ func _show_next_round() -> void:
 	go.grab_focus()
 
 func _show_result() -> void:
-	var box := _modal(600,440)
+	if tutorial.active:
+		tutorial.show_step()
+		return
+	var box := _modal(640,660)
 	box.add_child(label("VICTORY" if run.phase=="won" else "CORE DESTROYED",31,MINT if run.phase=="won" else AMBER))
 	box.add_child(label("All rounds cleared." if run.phase=="won" else "Your run ends here.",23))
-	box.add_child(label("ROUND %02d     /     SCORE %d\n\n%d towers on this board  ·  %d credits left\nSeed %d" % [run.round_no,run.score,run.towers.size(),run.credits,run.seed_value],18,MUTED))
-	var go := button("New run",func(): _show_menu(true),true)
+	box.add_child(label("ROUND %02d  /  SCORE %d  /  SEED %d" % [run.round_no,run.score,run.seed_value],17,MUTED))
+	var go := button("Retry this seed",_retry_same_seed,true)
+	go.set_meta("focus_id","result:retry")
+	go.tooltip_text = "Start from round 1 with this seed, mode, and original difficulties. Campaign difficulty choices can differ again."
 	box.add_child(go)
+	box.add_child(button("New run setup",func(): _show_menu(true)))
 	box.add_child(button("Inspect the board",_close_overlay))
+	for text: String in StrategyFeedback.result_lines(run):
+		var detail := label(text,17,WHITE)
+		detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		box.add_child(detail)
+	box.add_child(label("D-pad / left stick: navigate and scroll",14,MINT))
+	var return_to_retry := button("Back to retry",func(): go.grab_focus())
+	return_to_retry.set_meta("focus_id","result:bottom")
+	box.add_child(return_to_retry)
 	go.grab_focus()
+
+func _retry_same_seed() -> void:
+	if run.phase not in ["won","lost"]: return
+	var retry_seed: int = run.seed_value
+	var options: Dictionary = run.retry_options()
+	_cancel_camera_controls()
+	_close_controller_numbers()
+	run.new_run(retry_seed,options)
+	mode_choice = str(options.mode)
+	puzzle_choice = str(options.puzzle_difficulty)
+	combat_choice = str(options.combat_difficulty)
+	has_active_run = true
+	selected_cell = -1
+	selected_number = 0
+	armed_item = ""
+	manual_pause = false
+	dock.reset_for_run()
+	world.setup(run)
+	world.set_selected(-1,0)
+	last_phase = run.phase
+	_close_overlay()
+	_save()
+	_toast("Same seed, fresh run. Try a different route or loadout.")
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.keycode in [KEY_Q,KEY_E]:
