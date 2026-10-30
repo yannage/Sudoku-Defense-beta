@@ -42,6 +42,9 @@ var menu_open := true
 var has_active_run := false
 var manual_pause := false
 var muted := false
+var master_volume := 0.85
+var music_volume := 1.0
+var effects_volume := 1.0
 var reduced_motion := false
 var board_notes := true
 var preferences = PreferencesScript.new()
@@ -103,6 +106,9 @@ func _ready() -> void:
 	get_tree().auto_accept_quit = false
 	var settings: Dictionary = preferences.read_settings()
 	muted = settings.muted
+	master_volume = settings.master_volume
+	music_volume = settings.music_volume
+	effects_volume = settings.effects_volume
 	reduced_motion = settings.reduced_motion
 	board_notes = settings.board_notes
 	run.new_run(784217, {"mode":"campaign", "puzzle_difficulty":"easy", "combat_difficulty":"easy"})
@@ -114,6 +120,9 @@ func _ready() -> void:
 	sound = SoundScript.new()
 	add_child(sound)
 	sound.set_muted(muted)
+	sound.set_volume(master_volume)
+	sound.set_music_volume(music_volume)
+	sound.set_effects_volume(effects_volume)
 	_build_ui()
 	controller = ControllerScript.new()
 	controller.activity.connect(_controller_activity)
@@ -1038,8 +1047,66 @@ func _toggle_notes() -> void:
 	_save_preferences()
 
 func _save_preferences() -> void:
-	if not preferences.write_settings({"muted": muted, "reduced_motion": reduced_motion, "board_notes": board_notes}):
+	if not preferences.write_settings({"muted": muted, "reduced_motion": reduced_motion, "board_notes": board_notes,
+		"master_volume": master_volume, "music_volume": music_volume, "effects_volume": effects_volume}):
 		_toast("Settings apply now, but could not be saved on this device.",false)
+
+func _set_audio_level(channel: String, value: float) -> void:
+	value = clampf(snappedf(value, 0.05), 0.0, 1.0)
+	match channel:
+		"master": master_volume = value; sound.set_volume(value)
+		"music": music_volume = value; sound.set_music_volume(value)
+		"effects": effects_volume = value; sound.set_effects_volume(value)
+	_save_preferences()
+
+func _audio_level(channel: String) -> float:
+	return master_volume if channel == "master" else (music_volume if channel == "music" else effects_volume)
+
+func _show_audio_settings() -> void:
+	var box := _modal(540,568)
+	overlay.set_meta("audio_settings",true)
+	box.add_child(label("AUDIO",26,MINT))
+	box.add_child(label("Changes are saved on this device.",15,MUTED))
+	var first_control: Button
+	for channel in ["master","music","effects"]:
+		var key: String = channel
+		box.add_child(label(key.capitalize(),18,WHITE))
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation",12)
+		box.add_child(row)
+		var value_label := label("%d%%" % roundi(_audio_level(key)*100.0),22,MINT)
+		value_label.set_meta("audio_value",key)
+		value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		value_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var lower := button("- 5%",func():
+			_set_audio_level(key,_audio_level(key)-0.05)
+			value_label.text = "%d%%" % roundi(_audio_level(key)*100.0)
+		)
+		lower.set_meta("focus_id","audio:" + key + ":lower")
+		lower.custom_minimum_size.x = 90
+		if key == "master": first_control = lower
+		row.add_child(lower)
+		row.add_child(value_label)
+		var higher := button("+ 5%",func():
+			_set_audio_level(key,_audio_level(key)+0.05)
+			value_label.text = "%d%%" % roundi(_audio_level(key)*100.0)
+		)
+		higher.set_meta("focus_id","audio:" + key + ":higher")
+		higher.custom_minimum_size.x = 90
+		row.add_child(higher)
+		# Full-width rows below can win Godot's geometric focus heuristic.
+		# Keep left/right explicitly within the current volume control.
+		lower.focus_neighbor_right = lower.get_path_to(higher)
+		higher.focus_neighbor_left = higher.get_path_to(lower)
+	var mute := button("Sound: " + ("OFF" if muted else "ON"),func(): _toggle_sound())
+	mute.set_meta("focus_id","audio:mute")
+	mute.pressed.connect(func(): mute.text = "Sound: " + ("OFF" if muted else "ON"))
+	box.add_child(mute)
+	box.add_child(label("Mute keeps your volume choices. 0% is silent.",14,MUTED))
+	var back := button("Done",_close_overlay,true)
+	back.set_meta("focus_id","audio:done")
+	box.add_child(back)
+	first_control.grab_focus()
 
 func _toggle_pause() -> void:
 	if menu_open: return
@@ -1311,6 +1378,7 @@ func _show_pause_menu() -> void:
 		actions.add_child(intel)
 	actions.add_child(button("Manage gear",func(): _close_overlay(); _toggle_dock("bag")))
 	actions.add_child(button("How to play",_help))
+	actions.add_child(button("Audio settings",_show_audio_settings))
 	actions.add_child(button("New run",func(): _show_menu(true)))
 	resume.grab_focus()
 
@@ -1368,6 +1436,7 @@ func _help() -> void:
 	var box := _modal(720,652)
 	box.add_child(label("HOW TO PLAY",26,MINT))
 	box.add_child(button("Play guided first round",func(): tutorial.start(self),true))
+	box.add_child(button("Audio settings",_show_audio_settings))
 	for text in [
 		"01  SOLVE  ·  Fill each row, column and 3×3 box with 1–9, without repeats. Tap a square, then a number, or drag a number onto the board. Correct answers grow towers and earn credits. You can move on before finishing the puzzle.",
 		"02  PREPARE  ·  Read Wave intel before launching. Select a tower to upgrade it and choose First (nearest exit), Strongest (highest current health), or Nearest (closest to tower). Open Gear to fit modules; each tower has five slots. Menus pause the game.",

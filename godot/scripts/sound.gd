@@ -12,6 +12,8 @@ const CLIPS: Array[String] = ["click", "plant", "illegal", "shot", "electric", "
 var muted: bool = false
 var music_enabled: bool = true
 var master_volume: float = 0.85
+var music_volume: float = 1.0
+var effects_volume: float = 1.0
 var _clips: Dictionary = {}
 var _voices: Array[AudioStreamPlayer] = []
 var _music: AudioStreamPlayer
@@ -66,22 +68,40 @@ func set_muted(value: bool) -> void:
 	for voice: AudioStreamPlayer in _voices:
 		if muted:
 			voice.stop()
-	if is_instance_valid(_music):
-		_music.stream_paused = muted or not music_enabled
-		if not muted and music_enabled and _has_interaction and not _music.playing:
-			_music.play()
+	_update_music()
 
 func set_music_enabled(value: bool) -> void:
 	music_enabled = value
-	if is_instance_valid(_music):
-		_music.stream_paused = muted or not music_enabled
-		if value and not muted and _has_interaction and not _music.playing:
-			_music.play()
+	_update_music()
 
 func set_volume(value: float) -> void:
 	master_volume = clampf(value, 0.0, 1.0)
+	_update_mix()
+
+func set_music_volume(value: float) -> void:
+	music_volume = clampf(value, 0.0, 1.0)
+	_update_music()
+
+func set_effects_volume(value: float) -> void:
+	effects_volume = clampf(value, 0.0, 1.0)
+	_update_mix()
+
+func _update_mix() -> void:
+	for voice: AudioStreamPlayer in _voices:
+		if master_volume * effects_volume <= 0.0:
+			voice.stop()
+		else:
+			voice.volume_db = float(voice.get_meta("gain_db", -6.0)) + linear_to_db(master_volume * effects_volume)
+	_update_music()
+
+func _update_music() -> void:
 	if is_instance_valid(_music):
-		_music.volume_db = -18.0 + linear_to_db(maxf(master_volume, 0.001))
+		var level := master_volume * music_volume
+		var silent := muted or not music_enabled or level <= 0.0
+		_music.volume_db = -18.0 + linear_to_db(maxf(level, 0.0001))
+		_music.stream_paused = silent
+		if not silent and _has_interaction and _music.stream != null and not _music.playing:
+			_music.play()
 
 func play_event(event: Dictionary) -> void:
 	if not _initialized:
@@ -142,14 +162,10 @@ func _begin_interaction() -> void:
 	if not _initialized:
 		setup()
 	_has_interaction = true
-	if _headless or muted or not music_enabled:
-		return
-	if is_instance_valid(_music) and _music.stream != null and not _music.playing:
-		_music.volume_db = -18.0 + linear_to_db(maxf(master_volume, 0.001))
-		_music.play()
+	if not _headless: _update_music()
 
 func _play(clip_name: String, gain_db: float = -6.0, pitch: float = 1.0, important: bool = true) -> void:
-	if muted or _headless or not _clips.has(clip_name) or _voices.is_empty():
+	if muted or master_volume * effects_volume <= 0.0 or _headless or not _clips.has(clip_name) or _voices.is_empty():
 		return
 	var chosen: AudioStreamPlayer = null
 	for offset: int in _voices.size():
@@ -165,6 +181,7 @@ func _play(clip_name: String, gain_db: float = -6.0, pitch: float = 1.0, importa
 		_voice_cursor = (_voice_cursor + 1) % _voices.size()
 	chosen.stop()
 	chosen.stream = _clips[clip_name] as AudioStream
-	chosen.volume_db = gain_db + linear_to_db(maxf(master_volume, 0.001))
+	chosen.set_meta("gain_db", gain_db)
+	chosen.volume_db = gain_db + linear_to_db(master_volume * effects_volume)
 	chosen.pitch_scale = pitch
 	chosen.play()

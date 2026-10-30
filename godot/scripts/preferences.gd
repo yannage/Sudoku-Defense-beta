@@ -1,7 +1,8 @@
 extends RefCounted
 ## Device-local accessibility and presentation choices, independent of run saves.
 
-const DEFAULTS := {"muted": false, "reduced_motion": false, "board_notes": true}
+const DEFAULTS := {"muted": false, "reduced_motion": false, "board_notes": true,
+	"master_volume": 0.85, "music_volume": 1.0, "effects_volume": 1.0}
 var file_path := "user://sudoku-defense-settings.json"
 
 func read_settings() -> Dictionary:
@@ -12,17 +13,21 @@ func read_settings() -> Dictionary:
 	var parser := JSON.new()
 	if parser.parse(file.get_as_text()) != OK or not parser.data is Dictionary:
 		return settings
-	for key: String in DEFAULTS:
-		# Strings such as "false" must never silently become true.
-		if typeof(parser.data.get(key)) == TYPE_BOOL:
-			settings[key] = parser.data[key]
-	return settings
+	return validate(parser.data)
 
-func write_settings(settings: Dictionary) -> bool:
+func validate(settings: Dictionary) -> Dictionary:
 	var validated := DEFAULTS.duplicate()
 	for key: String in DEFAULTS:
-		if typeof(settings.get(key)) == TYPE_BOOL:
-			validated[key] = settings[key]
+		var value: Variant = settings.get(key)
+		# Legacy boolean settings keep their meaning; strings never become true.
+		if typeof(DEFAULTS[key]) == TYPE_BOOL:
+			if typeof(value) == TYPE_BOOL: validated[key] = value
+		elif typeof(value) in [TYPE_FLOAT, TYPE_INT] and is_finite(float(value)):
+			validated[key] = clampf(float(value), 0.0, 1.0)
+	return validated
+
+func write_settings(settings: Dictionary) -> bool:
+	var validated := validate(settings)
 	var temporary := file_path + ".tmp"
 	var file := FileAccess.open(temporary, FileAccess.WRITE)
 	if file == null: return false
