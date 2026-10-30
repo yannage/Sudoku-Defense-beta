@@ -12,6 +12,15 @@ python3 godot/scripts/build_exports.py --godot /absolute/path/to/godot
 
 Use `--targets web`, `--targets linux`, or `--targets windows` for a narrower build. Generated files stay under the ignored `godot/build/` directory. The helper imports resources, runs the simulation and UI-flow tests, fails on Godot script errors, exports the selected platforms, boots the Linux executable headlessly when selected, and creates packages plus SHA-256 checksums. Tests must print their success markers; the exported Linux game must print its ready marker after its board, run, and UI are initialized.
 
+The helper gives each test and executable smoke check a fresh temporary user
+profile (APPDATA/LOCALAPPDATA on Windows; XDG directories on Linux). This keeps
+test saves and their recovery sidecars away from real player progress. When
+running individual older test scripts directly, provide the same isolation.
+Cross-building Linux on Windows requires `--skip-smoke`; record Linux startup
+as unrun and separately boot the exported Windows executable with an isolated
+profile. `test_campaign_balance.gd` is an explicit seeded balance experiment,
+not part of every package build; see `docs/BALANCE-0.3.16.md`.
+
 Use `--render-check` to additionally require the real GLES framebuffer suites. They run on the current display or use `xvfb-run` when no display is set; a dummy/headless renderer is rejected. Install Xvfb, xauth, Mesa OpenGL drivers, and EGL first. CI requires these checks and uploads screenshots from `godot/build/render-checks/` alongside the logs. The CanvasItem suite passes `--canvas-graphics` to exercise the browser's board path with 3D disabled; the spatial suite retains `--safe-graphics` coverage. Pixel checks validate visible board content instead of relying only on successful process exit. UI-flow checks also run with both board renderers.
 
 Outputs:

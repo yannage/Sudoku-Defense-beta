@@ -2,7 +2,7 @@ extends SceneTree
 var scene
 var failures := 0
 var checks := 0
-const SAVE := "user://sudoku-defense-run.json"
+var save_path := ""
 
 func _initialize() -> void:
 	call_deferred("exercise")
@@ -31,13 +31,15 @@ func exercise() -> void:
 	root.add_child(scene)
 	await frames(6)
 	scene.set_process(false)
+	save_path = "user://guide-test-%d.json" % Time.get_ticks_usec()
+	scene.run_save.file_path = save_path
 	scene.run.new_run(91237,{"mode":"locked","puzzle_difficulty":"medium","combat_difficulty":"hard"})
 	scene.has_active_run = true
 	scene.manual_pause = true
 	scene.game_speed = 4.0
 	scene._save()
 	var original: String = JSON.stringify(scene.run.save_data())
-	var original_file: String = FileAccess.get_file_as_string(SAVE)
+	var original_file: String = FileAccess.get_file_as_string(save_path)
 	for size in [Vector2i(1280,800),Vector2i(720,1280)]:
 		root.size = size
 		scene._layout_ui()
@@ -116,7 +118,7 @@ func exercise() -> void:
 		scene.tutorial.observe()
 		check(scene.tutorial.step == 7,"Only a collected reward completes guide")
 		scene._save()
-		check(FileAccess.get_file_as_string(SAVE) == original_file,"Practice never changes saved campaign")
+		check(FileAccess.get_file_as_string(save_path) == original_file,"Practice never changes saved campaign")
 		scene.tutorial.finish()
 		await frames()
 		check(JSON.parse_string(JSON.stringify(scene.run.save_data())) == JSON.parse_string(original),"Finishing restores exact active run including RNG")
@@ -132,10 +134,12 @@ func exercise() -> void:
 		scene.tutorial.finish()
 		await frames()
 		check(scene.menu_open and not scene.has_active_run,"Skipping from initial menu returns to new-run setup")
-		check(FileAccess.get_file_as_string(SAVE) == original_file,"Menu practice preserves existing disk save")
+		check(FileAccess.get_file_as_string(save_path) == original_file,"Menu practice preserves existing disk save")
 		scene.run.load_data(JSON.parse_string(original))
 		scene.has_active_run = true
 	print("FIRST_ROUND_GUIDE_PASS: %d checks" % checks if failures == 0 else "First round guide failures: %d" % failures)
 	scene.queue_free()
 	await frames()
+	for suffix in ["", ".bak", ".pending", ".tmp", ".bak.tmp"]:
+		if FileAccess.file_exists(save_path+suffix): DirAccess.remove_absolute(save_path+suffix)
 	quit(1 if failures else 0)

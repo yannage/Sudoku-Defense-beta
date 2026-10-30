@@ -156,6 +156,7 @@ func _notification(what: int) -> void:
 		seed_pointer.cancel()
 		_finish_pointer_activity.call_deferred()
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		if tutorial.active: tutorial.restore()
 		if _save(): get_tree().quit()
 		else: _show_unsaved_quit()
 
@@ -1161,6 +1162,11 @@ func _show_unsaved_quit() -> void:
 	box.add_child(button("Quit without saving",func(): get_tree().quit()))
 	retry.grab_focus()
 
+func _retry_save_from_menu() -> void:
+	if tutorial.active: tutorial.restore()
+	_save()
+	_show_pause_menu()
+
 func _start_run() -> void:
 	if tutorial.active: tutorial.restore()
 	_cancel_camera_controls()
@@ -1367,7 +1373,7 @@ func _show_pause_menu() -> void:
 	actions.add_child(label("ROUND %02d / %02d  ·  %s" % [run.round_no,run.max_rounds,str({"solve":"Solve", "prep":"Prepare", "battle":"Defend", "loot":"Loot", "won":"Victory", "lost":"Defeat"}.get(run.phase,run.phase)).to_upper()],13,AMBER))
 	actions.add_child(label("Latest progress is NOT saved." if save_failed else "Your progress is saved on this device.",13,AMBER if save_failed else MUTED))
 	if save_failed:
-		actions.add_child(button("Retry saving",func(): _save(); _show_pause_menu(),true))
+		actions.add_child(button("Return and retry saving" if tutorial.active else "Retry saving",_retry_save_from_menu,true))
 	var resume := button("Resume run",_close_overlay,true)
 	resume.set_meta("menu_height",54)
 	actions.add_child(resume)
@@ -1539,8 +1545,7 @@ func _retry_same_seed() -> void:
 	world.set_selected(-1,0)
 	last_phase = run.phase
 	_close_overlay()
-	_save()
-	_toast("Same seed, fresh run. Try a different route or loadout.")
+	if _save(): _toast("Same seed, fresh run. Try a different route or loadout.")
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.keycode in [KEY_Q,KEY_E]:

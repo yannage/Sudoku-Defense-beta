@@ -4,6 +4,15 @@ A native Godot 4.7.2 version of the pre-Unity Sudoku Defense game. The same GDSc
 
 ## Play
 
+Version **0.3.16** is a release-preparation candidate. **Guided first round**
+teaches the real game in a practice run that preserves your campaign. Skip or
+replay from How to play. Run saves now keep a verified recovery journal and
+last-good backup; **Save!** means progress needs attention. Placement, upgrade
+and wave previews explain strategic effects. Run results include observed
+combat contributions and **Retry same seed**. Pause / Help → **Audio settings**
+remembers Master, Music and Effects levels alongside the existing mute toggle.
+See [the candidate checklist](../docs/ITERATION-0.3.16.md) before Steam delivery.
+
 Version **0.3.15** adds a controller placement loop: press **A** on an empty
 square to focus the number tray, choose with the D-pad / left stick or LB / RB,
 then press **A** to plant and return to that same square. **B** returns without
