@@ -44,7 +44,7 @@ def run(command: list[str], log: Path, expected: str | None = None) -> None:
 
 def make_web_shell(web: Path) -> None:
     """Preserve Godot's exported config; split only the large engine transport."""
-    original = (web / "index.html").read_text()
+    original = (web / "index.html").read_text(encoding="utf-8")
     match = re.search(r"const GODOT_CONFIG = (\{.*?\});", original)
     if not match:
         raise RuntimeError("Exported Godot HTML has no recognized engine config")
@@ -64,17 +64,17 @@ def make_web_shell(web: Path) -> None:
     reconstructed = b"".join((web / part["name"]).read_bytes() for part in parts)
     assert reconstructed == payload, "WASM chunk transport must be byte-identical"
     manifest = {"bytes": len(payload), "sha256": hashlib.sha256(payload).hexdigest(), "parts": parts}
-    (web / "engine-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    (web / "engine-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     engine_path.unlink()
-    shell = (PROJECT / "scripts" / "web_shell.html").read_text()
-    version_match = re.search(r'^config/version="([^\"]+)"$', (PROJECT / "project.godot").read_text(), re.MULTILINE)
+    shell = (PROJECT / "scripts" / "web_shell.html").read_text(encoding="utf-8")
+    version_match = re.search(r'^config/version="([^\"]+)"$', (PROJECT / "project.godot").read_text(encoding="utf-8"), re.MULTILINE)
     if not version_match:
         raise RuntimeError("Project version is required for the web launch page")
     shell = shell.replace("__GAME_VERSION__", version_match.group(1))
     shell = shell.replace("__GODOT_CONFIG__", json.dumps(config, separators=(",", ":")))
     shell = shell.replace("__WASM_PARTS__", json.dumps(parts, separators=(",", ":")))
     shell = shell.replace("__WASM_BYTES__", str(len(payload)))
-    (web / "index.html").write_text(shell)
+    (web / "index.html").write_text(shell, encoding="utf-8")
     for path in web.rglob("*"):
         if path.is_file() and path.stat().st_size > STATIC_FILE_LIMIT:
             raise RuntimeError(f"Static hosting file limit exceeded: {path}")
@@ -164,9 +164,9 @@ def stage_downloads(build: Path) -> None:
             assert rebuilt == data, f"Download chunks changed {filename}"
         packages.append(package)
     manifest = {"godot_version": EXPECTED_VERSION, "built_at": datetime.now(timezone.utc).isoformat(), "packages": packages}
-    (destination / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
-    shell = (PROJECT / "scripts" / "downloads_shell.html").read_text()
-    (web / "downloads.html").write_text(shell.replace("__DOWNLOAD_MANIFEST__", json.dumps(manifest, separators=(",", ":"))))
+    (destination / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    shell = (PROJECT / "scripts" / "downloads_shell.html").read_text(encoding="utf-8")
+    (web / "downloads.html").write_text(shell.replace("__DOWNLOAD_MANIFEST__", json.dumps(manifest, separators=(",", ":"))), encoding="utf-8")
     for path in web.rglob("*"):
         if path.is_file() and path.stat().st_size > STATIC_FILE_LIMIT:
             raise RuntimeError(f"Static hosting file limit exceeded: {path}")
@@ -281,7 +281,7 @@ def main() -> None:
 
 def export_releases(args: argparse.Namespace, build: Path, downloads: Path, logs: Path) -> None:
     """Package the validated source; usable separately after packaging-only fixes."""
-    match = re.search(r'^config/version="([^"]+)"$', (PROJECT / "project.godot").read_text(), re.MULTILINE)
+    match = re.search(r'^config/version="([^"]+)"$', (PROJECT / "project.godot").read_text(encoding="utf-8"), re.MULTILINE)
     if not match:
         raise RuntimeError("Project application version is required for package verification")
     app_version = match.group(1)
@@ -312,7 +312,13 @@ def export_releases(args: argparse.Namespace, build: Path, downloads: Path, logs
                 for path in sorted(folder.rglob("*")):
                     relative = path.relative_to(folder)
                     if path.is_file() and not any(part.startswith(".") for part in relative.parts):
-                        archive.add(path, arcname=str(relative), recursive=False)
+                        entry = archive.gettarinfo(str(path), arcname=relative.as_posix())
+                        # Windows chmod cannot set POSIX execute bits. Preserve
+                        # Linux launchability when cross-building on Windows.
+                        if path == output:
+                            entry.mode = 0o755
+                        with path.open("rb") as payload:
+                            archive.addfile(entry, payload)
         if name != "web":
             archive_directory(folder, downloads / f"Sudoku-Defense-Godot-{name.capitalize()}.zip")
     archive_directory(
@@ -324,7 +330,7 @@ def export_releases(args: argparse.Namespace, build: Path, downloads: Path, logs
         # The distributable browser ZIP also contains its desktop-download page.
         archive_directory(build / "web", downloads / "Sudoku-Defense-Godot-Web.zip")
     hashes = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(downloads.glob("*")) if p.is_file() and p.name != "SHA256SUMS.txt"}
-    (downloads / "SHA256SUMS.txt").write_text("".join(f"{digest}  {name}\n" for name, digest in hashes.items()))
+    (downloads / "SHA256SUMS.txt").write_text("".join(f"{digest}  {name}\n" for name, digest in hashes.items()), encoding="utf-8")
     print(f"Completed: {downloads}")
 
 
