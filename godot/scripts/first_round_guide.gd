@@ -141,6 +141,7 @@ func continue_step() -> void:
 	host._close_overlay()
 	if step == 3: host._toggle_dock("bag")
 	elif step == 6: host._toggle_dock("loot")
+	elif step in [4,5]: host.dock.close_panel()
 	elif step in [0,1] and target_cell >= 0 and host.run.board[target_cell] == 0:
 		host._select(target_cell,false,false)
 
