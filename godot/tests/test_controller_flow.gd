@@ -220,6 +220,10 @@ func exercise() -> void:
 		check(scene.dock._scroll.get_global_rect().grow(1.0).encloses(mini_target.get_global_rect()), "Workshop scroll follows controller focus to the mini-grid")
 		await press(JOY_BUTTON_A)
 		check(scene.selected_cell == cells[1], "A selects another tower through the workshop mini-grid")
+	# Ordinary management tabs keep their shoulders; the explicit controller
+	# socket workflow has separate eligible-tower cycling coverage.
+	scene.dock.open_panel("tower", scene.selected_cell)
+	await frames()
 	var selected_before: int = scene.selected_cell
 	var number_before: int = scene.selected_number
 	await press(JOY_BUTTON_RIGHT_SHOULDER)

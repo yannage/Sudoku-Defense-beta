@@ -321,6 +321,7 @@ func _build_ui() -> void:
 	dock.closed.connect(func(): armed_item = ""; _release_ui_focus(); _refresh())
 	dock.cell_requested.connect(_inspect_tower)
 	dock.family_preview_requested.connect(_update_family_focus)
+	dock.controller_module_equipped.connect(_controller_module_equipped)
 	dock.item_armed.connect(func(item_id):
 		if str(item_id).is_empty():
 			armed_item = ""
@@ -613,6 +614,7 @@ func _style_modal_tree(node: Node) -> void:
 	for child in node.get_children(): _style_modal_tree(child)
 
 func _process(dt: float) -> void:
+	if dock.controller_workshop_cell >= 0: dock.validate_controller_context()
 	_tick_camera_controls(minf(dt,0.05))
 	# Switching hint styles rebuilds the dock. Defer it until a cursor click or
 	# drag has finished so its pressed Control survives through release.
@@ -744,6 +746,9 @@ func _refresh() -> void:
 	if portrait_layout: _refresh_portrait_text()
 	_refresh_strategy_preview()
 	controls_label.text = "D-PAD grid   A choose number   RS cursor   L3 camera   X gear   Y advance" if controller_used else "TAP / DRAG to plant   RIGHT-DRAG / Q E rotate   HOME reset   ESC menu"
+	if controller_used and not _controller_pointer_active():
+		if dock.controller_context_active(): controls_label.text = "A choose / equip module   B back   LB / RB next available tower"
+		elif run.phase == "prep" and run.towers.has(selected_cell) and not dock.is_open(): controls_label.text = "A open module slot   LB / RB next available tower   X gear   Y launch"
 	if controller_used and not armed_item.is_empty(): controls_label.text = "D-PAD / STICK choose tower     A attach module     B cancel"
 	if _controller_pointer_active(): controls_label.text = "RS cursor   R3 click   RT drag   LT precision   L3 camera   D-PAD grid"
 	hud_nodes.plant_caption.text = "CHOOSE A NUMBER" if _controller_number_cell >= 0 else "PLANT A NUMBER"
@@ -818,6 +823,9 @@ func _number_placement_allowed() -> bool:
 
 func _pointer_activity(pointer_owner: int = -2) -> void:
 	if controller_cursor != null and controller_cursor.is_dispatching(): return
+	# Clear targeting immediately, but retain the pressed Control until release.
+	# The normal pointer handoff below rebuilds the sheet after the gesture.
+	if dock != null and dock.controller_workshop_cell >= 0: dock.cancel_controller_context()
 	_close_controller_numbers()
 	if _controller_pointer_active(): controller_cursor.deactivate()
 	if pointer_owner == -2 and _pointer_hint_owner != -2: _finish_pointer_activity.call_deferred()
@@ -913,6 +921,63 @@ func _inspect_tower(cell: int) -> void:
 	# controller cursor across the battlefield on the way to an empty square.
 	if run.towers.has(cell): selected_number = int(run.towers[cell].number)
 	_select(cell,false)
+	if dock.controller_workshop_cell >= 0: dock.cancel_controller_context(true)
+
+func _eligible_upgrade_towers() -> Array[int]:
+	var result: Array[int] = []
+	if not run._gear_phase() or not run.items.any(func(item): return str(item.get("type","")) == "attachment"): return result
+	for cell in run.towers:
+		if run.towers[cell].attachments.size() < 5: result.append(int(cell))
+	result.sort()
+	return result
+
+func _cycle_upgrade_tower(direction: int) -> void:
+	var candidates := _eligible_upgrade_towers()
+	if candidates.is_empty():
+		_toast("No available modules." if not run.items.any(func(item): return str(item.get("type","")) == "attachment") else "Every tower's module slots are full.",false)
+		return
+	var workshop: bool = dock.controller_context_active()
+	var index := candidates.find(selected_cell)
+	var target: int = candidates[0] if direction > 0 else candidates.back()
+	if index >= 0: target = candidates[posmod(index+direction,candidates.size())]
+	else:
+		# A full selected tower is absent from the eligible list. Continue from its
+		# board position rather than jumping arbitrarily to the list's beginning.
+		for candidate: int in candidates:
+			if direction > 0 and candidate > selected_cell:
+				target = candidate
+				break
+			if direction < 0 and candidate < selected_cell: target = candidate
+	selected_number = int(run.towers[target].number)
+	_select(target,false,false)
+	if workshop: dock.open_controller_workshop(target)
+	_refresh()
+
+func _controller_module_equipped(origin_cell: int) -> void:
+	# This signal belongs only to the explicit controller slot chooser. Pointer
+	# drags, swaps, removals and ordinary inventory targeting never auto-advance.
+	dock.close_panel()
+	var candidates := _eligible_upgrade_towers()
+	var target := origin_cell
+	var best_distance := INF
+	for cell: int in candidates:
+		if cell == origin_cell: continue
+		var delta := Vector2(cell%9-origin_cell%9,cell/9-origin_cell/9)
+		var distance := delta.length_squared()
+		if distance < best_distance:
+			best_distance = distance
+			target = cell
+	if run.towers.has(target):
+		selected_number = int(run.towers[target].number)
+		_select(target,false,false)
+	# Keep the save-failure warning from _action visible even though the module
+	# was equipped in memory and controller selection can safely move on.
+	if not save_failed:
+		if target != origin_cell: _toast("Module fitted. Next tower selected; A opens its empty slot.")
+		elif not run.items.any(func(item): return str(item.get("type","")) == "attachment"): _toast("Module fitted. No modules remaining in Gear.")
+		elif candidates.is_empty(): _toast("Module fitted. Every tower's module slots are full.")
+		else: _toast("Module fitted. A opens this tower's next empty slot.")
+	_refresh()
 
 func _attachment_item(item_id: String) -> Dictionary:
 	for item: Dictionary in run.items:
@@ -1138,6 +1203,7 @@ func _save() -> bool:
 	return not save_failed
 
 func _load() -> bool:
+	dock.cancel_controller_context(true)
 	var saved: Dictionary = run_save.read_run()
 	if saved.is_empty(): return false
 	var loaded: bool = run.load_data(saved.data)
@@ -1197,6 +1263,7 @@ func _close_overlay() -> void:
 	_refresh()
 
 func _modal(width: float = 650, height: float = 640) -> VBoxContainer:
+	if dock != null and dock.controller_workshop_cell >= 0: dock.cancel_controller_context(true)
 	_close_controller_numbers()
 	_cancel_camera_controls()
 	if seed_pointer != null: seed_pointer.cancel()
@@ -1467,6 +1534,7 @@ Controller: press L3, use the right stick, R3 to reset, B to finish.",15,MUTED)
 	box.add_child(label("CONTROLLER",12,MINT))
 	var input_label := label("Left stick / D-pad: grid, numbers or menu  ·  LB / RB: number / tab\nA on an empty square: choose a number below\nA on a number: plant and return to that square  ·  B: back\nRight stick: free cursor  ·  R3: click  ·  Hold RT: click / drag\nHold LT: precise cursor  ·  Hover at list edges to scroll\nX: gear  ·  Y: next phase  ·  Start: pause menu  ·  View: help",15,MUTED)
 	box.add_child(input_label)
+	box.add_child(label("Tower modules: A on a tower focuses its first empty + socket. A opens available modules; A fits one, then selects the nearest other available tower. B returns one step.\nLB / RB cycle available towers in the workshop or on a selected tower during Prepare. Elsewhere they retain number / tab controls. Full towers focus Close; navigate to a filled socket to remove a module.",15,MUTED))
 	var reduce := button("Reduced motion: " + ("ON" if reduced_motion else "OFF"),func(): _toggle_reduced_motion(); _help())
 	box.add_child(reduce)
 	box.add_child(button("Sound: " + ("OFF" if muted else "ON"),func(): _toggle_sound(); _help()))
@@ -1669,6 +1737,7 @@ func _controller_pointer_active() -> bool:
 	return controller_cursor != null and controller_cursor.is_active()
 
 func _controller_pointer_activity() -> void:
+	if dock.controller_workshop_cell >= 0: dock.cancel_controller_context(true)
 	_close_controller_numbers()
 	_pointer_hint_owner = -2
 	if camera_mode:
@@ -1760,6 +1829,7 @@ func _controller_confirm_ui() -> void:
 		focused.pressed.emit()
 
 func _controller_action(action: String) -> void:
+	if dock.controller_workshop_cell >= 0 and not dock.validate_controller_context() and action in ["confirm","previous","next"]: return
 	# Validate before dispatch too: a solve timeout must not leave a stale picker.
 	if _controller_number_cell >= 0:
 		_refresh()
@@ -1799,6 +1869,7 @@ func _controller_action(action: String) -> void:
 	if action == "cancel":
 		if _seed_editing: _show_menu(_seed_return_initial)
 		elif menu_open: _close_overlay()
+		elif dock.controller_back(): pass
 		elif dock.is_open(): dock.close_panel()
 		else:
 			armed_item = ""
@@ -1818,11 +1889,15 @@ func _controller_action(action: String) -> void:
 		return
 	if dock.is_open():
 		if action == "confirm": _controller_confirm_ui()
+		elif action in ["previous","next"] and dock.controller_context_active(): _cycle_upgrade_tower(-1 if action == "previous" else 1)
 		elif action in ["previous","next"]: dock.cycle_panel(-1 if action == "previous" else 1)
 		return
 	if manual_pause: return
 	match action:
 		"previous", "next":
+			if run.phase == "prep" and run.towers.has(selected_cell) and armed_item.is_empty():
+				_cycle_upgrade_tower(-1 if action == "previous" else 1)
+				return
 			if selected_number <= 0: selected_number = 9 if action == "previous" else 1
 			else: selected_number = posmod(selected_number-1+(-1 if action == "previous" else 1),9)+1
 			world.set_selected(selected_cell,selected_number)
@@ -1830,6 +1905,10 @@ func _controller_action(action: String) -> void:
 		"confirm":
 			if selected_cell < 0: _select(40,false,false)
 			elif run.board[selected_cell] == 0 and _number_placement_allowed(): _open_controller_numbers(selected_cell)
+			elif run.towers.has(selected_cell) and armed_item.is_empty() and run._gear_phase():
+				selected_number = int(run.towers[selected_cell].number)
+				dock.open_controller_workshop(selected_cell)
+				_refresh()
 			else: _select(selected_cell,true)
 		"advance": _advance()
 

@@ -4,6 +4,13 @@ A native Godot 4.7.2 version of the pre-Unity Sudoku Defense game. The same GDSc
 
 ## Play
 
+Version **0.3.17** streamlines controller equipment: **A on a tower → A on its
+empty (+) socket → A on a module**. After equipping, selection moves to the
+nearest other tower with room for another available module. LB/RB cycle eligible
+towers in board order during this flow and from a selected tower in Prepare.
+B returns to the socket, then the board. See
+[the candidate checklist](../docs/ITERATION-0.3.17.md).
+
 Version **0.3.16** is a release-preparation candidate. **Guided first round**
 teaches the real game in a practice run that preserves your campaign. Skip or
 replay from How to play. Run saves now keep a verified recovery journal and

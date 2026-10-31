@@ -67,6 +67,7 @@ jobs:
             godot/build/menu-checks/
             godot/build/controller-cursor-checks/
             godot/build/controller-number-checks/
+            godot/build/controller-upgrade-checks/
             godot/build/loot-gear-checks/
           retention-days: 14
 

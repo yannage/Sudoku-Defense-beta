@@ -8,6 +8,7 @@ signal closed()
 signal cell_requested(cell: int)
 signal item_armed(item_id: String)
 signal family_preview_requested(number: int)
+signal controller_module_equipped(cell: int)
 
 const LootTable = preload("res://scripts/loot_table.gd")
 const Card = preload("res://scripts/item_card.gd")
@@ -59,6 +60,114 @@ var _show_reserves: bool = false
 var _recent_item_ids: Array[String] = []
 var _loot_table: Control
 var reduced_motion: bool = false
+var controller_workshop_cell := -1
+var controller_picker_slot := -1
+var controller_context_phase := ""
+var _controller_focus_id := ""
+var _controller_tower: Dictionary = {}
+var _controller_picker_count := -1
+
+func controller_context_active() -> bool:
+	return _opened and controller_workshop_cell >= 0 and current_panel in ["tower","bag"] and selected_cell == controller_workshop_cell and run != null and run.phase == controller_context_phase and run._gear_phase() and run.towers.has(controller_workshop_cell) and is_same(run.towers[controller_workshop_cell],_controller_tower)
+
+func validate_controller_context() -> bool:
+	if controller_workshop_cell < 0: return false
+	if controller_context_active(): return true
+	cancel_controller_context(true)
+	return false
+
+func cancel_controller_context(refresh_ui: bool = false) -> void:
+	var was_picker := controller_picker_slot >= 0
+	controller_workshop_cell = -1
+	controller_picker_slot = -1
+	controller_context_phase = ""
+	_controller_focus_id = ""
+	_controller_tower = {}
+	_controller_picker_count = -1
+	if is_instance_valid(_shell): _shell.set_meta("controller_module_picker",false)
+	if was_picker: current_panel = "tower"
+	if refresh_ui and _opened:
+		refresh(false)
+		_focus_current.call_deferred()
+
+func open_controller_workshop(cell: int, focus_slot: int = -1) -> void:
+	if not run._gear_phase() or not run.towers.has(cell): return
+	controller_workshop_cell = cell
+	controller_picker_slot = -1
+	controller_context_phase = str(run.phase)
+	_controller_tower = run.towers[cell]
+	_controller_picker_count = -1
+	var used: int = run.towers[cell].attachments.size()
+	var slot: int = focus_slot if focus_slot >= 0 and focus_slot < 5 else used
+	_controller_focus_id = "slot:%d" % slot if slot < 5 else "close"
+	_armed_id = ""
+	open_panel("tower",cell,true)
+
+func open_controller_picker(slot: int) -> void:
+	if not validate_controller_context(): return
+	var used: int = run.towers[controller_workshop_cell].attachments.size()
+	if slot < used or slot >= 5: return
+	controller_picker_slot = slot
+	_controller_picker_count = used
+	var available := _controller_modules()
+	_controller_focus_id = "item:" + str(available[0].id) if not available.is_empty() else "upgrade:back"
+	open_panel("bag",controller_workshop_cell,true)
+
+func controller_back() -> bool:
+	if not validate_controller_context(): return false
+	if controller_picker_slot >= 0: open_controller_workshop(controller_workshop_cell,controller_picker_slot)
+	else: close_panel()
+	return true
+
+func _controller_modules() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for item: Dictionary in run.items:
+		if str(item.get("type","")) == "attachment": result.append(item)
+	# Stable ties keep the focused choice predictable after inventory changes.
+	result.sort_custom(func(a,b):
+		var ar: int = Loot.rarity_index(str(a.get("rarity","common")))
+		var br: int = Loot.rarity_index(str(b.get("rarity","common")))
+		if ar != br: return ar > br
+		if str(a.kind) != str(b.kind): return str(a.kind) < str(b.kind)
+		if float(a.get("power",1)) != float(b.get("power",1)): return float(a.get("power",1)) > float(b.get("power",1))
+		return int(a.id) < int(b.id)
+	)
+	return result
+
+func _choose_controller_module(item_id: String) -> void:
+	if not validate_controller_context() or controller_picker_slot < 0: return
+	var cell := controller_workshop_cell
+	if run.towers[cell].attachments.size() != _controller_picker_count or _controller_picker_count >= 5:
+		open_controller_workshop(cell)
+		return
+	var result: Dictionary = run.equip_item(cell,item_id)
+	_message = str(result.get("message",""))
+	changed.emit(result)
+	if bool(result.get("ok",false)): controller_module_equipped.emit(cell)
+
+func _controller_picker_panel(content: VBoxContainer) -> void:
+	_note(content,"Fit a module to tower %d / R%d C%d" % [int(run.towers[controller_workshop_cell].number),controller_workshop_cell/9+1,controller_workshop_cell%9+1],MINT)
+	_note(content,"A equips once. B returns to this tower. LB / RB choose another tower.")
+	var back := _button("Back to tower",controller_back,false,false,42,"upgrade:back")
+	content.add_child(back)
+	var available := _controller_modules()
+	if available.is_empty():
+		_note(content,"No modules available. Open earned chests to find more. Single-use boosts cannot fill a socket.",GOLD)
+		return
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grid.add_theme_constant_override("h_separation",7)
+	grid.add_theme_constant_override("v_separation",9)
+	content.add_child(grid)
+	for item: Dictionary in available:
+		var id := str(item.id)
+		var card: Button = Card.new()
+		card.configure(item,false,true,true,_recent_item_ids.has(id))
+		for text in card.find_children("*","Label",true,false):
+			if text.text == "A SELECT": text.text = "A EQUIP"
+		card.pressed.connect(func(): _choose_controller_module(id))
+		grid.add_child(card)
 
 func set_reduced_motion(value: bool) -> void:
 	reduced_motion = value
@@ -174,7 +283,8 @@ func _build_shell() -> void:
 	_body = outer
 	_apply_layout()
 
-func open_panel(kind: String, cell: int = -1) -> void:
+func open_panel(kind: String, cell: int = -1, preserve_controller_context: bool = false) -> void:
+	if not preserve_controller_context: cancel_controller_context()
 	current_panel = kind
 	if is_instance_valid(_scroll): _scroll.scroll_vertical = 0
 	if cell >= 0: selected_cell = cell
@@ -190,10 +300,12 @@ func open_panel(kind: String, cell: int = -1) -> void:
 func _focus_current() -> void:
 	if _opened and is_instance_valid(_focus_target) and _focus_target.is_inside_tree():
 		_focus_target.grab_focus()
+		if str(_focus_target.get_meta("focus_id","")) == _controller_focus_id: _controller_focus_id = ""
 		if is_instance_valid(_scroll) and _scroll.is_ancestor_of(_focus_target):
 			_scroll.ensure_control_visible.call_deferred(_focus_target)
 
 func close_panel(preserve_armed: bool = false) -> void:
+	cancel_controller_context()
 	_clear_family_preview()
 	_opened = false
 	visible = false
@@ -226,6 +338,8 @@ func clear_armed() -> void:
 
 func refresh(preserve_focus: bool = true) -> void:
 	if not _opened or run == null: return
+	if controller_workshop_cell >= 0 and not controller_context_active(): cancel_controller_context()
+	_shell.set_meta("controller_module_picker",controller_picker_slot >= 0)
 	_clear_family_preview()
 	var old_scroll: int = _scroll.scroll_vertical if is_instance_valid(_scroll) else 0
 	var focus_owner: Control = get_viewport().gui_get_focus_owner()
@@ -325,7 +439,9 @@ func refresh(preserve_focus: bool = true) -> void:
 		_scroll.add_child(content)
 		match current_panel:
 			"tower": _tower_panel(content)
-			"bag": _bag_panel(content)
+			"bag":
+				if controller_context_active() and controller_picker_slot >= 0: _controller_picker_panel(content)
+				else: _bag_panel(content)
 			"camp": _camp_panel(content)
 		if _portrait: _apply_touch_sizes(_body)
 		_scroll.set_deferred("scroll_vertical", old_scroll)
@@ -346,6 +462,12 @@ func refresh(preserve_focus: bool = true) -> void:
 			var controls: Array[Control] = _focusable_buttons()
 			if not controls.is_empty(): _focus_target = controls[mini(old_focus_index, controls.size() - 1)]
 		_focus_current.call_deferred()
+	if not _controller_focus_id.is_empty():
+		for candidate in _focusable_buttons():
+			if str(candidate.get_meta("focus_id","")) == _controller_focus_id:
+				_focus_target = candidate
+				_focus_current.call_deferred()
+				break
 
 func _focusable_buttons() -> Array[Control]:
 	var controls: Array[Control] = []
@@ -460,14 +582,18 @@ func _socket_strip(content: VBoxContainer, cell: int) -> void:
 			visual.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 			socket.add_child(visual)
 			socket.tooltip_text = Card.effect_name(module) + "\n" + Card._short_stat(module) + "\nSelect to remove · drag another module here to swap"
-			socket.pressed.connect(func(): _act("unequip_item",[cell,slot]))
+			socket.pressed.connect(func():
+				if controller_context_active(): _controller_focus_id = "slot:%d" % (run.towers[cell].attachments.size()-1)
+				_act("unequip_item",[cell,slot])
+			)
 		else:
 			socket.text = "+"
 			socket.add_theme_font_size_override("font_size",22)
 			socket.add_theme_color_override("font_color",MINT if not _armed_id.is_empty() else MUTED)
 			socket.tooltip_text = "Empty slot %d / 5" % (slot+1)
 			socket.pressed.connect(func():
-				if not _armed_id.is_empty(): _act("equip_item",[cell,_armed_id])
+				if controller_context_active(): open_controller_picker(slot)
+				elif not _armed_id.is_empty(): _act("equip_item",[cell,_armed_id])
 				else: open_panel("bag",cell)
 			)
 		socket.module_dropped.connect(func(id):
