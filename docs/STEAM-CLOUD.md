@@ -1,6 +1,6 @@
 # Steam Cloud save design
 
-This describes the 0.3.19 candidate. Source changes and synthetic tests do not
+This describes the 0.3.19 integration and the local 0.3.20 migration fix. Source changes and synthetic tests do not
 establish that Steamworks settings were published or that two real devices
 synchronized. The delivery receipt must state those separately.
 
@@ -42,16 +42,22 @@ byte-for-byte. Existing scoped files take precedence and are never replaced by
 an older legacy file. Achievement confirmations are cleared on migration so the
 current account must acknowledge them again.
 
-After each verified copy commits, an unsynchronized device-local claim records
-which account received that legacy file. Another Steam account cannot import the
-same legacy progress. If interruption occurs between copy and claim, the next
-launch finishes the claim from the verified copy's migration evidence. An I/O
-failure blocks startup of that profile with a visible error; it does not delete
-either original or copy.
+Before the first copy commits, an unsynchronized device-local claim reserves
+the legacy progress for the verified account. Its source map is initially empty;
+each verified copy then adds its completed source hash. Another Steam account
+cannot import the same legacy progress, including when it launches first after
+an interrupted migration. The reserved owner can retry a failed copy. If a copy
+committed before its completion record, that account's next launch finishes the
+record from the copy's migration evidence. An I/O failure blocks startup of that
+profile with a visible error; it does not delete either original or copy.
 
 Returning to 0.3.18 leaves the new scoped files intact, but that older executable
 reads the untouched legacy save from before migration. Returning to 0.3.19 reads
-the scoped progress again. Do not copy cloud files over legacy files as an
+the scoped progress again after a completed migration. If 0.3.20 stopped after
+reserving ownership but before any copy completed, 0.3.19 safely blocks on that
+empty-source claim; finish migration in 0.3.20 before rollback. Existing orphan
+copies created by 0.3.19 without a claim are not retroactively discovered when
+a different account launches first. Do not copy cloud files over legacy files as an
 automatic rollback step.
 
 ## Interrupted writes and conflicting progress

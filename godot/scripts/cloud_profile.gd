@@ -65,6 +65,11 @@ func _migrate_file(kind: String, legacy, destination, claim, steam_id: String) -
 		return unchanged
 	# An explicitly owned profile cannot transfer its unlocks to another user.
 	if kind == "achievements" and str(original.data.account_id) not in ["", steam_id]: return unchanged
+	# Reserve this device's legacy progress before publishing any account copy.
+	# The next launch may belong to another account after an interrupted copy;
+	# an empty sources map means ownership is reserved, not migration complete.
+	if claimed.is_empty() and not _write_claim(claim, steam_id, sources):
+		return _error_from(claim.last_error, unchanged)
 	var source_hash := str(original.text).sha256_text()
 	var migrated: Dictionary = original.data.duplicate(true)
 	migrated["_steam_migration"] = {"owner": steam_id, "kind": kind, "source_sha256": source_hash}
@@ -90,7 +95,7 @@ func _write_claim(claim, steam_id: String, sources: Dictionary) -> bool:
 
 func _valid_claim(data: Dictionary) -> bool:
 	if not _valid_steam_id(str(data.get("owner", ""))) or not data.get("sources") is Dictionary: return false
-	if data.sources.is_empty() or data.sources.size() > 2: return false
+	if data.sources.size() > 2: return false
 	for kind: Variant in data.sources:
 		if kind not in ["run", "achievements"] or not _valid_hash(str(data.sources[kind])): return false
 	return true

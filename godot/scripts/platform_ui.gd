@@ -10,6 +10,11 @@ func _text(box: VBoxContainer, value: String, color: Color, size: int = 17) -> L
 
 func _back(box: VBoxContainer, id: String = "platform:back") -> Button:
 	var button: Button = host.button("Back",host._platform_back,true)
+	# ScrollContainer clips at its boundary; keep the whole focus ring inside
+	# the Back control even when it is the first or last visible list action.
+	var focus: StyleBoxFlat = button.get_theme_stylebox("focus").duplicate()
+	focus.set_expand_margin_all(0)
+	button.add_theme_stylebox_override("focus",focus)
 	button.set_meta("focus_id",id)
 	box.add_child(button)
 	return button
@@ -27,7 +32,7 @@ func show_achievements() -> void:
 	if not host.cloud_profile_status.get("scoped",false):
 		status = "Local achievements. Launch from Steam to use your Steam account."
 	elif pending > 0:
-		status = "%d unlocks waiting for Steam confirmation. You can keep playing offline." % pending
+		status = "%d %s waiting for Steam confirmation. You can keep playing offline." % [pending,"unlock" if pending == 1 else "unlocks"]
 	elif platform.get("ready",false):
 		status = "Saved unlocks are confirmed by Steam."
 	_text(box,status,host.MUTED,16)

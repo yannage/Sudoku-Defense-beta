@@ -558,15 +558,18 @@ func _layout_ui() -> void:
 			_place(hud_nodes.camp,Rect2(w-180,200,160,50)); _font(hud_nodes.camp,21)
 			_place(hud_nodes.camera,Rect2(w-180,260,160,50)); _font(hud_nodes.camera,21)
 			_place(hud_nodes.camera_reset,Rect2(w-180,320,160,50)); _font(hud_nodes.camera_reset,21)
-			_place(hud_nodes.bottom,Rect2(0,h-80,w,80))
+			# The 29px number font needs 61px with the button's vertical padding.
+			# Reserve a separate hint row instead of letting that minimum height
+			# grow into it when the requested button height is only 50px.
+			_place(hud_nodes.bottom,Rect2(0,h-96,w,96))
 			for i in range(9):
-				_place(number_buttons[i],Rect2(20+i*61,h-70,54,50)); _font(number_buttons[i],29)
-			_place(hud_nodes.speed,Rect2(w-418,h-70,74,50)); _font(hud_nodes.speed,22)
-			_place(next_button,Rect2(w-326,h-70,304,50)); _font(next_button,21)
+				_font(number_buttons[i],29); _place(number_buttons[i],Rect2(20+i*61,h-86,54,62))
+			_font(hud_nodes.speed,22); _place(hud_nodes.speed,Rect2(w-418,h-86,74,62))
+			_font(next_button,21); _place(next_button,Rect2(w-326,h-86,304,62))
 			_place(controls_label,Rect2(20,h-19,680,17))
 			_place(pause_label,Rect2(260,68,w-480,28)); _font(pause_label,16)
 			_place(notice,Rect2(18,270,188,158)); _font(notice,18)
-			board_rect = Rect2(218,80,w-(578 if open else 406),h-170)
+			board_rect = Rect2(218,80,w-(578 if open else 406),h-186)
 	if world.has_method("set_board_rect"): world.set_board_rect(board_rect)
 	if dock != null and dock.has_method("set_layout"):
 		dock.set_layout(layout_size,portrait_layout,board_rect.end.y)
@@ -587,7 +590,7 @@ func _refresh_portrait_text() -> void:
 	match run.phase:
 		"solve": phase_detail.text = "SOLVE  %02d:%02d" % [int(run.timer)/60,int(run.timer)%60]
 		"prep": phase_detail.text = "PREPARE"
-		"battle": phase_detail.text = "CLEANUP 8x · %d left" % _wave_enemies_remaining() if cleanup_fast else "DEFEND · %d enemies left" % _wave_enemies_remaining()
+		"battle": phase_detail.text = "CLEANUP 8x · %d left" % _wave_enemies_remaining() if cleanup_fast else "DEFEND · %d %s left" % [_wave_enemies_remaining(),"enemy" if _wave_enemies_remaining() == 1 else "enemies"]
 		"loot": phase_detail.text = "LOOT"
 		_: phase_detail.text = "RUN COMPLETE"
 	if selected_cell >= 0:
@@ -744,7 +747,7 @@ func _refresh() -> void:
 	var count: int = run.towers.size()
 	match run.phase:
 		"solve":
-			phase_detail.text = "PLANT YOUR DEFENSE\n\n%d towers grown\n%02d:%02d remaining" % [count,int(run.timer)/60,int(run.timer)%60]
+			phase_detail.text = "PLANT YOUR DEFENSE\n\n%d %s grown\n%02d:%02d remaining" % [count,"tower" if count == 1 else "towers",int(run.timer)/60,int(run.timer)%60]
 			progress.value = 100.0*run.timer/maxf(1,run.solve_duration)
 			next_button.text = "Prepare defense"
 		"prep":
@@ -753,9 +756,9 @@ func _refresh() -> void:
 			progress.value = 100
 			next_button.text = "Launch wave"
 		"battle":
-			phase_detail.text = "HOLD THE LINE\n\n%d / %d enemies left\n%d towers active\n%d corruption" % [_wave_enemies_remaining(),run.spawn_total,count,run.corruption]
+			phase_detail.text = "HOLD THE LINE\n\n%d / %d %s left\n%d %s active\n%d corruption" % [_wave_enemies_remaining(),run.spawn_total,"enemy" if _wave_enemies_remaining() == 1 else "enemies",count,"tower" if count == 1 else "towers",run.corruption]
 			if _cleanup_available():
-				phase_detail.text = "WAVE CLEANUP\n\n%d enemies on route\n%s\nAll enemies speed up." % [run.enemies.size(),"Fast-forward active: 8x" if cleanup_fast else "Optional fast-forward: 8x"]
+				phase_detail.text = "WAVE CLEANUP\n\n%d %s on route\n%s\nAll enemies speed up." % [run.enemies.size(),"enemy" if run.enemies.size() == 1 else "enemies","Fast-forward active: 8x" if cleanup_fast else "Optional fast-forward: 8x"]
 			progress.value = 100.0*(run.spawn_total-_wave_enemies_remaining())/maxi(1,run.spawn_total)
 			next_button.text = ("Stop fast-forward" if cleanup_fast else "Fast-forward 8x") if _cleanup_available() else "Wave in progress"
 		"loot":

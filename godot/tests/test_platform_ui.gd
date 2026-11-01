@@ -24,6 +24,13 @@ class DisplayPlatform:
 	func shutdown() -> void: pass
 	func pump(_delta: float) -> void: pass
 
+class DisplayAchievements:
+	extends RefCounted
+	var pending := 1
+	func get_status() -> Dictionary:
+		return {"pending_count": pending, "unlocked_count": pending}
+	func entries() -> Array[Dictionary]: return []
+
 func _initialize() -> void:
 	Engine.max_fps = 120
 	rendered = "--render-check" in OS.get_cmdline_user_args()
@@ -82,6 +89,18 @@ func focus_visible(context: String) -> void:
 	while parent != null:
 		if parent is ScrollContainer:
 			check(parent.get_global_rect().grow(2).encloses(control.get_global_rect()), context + ": focused action is scrolled into view")
+		parent = parent.get_parent()
+
+func focus_outline_visible(context: String) -> void:
+	var control: Button = root.gui_get_focus_owner()
+	check(is_instance_valid(control), context + ": focused Back exists")
+	if not is_instance_valid(control): return
+	var focus: StyleBoxFlat = control.get_theme_stylebox("focus")
+	var outline := control.get_global_rect().grow_individual(focus.expand_margin_left,focus.expand_margin_top,focus.expand_margin_right,focus.expand_margin_bottom)
+	var parent := control.get_parent()
+	while parent != null:
+		if parent is ScrollContainer:
+			check(parent.get_global_rect().encloses(outline), context + ": entire focus outline fits inside scroll clipping bounds")
 		parent = parent.get_parent()
 
 func make_scene() -> void:
@@ -213,6 +232,7 @@ func gameplay_and_practice() -> void:
 
 func achievement_navigation() -> void:
 	check(texts().contains("D-pad / left stick: scroll"), "Achievement list explains controller scrolling")
+	focus_outline_visible("achievement top")
 	var scroll: ScrollContainer = scene.overlay.find_children("*", "ScrollContainer", true, false)[0]
 	var limit := int(scroll.get_v_scroll_bar().max_value-scroll.size.y)
 	check(limit > scroll.size.y and scroll.scroll_vertical == 0, "Achievement list starts at its top and spans multiple screens")
@@ -223,6 +243,7 @@ func achievement_navigation() -> void:
 		if scroll.scroll_vertical >= limit: break
 		await press(JOY_BUTTON_DPAD_DOWN)
 	check(scroll.scroll_vertical >= limit and focused_id() == "platform:back_bottom", "Repeated Down reaches the bottom with a useful Back action")
+	focus_outline_visible("achievement bottom")
 	var last_card: Control
 	for node in scene.overlay.find_children("*", "PanelContainer", true, false):
 		if node.has_meta("achievement_id"): last_card = node
@@ -242,6 +263,7 @@ func achievement_navigation() -> void:
 		if scroll.scroll_vertical == 0: break
 		await press(JOY_BUTTON_DPAD_UP)
 	check(scroll.scroll_vertical == 0 and focused_id() == "platform:back", "Repeated Up returns to the top Back action")
+	focus_outline_visible("achievement return to top")
 	await press(JOY_BUTTON_A)
 	check(button_named("Resume run") != null, "A on achievement Back returns to pause")
 	button_named("Achievements").pressed.emit()
@@ -297,6 +319,17 @@ func panels() -> void:
 	await frames()
 	check(texts().contains("wait for Steam to report Up to date") and texts().contains("Suspend does not promise"), "Enabled Cloud status explains actual session boundaries")
 	await capture("cloud-status-mock-deck")
+	var saved_profile = scene.achievements
+	var display_profile := DisplayAchievements.new()
+	scene.achievements = display_profile
+	scene.platform_ui.show_achievements()
+	await frames()
+	check(texts().contains("1 unlock waiting for Steam confirmation"), "A single pending unlock uses singular copy")
+	display_profile.pending = 2
+	scene.platform_ui.show_achievements()
+	await frames()
+	check(texts().contains("2 unlocks waiting for Steam confirmation"), "Multiple pending unlocks use plural copy")
+	scene.achievements = saved_profile
 	scene.platform_ui.show_achievements()
 	await frames()
 	check(texts().contains("waiting for Steam confirmation"), "Scoped pending unlock count remains explicit")

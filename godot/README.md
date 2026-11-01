@@ -4,6 +4,13 @@ A native Godot 4.7.2 version of the pre-Unity Sudoku Defense game. The same GDSc
 
 ## Play
 
+Local candidate **0.3.20** fixes narrow landscape footer spacing, achievement
+Back focus outlines, singular count text, and migration ownership if the first
+Steam-account copy is interrupted. It retains 0.3.19's 26 achievements and
+account-specific Cloud save integration. See
+[the local candidate record](../docs/ITERATION-0.3.20.md) for validation and
+remaining device acceptance. It has not been uploaded or activated on Steam.
+
 Version **0.3.18** offers **Fast-forward 8x** once a wave has run for 45 battle
 seconds and all enemies have spawned. Tap the phase button or press **Y / Enter**
 to toggle it; **B** also stops it. The HUD shows how many enemies remain. Enemies
@@ -55,7 +62,7 @@ Open the published Godot edition in a current WebGL 2 browser. Version 0.3.11 ad
 
 The browser export now projects the voxel board and animated chests with ordinary Godot CanvasItem polygons. This bypasses the entire spatial rendering pass that continued to show black on the affected phone, even with simpler materials. The same GDScript run drives tower growth, aiming, routes, equipment, combat, and loot. Desktop builds retain the native 3D scene; pass `--canvas-graphics` to use the browser's compatible voxel view on desktop. The older `--safe-graphics` option only simplifies desktop 3D materials and is no longer the web default. The exact phone still needs a retest; local framebuffer checks cannot establish its GPU behavior.
 
-The browser game saves automatically on that browser/device. Desktop builds save through Godot's `user://` storage. Browser and desktop saves do not synchronize. Steam Cloud and Steam achievements are not integrated in this version.
+The browser game saves automatically on that browser/device. Desktop builds save through Godot's `user://` storage. Browser and desktop saves do not synchronize. Native builds launched through Steam support account-specific Cloud saves and 26 achievements; direct local launches remain local. Actual Steam unlocks and two-device sync still require acceptance testing.
 
 ## The loop
 

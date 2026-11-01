@@ -38,7 +38,7 @@ func frames(count := 4) -> void:
 		await process_frame
 		if rendered: RenderingServer.force_draw(false)
 
-func press(index: int) -> void:
+func press(index: int, held_frames := 1) -> void:
 	for down in [true,false]:
 		var event := InputEventJoypadButton.new()
 		event.device = DEVICE
@@ -46,7 +46,7 @@ func press(index: int) -> void:
 		event.pressed = down
 		Input.parse_input_event(event)
 		Input.flush_buffered_events()
-		await frames(1 if down else 4)
+		await frames(held_frames if down else 4)
 
 func focused_id() -> String:
 	var control: Control = root.gui_get_focus_owner()
@@ -265,6 +265,38 @@ func sockets_and_removal() -> void:
 	check(scene.run.towers[40].attachments.size() == 2 and str(scene.run.towers[40].attachments.back().id) == chosen,"A on the emptied socket supports replacement without dragging")
 	check(all_module_ids() == before,"Remove and replace preserve all module IDs")
 
+func held_actions_and_context_wrap() -> void:
+	group = "held actions and chooser wrap"
+	await fixture([40,2,18,79],3)
+	fill(18,5)
+	var before := all_module_ids()
+	var credits: int = scene.run.credits
+	# Keep the native button down longer than navigation's initial-repeat delay.
+	# A held confirm must not pass through each replacement UI to the board.
+	await press(JOY_BUTTON_A,50)
+	check(scene.dock.controller_context_active() and scene.dock.controller_picker_slot == -1 and focused_id() == "slot:0","Held A opens only the workshop, without entering the newly focused socket")
+	await press(JOY_BUTTON_A,50)
+	check(scene.dock.controller_picker_slot == 0 and focused_id().begins_with("item:"),"Second held A opens only the chooser")
+	check(scene.run.towers[40].attachments.is_empty() and all_module_ids() == before,"Holding or releasing A while opening the chooser cannot equip")
+	# Starting at tower 40, cross both row-major endpoints inside the chooser.
+	for step in [[JOY_BUTTON_RIGHT_SHOULDER,79],[JOY_BUTTON_RIGHT_SHOULDER,2],[JOY_BUTTON_LEFT_SHOULDER,79],[JOY_BUTTON_LEFT_SHOULDER,40]]:
+		await press(step[0],50)
+		check(scene.selected_cell == step[1] and scene.dock.controller_workshop_cell == step[1] and scene.dock.controller_picker_slot == -1,"Held chooser bumper makes one eligible-tower step with endpoint wrap")
+		check(focused_id() == "slot:0","Chooser bumper restores the destination's first empty socket")
+		await enter_picker()
+	await press(JOY_BUTTON_B,50)
+	check(scene.dock.controller_context_active() and scene.dock.controller_picker_slot == -1 and focused_id() == "slot:0","Held B returns only to the originating socket")
+	check(scene.run.towers[40].attachments.is_empty() and all_module_ids() == before,"Held cancel leaves every module unchanged")
+	await enter_picker()
+	var chosen := focused_id().trim_prefix("item:")
+	await press(JOY_BUTTON_A,50)
+	check(scene.run.towers[40].attachments.size() == 1 and str(scene.run.towers[40].attachments[0].id) == chosen,"Held A confirms exactly the highlighted module once")
+	check(not scene.dock.is_open() and scene.selected_cell == 2 and scene.run.towers[2].attachments.is_empty(),"Held equip cannot open or act on the next eligible tower")
+	await enter_socket(0)
+	await press(JOY_BUTTON_B,50)
+	check(not scene.dock.is_open() and not scene.menu_open and scene.selected_cell == 2,"Held B closes the workshop without opening a second overlay")
+	check(scene.run.credits == credits and all_module_ids() == before,"Held actions conserve credits and every module ID")
+
 func empty_and_full() -> void:
 	group = "empty inventory and full capacity"
 	for consumable_only in [false,true]:
@@ -473,6 +505,7 @@ func exercise() -> void:
 	await repeated_equipping()
 	await cycle_and_cancel()
 	await sockets_and_removal()
+	await held_actions_and_context_wrap()
 	await empty_and_full()
 	await stale_selections()
 	await save_failure_feedback()

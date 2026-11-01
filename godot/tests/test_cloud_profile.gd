@@ -25,6 +25,14 @@ class UnreadableFile:
 		if path == blocked_path: return {"code": "unreadable_save", "message": "Injected inaccessible committed file"}
 		return super._committed_file_issue(path)
 
+class FailingCompletedClaim:
+	extends "res://scripts/cloud_profile.gd"
+	func _write_claim(claim, steam_id: String, sources: Dictionary) -> bool:
+		if not sources.is_empty():
+			claim.last_error = {"code": "io_error", "message": "Injected interruption after migration copy"}
+			return false
+		return super._write_claim(claim, steam_id, sources)
+
 func _initialize() -> void:
 	call_deferred("exercise")
 
@@ -198,10 +206,39 @@ func exercise() -> void:
 	write_text(failed_claim_root.path_join(Profile.LEGACY_RUN), old_text)
 	DirAccess.make_dir_absolute(failed_claim_root.path_join(Profile.MIGRATION_CLAIM) + ".tmp")
 	var failed_claim: Dictionary = profile.configure(ACCOUNT_A, failed_claim_root)
-	check(not failed_claim.ok and FileAccess.file_exists(failed_claim.run_path), "Claim write failure preserves committed migration and reports blocked startup")
+	check(not failed_claim.ok and not FileAccess.file_exists(failed_claim.run_path), "Ownership reservation failure blocks copying before account progress commits")
 	check(FileAccess.get_file_as_string(failed_claim_root.path_join(Profile.LEGACY_RUN)) == old_text, "Failed claim never changes original run")
 	DirAccess.remove_absolute(failed_claim_root.path_join(Profile.MIGRATION_CLAIM) + ".tmp")
-	check(profile.configure(ACCOUNT_A, failed_claim_root).ok, "Retry finishes failed claim without replacing committed copy")
+	check(profile.configure(ACCOUNT_A, failed_claim_root).ok, "Retry reserves ownership and finishes migration after claim storage recovers")
+	var failed_copy_root := folder.path_join("migration-copy-failure")
+	write_text(failed_copy_root.path_join(Profile.LEGACY_RUN), old_text)
+	var blocked_stage := failed_copy_root.path_join("steam/" + ACCOUNT_A + "/local/staging/run/snapshot.tmp")
+	DirAccess.make_dir_recursive_absolute(blocked_stage)
+	var failed_copy: Dictionary = profile.configure(ACCOUNT_A, failed_copy_root)
+	check(not failed_copy.ok and not FileAccess.file_exists(failed_copy.run_path), "Copy failure leaves no committed account run")
+	var reserved_claim: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(failed_copy_root.path_join(Profile.MIGRATION_CLAIM)))
+	check(reserved_claim.owner == ACCOUNT_A and reserved_claim.sources.is_empty(), "Ownership reservation survives interrupted copy without marking a source complete")
+	check(not profile.configure(ACCOUNT_B, failed_copy_root).migrated, "Another account cannot take over a reserved migration")
+	DirAccess.remove_absolute(blocked_stage)
+	var retried_copy: Dictionary = profile.configure(ACCOUNT_A, failed_copy_root)
+	check(retried_copy.ok and retried_copy.migrated, "Reserved owner retries and completes the previously failed copy")
+	# A different account can be the first launch after a crash. Ownership must
+	# already be durable when the copy commits, even before completion is logged.
+	for kind: String in ["run", "achievements"]:
+		var switched_root := folder.path_join("migration-switch-after-copy-" + kind)
+		var legacy_name := Profile.LEGACY_RUN if kind == "run" else Profile.LOCAL_ACHIEVEMENTS
+		var original_text := old_text if kind == "run" else local_awards
+		write_text(switched_root.path_join(legacy_name), original_text)
+		var interrupted = FailingCompletedClaim.new()
+		var incomplete: Dictionary = interrupted.configure(ACCOUNT_A, switched_root)
+		var copied_path: String = incomplete.run_path if kind == "run" else incomplete.achievement_path
+		check(not incomplete.ok and FileAccess.file_exists(copied_path), kind + " copy commits before injected completion failure")
+		var copied_text := FileAccess.get_file_as_string(copied_path)
+		var switched: Dictionary = profile.configure(ACCOUNT_B, switched_root)
+		var other_path: String = switched.run_path if kind == "run" else switched.achievement_path
+		check(switched.ok and not switched.migrated and not FileAccess.file_exists(other_path), "Account switch after interrupted " + kind + " migration cannot import the first account's legacy progress")
+		check(FileAccess.get_file_as_string(copied_path) == copied_text and FileAccess.get_file_as_string(switched_root.path_join(legacy_name)) == original_text, "Interrupted " + kind + " migration preserves original and committed copy")
+		check(profile.configure(ACCOUNT_A, switched_root).ok, "Original account can complete interrupted " + kind + " claim")
 	print("CLOUD_PROFILE_PASS %d checks / %d failures" % [checks, failures])
 	print("CLOUD_PROFILE_TEST_ROOT " + ProjectSettings.globalize_path(folder))
 	quit(1 if failures else 0)
