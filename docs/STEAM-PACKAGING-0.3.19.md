@@ -7,6 +7,13 @@ runtime. A separate minimal project confirmed this layout on both export
 presets. Browser exports exclude the entire addon and continue using the normal
 single-threaded Web template.
 
+On a fresh checkout the build helper seeds the generated
+`.godot/extension_list.cfg` with GodotSteam's resource path before the first
+editor import, preserving other cached extension entries. GodotSteam requires
+CORE-level initialization at engine startup; discovering it halfway through
+the first filesystem scan can otherwise abort a clean import. This bootstrap
+is idempotent and is also used by CI.
+
 The existing launch names remain `SudokuDefense.exe` and `sudoku-defense` on
 Steam. The downloadable Linux executable remains `sudoku-defense.x86_64`.
 

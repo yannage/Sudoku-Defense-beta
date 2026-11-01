@@ -24,6 +24,25 @@ CHUNK_BYTES = 10 * 1024 * 1024
 STATIC_FILE_LIMIT = 25 * 1024 * 1024
 
 
+def bootstrap_extension_cache(project: Path = PROJECT) -> None:
+    """Load CORE-level GodotSteam at engine startup on a clean checkout.
+
+    Discovery during the editor's first filesystem scan is too late for this
+    extension's initialization level. This is generated cache, not a project
+    export resource; retain any other extension registrations already present.
+    """
+    extension = "res://addons/godotsteam/godotsteam.gdextension"
+    if not (project / extension.removeprefix("res://")).is_file():
+        raise RuntimeError("The pinned GodotSteam extension must exist before importing")
+    cache = project / ".godot/extension_list.cfg"
+    existing = cache.read_text(encoding="utf-8-sig") if cache.exists() else ""
+    if extension in {line.strip() for line in existing.splitlines()}:
+        return
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    separator = "\n" if existing and not existing.endswith("\n") else ""
+    cache.write_text(existing + separator + extension + "\n", encoding="utf-8", newline="\n")
+
+
 def run(command: list[str], log: Path, expected: str | None = None) -> None:
     # UI regressions exercise real save paths. A fresh profile per suite keeps
     # the developer's actual campaign untouched, including journal sidecars.
@@ -210,6 +229,7 @@ def main() -> None:
     downloads.mkdir(parents=True, exist_ok=True)
     # Keep exported data out of subsequent resource scans and native packages.
     (build / ".gdignore").touch()
+    bootstrap_extension_cache()
     if not args.skip_import:
         run([args.godot, "--headless", "--path", str(PROJECT), "--editor", "--import", "--quit"], logs / "import.log")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_run.gd"], logs / "simulation-tests.log", expected="PASS:")

@@ -59,6 +59,39 @@ class DesktopPackagingTests(unittest.TestCase):
             contract.validate_payload(PROJECT, platform, content, version="0.3.19", source_commit=COMMIT)
         staging.validate_executables(self.linux[contract.EXECUTABLES["linux"]], self.windows[contract.EXECUTABLES["windows"]])
 
+    def test_fresh_import_registers_extension_before_engine_launch(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary)
+            extension = project / "addons/godotsteam/godotsteam.gdextension"
+            extension.parent.mkdir(parents=True)
+            extension.touch()
+            build_exports.bootstrap_extension_cache(project)
+            self.assertEqual((project / ".godot/extension_list.cfg").read_text(),
+                             "res://addons/godotsteam/godotsteam.gdextension\n")
+
+    def test_extension_bootstrap_preserves_other_entries_and_is_idempotent(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary)
+            extension = project / "addons/godotsteam/godotsteam.gdextension"
+            extension.parent.mkdir(parents=True)
+            extension.touch()
+            cache = project / ".godot/extension_list.cfg"
+            cache.parent.mkdir()
+            cache.write_text("res://addons/another/another.gdextension")
+            build_exports.bootstrap_extension_cache(project)
+            once = cache.read_bytes()
+            self.assertIn(b"res://addons/another/another.gdextension\n", once)
+            build_exports.bootstrap_extension_cache(project)
+            self.assertEqual(cache.read_bytes(), once)
+            self.assertEqual(once.count(b"res://addons/godotsteam/godotsteam.gdextension"), 1)
+
+    def test_extension_bootstrap_refuses_missing_dependency(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary)
+            with self.assertRaisesRegex(RuntimeError, "must exist"):
+                build_exports.bootstrap_extension_cache(project)
+            self.assertFalse((project / ".godot/extension_list.cfg").exists())
+
     def test_wrong_version_or_commit_rejected(self):
         for options in [{"version": "0.3.18"}, {"source_commit": "b" * 40}]:
             with self.assertRaises(ValueError):
