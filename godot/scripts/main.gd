@@ -564,7 +564,7 @@ func _refresh_portrait_text() -> void:
 	match run.phase:
 		"solve": phase_detail.text = "SOLVE  %02d:%02d" % [int(run.timer)/60,int(run.timer)%60]
 		"prep": phase_detail.text = "PREPARE"
-		"battle": phase_detail.text = "%s · %d left" % ["CLEANUP 8x" if cleanup_fast else "DEFEND",_wave_enemies_remaining()]
+		"battle": phase_detail.text = "CLEANUP 8x · %d left" % _wave_enemies_remaining() if cleanup_fast else "DEFEND · %d enemies left" % _wave_enemies_remaining()
 		"loot": phase_detail.text = "LOOT"
 		_: phase_detail.text = "RUN COMPLETE"
 	if selected_cell >= 0:
