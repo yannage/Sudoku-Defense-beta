@@ -95,7 +95,7 @@ func resolve_merged(data: Dictionary, expected_signature: String) -> bool:
 	if previous.is_empty(): previous = _read_valid(file_path + ".bak")
 	payload["_journal"] = {"version": 1, "parent_sha256": str(previous.text).sha256_text() if not previous.is_empty() else ""}
 	var temporary := file_path + ".tmp" if staging_path.is_empty() else staging_path.path_join("snapshot.tmp")
-	if not _write_guarded(temporary, JSON.stringify(payload), expected_signature): return false
+	if not _write_guarded(temporary, JSON.stringify(payload, "", true, true), expected_signature): return false
 	if not _replace_guarded(temporary, file_path + ".pending", expected_signature):
 		_observe_transaction()
 		return false
@@ -131,7 +131,8 @@ func _write_transaction(data: Dictionary, expected_signature: String) -> bool:
 	previous = _read_best()
 	var parent := str(previous.get("text", "")).sha256_text() if not previous.is_empty() else ""
 	payload["_journal"] = {"version": 1, "parent_sha256": parent}
-	var text := JSON.stringify(payload)
+	# Default JSON rounding can move combat timers across a simulation tick.
+	var text := JSON.stringify(payload, "", true, true)
 	if text.to_utf8_buffer().size() > MAX_BYTES: return _fail("too_large", "Progress exceeds the supported save size. Earlier saved progress has been kept.")
 	var temporary := file_path + ".tmp" if staging_path.is_empty() else staging_path.path_join("snapshot.tmp")
 	var backup_temporary := file_path + ".bak.tmp" if staging_path.is_empty() else staging_path.path_join("backup.tmp")

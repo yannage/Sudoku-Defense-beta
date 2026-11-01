@@ -1,16 +1,18 @@
 # Sudoku Defense
 
-## Current local Godot candidate - 0.3.21
+## Current local Godot candidate - 0.3.22
 
 The maintained game on this branch is **`godot/`**, built with Godot 4.7.2 for
 native Windows, Linux / Steam Deck, and browser play. Start with
 [the Godot README](godot/README.md) and [build instructions](docs/GODOT-BUILDS.md).
 [Play the Godot edition](https://sudoku-defense-godot.yakstudios.chatgpt.site).
 
-The local 0.3.21 candidate fixes account changes during Steam achievement
-reads and external save changes during journal transactions. It adds targeted
-interruption, migration, acknowledgement and complete-practice regressions.
-See [the local candidate record](docs/ITERATION-0.3.21.md).
+The local 0.3.22 candidate preserves combat timer precision when saving and
+recovering a run. A real seeded run exposed a poison tick lost after restarting.
+It adds full Campaign/Locked In resume regressions and documents real gameplay
+witnesses for all 26 achievements. See [the candidate record](docs/ITERATION-0.3.22.md)
+and [progression evidence and acceptance checklist](docs/PROGRESSION-ACCEPTANCE-0.3.22.md).
+It retains [0.3.21's account and journal protections](docs/ITERATION-0.3.21.md).
 It includes [0.3.20's polish and migration ownership fixes](docs/ITERATION-0.3.20.md).
 This remains an unapproved local candidate, with no push, upload or Steam
 activation. The uploaded 0.3.19 candidate remains on safety hold.

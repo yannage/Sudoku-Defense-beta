@@ -293,6 +293,27 @@ func preflight_conflicts() -> void:
 		check(not store.write_run(fixture(109)), entry + " early recovery rejection cannot establish a newer retry baseline")
 		check(FileAccess.get_file_as_string(store.file_path) == store.foreign_text, entry + " early recovery rejection preserves newer original")
 
+func float_precision() -> void:
+	# Actual round-49 poison timer boundary, reduced to a journal payload probe.
+	# Full gameplay reproduction is in test_progression_resume.gd (seed 9137).
+	var precise := 1.6500000000000032
+	for staged: bool in [false, true]:
+		var store = setup("precision-%s" % staged, staged)
+		var data := fixture(102)
+		data.state.battle_time = precise
+		check(store.write_run(data), "Precise timer saves through normal transaction")
+		check(float(fresh(store).read_run().data.state.battle_time) == precise, "Normal journal retains tick-boundary precision")
+		# Recovery must retain precision and archive legacy-format bytes exactly.
+		var legacy_text := JSON.stringify(fixture(103))
+		write_text(store.file_path, legacy_text)
+		var snapshot: Dictionary = store.recovery_snapshot()
+		var originals := saved_bytes(store)
+		check(store.resolve_merged(data, str(snapshot.token)), "Explicit recovery publishes precise selected payload")
+		check(float(fresh(store).read_run().data.state.battle_time) == precise, "Recovery journal retains tick-boundary precision")
+		for suffix: String in originals:
+			check(FileAccess.get_file_as_string(store.last_archive_path.path_join("run.json" + suffix)) == originals[suffix], "Precision recovery archives exact original " + suffix)
+		check(str(fresh(store).read_run().data._journal.parent_sha256) == legacy_text.sha256_text(), "Precise recovery lineage hashes original bytes")
+
 func exercise() -> void:
 	folder = "user://journal-faults-%s-%s" % [OS.get_process_id(), Time.get_ticks_usec()]
 	check(DirAccess.make_dir_recursive_absolute(folder) == OK, "Create isolated fault test root")
@@ -301,6 +322,7 @@ func exercise() -> void:
 		recovery_matrix()
 		schema_and_backup()
 		concurrent_changes()
+		float_precision()
 	preflight_conflicts()
 	print("JOURNAL_FAULTS_PASS %d checks / %d failures" % [checks, failures])
 	print("JOURNAL_FAULTS_TEST_ROOT " + ProjectSettings.globalize_path(folder))

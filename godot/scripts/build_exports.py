@@ -238,6 +238,7 @@ def main() -> None:
         ("test_cloud_profile.gd", "CLOUD_PROFILE_PASS"),
         ("test_migration_faults.gd", "MIGRATION_FAULTS_PASS"),
         ("test_journal_faults.gd", "JOURNAL_FAULTS_PASS"),
+        ("test_progression_resume.gd", "PROGRESSION_RESUME_PASS"),
         ("test_achievement_rules.gd", "ACHIEVEMENT_RULES_PASS"),
         ("test_achievement_profile.gd", "ACHIEVEMENT_PROFILE_PASS"),
         ("test_steam_platform.gd", "STEAM_PLATFORM_TESTS_OK"),
