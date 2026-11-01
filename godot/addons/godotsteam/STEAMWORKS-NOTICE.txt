@@ -1,0 +1,20 @@
+Steamworks runtime redistributables
+
+steam_api64.dll and libsteam_api.so are Valve Corporation's Steamworks SDK
+runtime redistributables, supplied with the official GodotSteam 4.23.2 release
+(Steamworks SDK 1.65). They are not covered by GodotSteam's MIT license.
+
+The Windows redistributable's original version-resource notice reads:
+CompanyName: Valve Corporation
+LegalCopyright: Copyright (C) 2007
+
+Use and redistribution of Valve's runtime are governed by the applicable
+Steamworks SDK and Steam distribution agreements. This attribution does not
+replace those agreements or grant independent rights to redistribute the SDK.
+
+Official SDK and runtime distribution documentation:
+https://partner.steamgames.com/doc/sdk
+https://partner.steamgames.com/doc/sdk/api
+
+The MIT notice for the separate GodotSteam wrapper is in license.md.
+Exact binary provenance and hashes are recorded in dependency-lock.json.

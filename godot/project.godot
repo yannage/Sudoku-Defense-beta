@@ -7,7 +7,7 @@ config/description="Plant answers. Grow a defense. A voxel Sudoku roguelite by Y
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="res://assets/icon.svg"
-config/version="0.3.18"
+config/version="0.3.19"
 
 [display]
 window/size/viewport_width=1280
@@ -39,3 +39,8 @@ theme/default_font_multichannel_signed_distance_field=true
 
 [filesystem]
 import/blender/enabled=false
+
+[steam]
+initialization/app_data/app_id=0
+initialization/processes/initialize_on_startup=false
+initialization/processes/embed_callbacks=false

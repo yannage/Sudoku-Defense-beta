@@ -1,0 +1,53 @@
+api_name (required; must match an api_name from the definitions CSV),field (name or description),english
+SD_FIRST_PLANT,name,A Number Takes Root
+SD_FIRST_PLANT,description,Plant a correct number without using a hint.
+SD_FIRST_UNIT,name,Nine in Line
+SD_FIRST_UNIT,description,"Complete a row, column, or box with a placement of your own."
+SD_FIRST_UPGRADE,name,Growing Stronger
+SD_FIRST_UPGRADE,description,Upgrade a tower.
+SD_FIRST_MODULE,name,Added Potential
+SD_FIRST_MODULE,description,Equip a module on a tower.
+SD_FIRST_CHEST,name,Recovered Supplies
+SD_FIRST_CHEST,description,Open a chest with fragments.
+SD_FIRST_BOOST,name,Timely Intervention
+SD_FIRST_BOOST,description,Use a combat boost during a wave.
+SD_FIRST_CLEAR,name,Holding the Line
+SD_FIRST_CLEAR,description,Clear a wave.
+SD_FIRST_BOSS,name,Giant Answer
+SD_FIRST_BOSS,description,Defeat a boss before it reaches the core.
+SD_ROUND_10,name,Double Digits
+SD_ROUND_10,description,Clear round 10 in Campaign or Locked In.
+SD_ROUND_25,name,Halfway Home
+SD_ROUND_25,description,Clear round 25 in Campaign or Locked In.
+SD_CAMPAIGN_CLEAR,name,Fifty and Standing
+SD_CAMPAIGN_CLEAR,description,Clear all 50 rounds in Campaign or Locked In.
+SD_LOCKED_CLEAR,name,A Promise Kept
+SD_LOCKED_CLEAR,description,Clear all 50 rounds in Locked In.
+SD_FIRST_FAMILY,name,Family Investment
+SD_FIRST_FAMILY,description,Upgrade a number family.
+SD_FAMILY_FIVE,name,Strength in Numbers
+SD_FAMILY_FIVE,description,Raise a number family to level 5.
+SD_TOWER_FIVE,name,A Tower of Your Own
+SD_TOWER_FIVE,description,Raise one tower's individual level to 5.
+SD_FIVE_SOCKETS,name,Fully Fitted
+SD_FIVE_SOCKETS,description,Fill all five module sockets on one tower.
+SD_STACK_MODULES,name,Double Down
+SD_STACK_MODULES,description,Equip two modules of the same kind on one tower.
+SD_THREE_EFFECTS,name,Combined Arms
+SD_THREE_EFFECTS,description,Equip three different module kinds on one tower.
+SD_TARGET_LINEUP,name,Different Priorities
+SD_TARGET_LINEUP,description,Clear a wave with legal towers using all three target priorities.
+SD_NINE_FAMILIES,name,Every Number Counts
+SD_NINE_FAMILIES,description,Clear a wave with a legal tower of every number from 1 to 9.
+SD_HARD_GRID,name,Hard Answers
+SD_HARD_GRID,description,Complete a Hard Sudoku grid.
+SD_NO_HINT_GRID,name,Your Own Reasoning
+SD_NO_HINT_GRID,description,Complete a Sudoku grid without using a hint on that grid.
+SD_BOSS_WAVE_CLEAN,name,Nothing Gets Through
+SD_BOSS_WAVE_CLEAN,description,Clear a boss wave without any enemies reaching the core.
+SD_CORRUPT_CLEAR,name,Controlled Chaos
+SD_CORRUPT_CLEAR,description,Clear a wave after planting at least three illegal emergency towers in it.
+SD_UNFINISHED_CLEAR,name,Enough to Defend
+SD_UNFINISHED_CLEAR,description,Clear a wave with the Sudoku grid still incomplete.
+SD_CLEAN_CAMPAIGN,name,By the Rules
+SD_CLEAN_CAMPAIGN,description,Clear all 50 rounds in Campaign or Locked In without planting an illegal emergency tower.

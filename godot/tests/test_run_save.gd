@@ -127,6 +127,7 @@ func exercise() -> void:
 	for suffix in [".bak.tmp", ".tmp", ".pending"]:
 		clear_snapshots()
 		write_text(path, old_text)
+		broken.read_run() # Each injected disk fixture is a fresh loaded session.
 		broken.fail_suffix = suffix
 		check(not broken.write_run(second.save_data()), "Rename failure at %s is reported" % suffix)
 		check(seed_of(store) == (4502 if suffix == ".pending" else 4501), "Rename failure leaves the correct committed run recoverable")
@@ -134,6 +135,7 @@ func exercise() -> void:
 		check(broken.write_run(first.save_data()), "Retry succeeds after rename failure")
 	# Mid-battle replay keeps RNG, ownership, enemy and timer state intact.
 	clear_snapshots()
+	store.read_run() # Adopt the explicitly cleared fixture before starting it.
 	for cell in range(81):
 		if first.board[cell] == 0: first.place(cell, first.solution[cell])
 		if first.towers.size() == 8: break
@@ -153,6 +155,9 @@ func exercise() -> void:
 	root.size = Vector2i(1280, 800)
 	var scene = load("res://scenes/main.tscn").instantiate()
 	scene.run_save.file_path = folder + "/missing/run.json"
+	# Platform profile setup may create the parent; block the actual staging
+	# file so this still tests a real write failure independently of setup.
+	DirAccess.make_dir_recursive_absolute(scene.run_save.file_path + ".tmp")
 	scene.preferences.file_path = folder + "/settings.json"
 	root.add_child(scene)
 	await process_frame

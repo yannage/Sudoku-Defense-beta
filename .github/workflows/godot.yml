@@ -3,10 +3,10 @@ name: Build Sudoku Defense Godot
 on:
   push:
     branches: [godot-deck-edition]
-    paths: ['godot/**', '.github/workflows/godot.yml']
+    paths: ['godot/**', 'steam/**', 'tests/test_desktop_package.py', '.github/workflows/godot.yml']
     tags: ['godot-v*']
   pull_request:
-    paths: ['godot/**', '.github/workflows/godot.yml']
+    paths: ['godot/**', 'steam/**', 'tests/test_desktop_package.py', '.github/workflows/godot.yml']
   workflow_dispatch:
 
 permissions:
@@ -42,7 +42,9 @@ jobs:
           mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
           mv templates/* "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
       - name: Import, export, validate Linux boot, and package
-        run: python3 godot/scripts/build_exports.py --render-check
+        run: |
+          python3 -m unittest discover -s tests -p test_desktop_package.py
+          python3 godot/scripts/build_exports.py --render-check
       - uses: actions/upload-artifact@v4
         with:
           name: Sudoku-Defense-Godot-Web
@@ -69,6 +71,7 @@ jobs:
             godot/build/controller-number-checks/
             godot/build/controller-upgrade-checks/
             godot/build/loot-gear-checks/
+            godot/build/platform-ui-checks/
           retention-days: 14
 
   windows-smoke:
@@ -91,7 +94,17 @@ jobs:
           $exe = Join-Path $folder 'SudokuDefense.exe'
           $version = [regex]::Match((Get-Content godot/project.godot -Raw), '(?m)^config/version="([^"]+)"\r?$').Groups[1].Value
           if (-not $version) { throw 'Missing application version' }
-          $process = Start-Process -FilePath $exe -WorkingDirectory $folder -ArgumentList @('--headless', '--audio-driver', 'Dummy', '--quit-after', '120', '--log-file', 'windows-smoke.log', '--', '--smoke-test') -Wait -PassThru
+          $testProfile = Join-Path $env:RUNNER_TEMP 'sudoku-windows-smoke-profile'
+          New-Item -ItemType Directory -Force -Path $testProfile | Out-Null
+          $env:APPDATA = $testProfile
+          $env:LOCALAPPDATA = $testProfile
+          $metadata = Get-Content (Join-Path $folder 'BUILD-METADATA-windows.json') -Raw | ConvertFrom-Json
+          if ($metadata.source_commit -ne '${{ github.sha }}' -or $metadata.game_version -ne $version) { throw 'Windows package metadata belongs to another source or version' }
+          foreach ($entry in $metadata.files.PSObject.Properties) {
+            $filePath = Join-Path $folder $entry.Name
+            if ((Get-FileHash $filePath -Algorithm SHA256).Hash.ToLowerInvariant() -ne $entry.Value.sha256 -or (Get-Item $filePath).Length -ne $entry.Value.bytes) { throw "Windows payload changed: $($entry.Name)" }
+          }
+          $process = Start-Process -FilePath $exe -WorkingDirectory $folder -WindowStyle Hidden -ArgumentList @('--headless', '--audio-driver', 'Dummy', '--quit-after', '120', '--log-file', 'windows-smoke.log', '--', '--smoke-test', '--no-steam') -Wait -PassThru
           $log = Get-Content (Join-Path $folder 'windows-smoke.log') -Raw
           Write-Host $log
           if ($process.ExitCode -ne 0 -or $log -match 'ERROR:|Parse Error:' -or -not $log.Contains("SUDOKU_DEFENSE_READY version=$version")) {
@@ -104,6 +117,9 @@ jobs:
             executable_sha256 = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
             archive_sha256 = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
             ready_marker = "SUDOKU_DEFENSE_READY version=$version"
+            steam_initialization = 'disabled'
+            isolated_profile = $true
+            runtime_files = $metadata.files
           } | ConvertTo-Json | Set-Content windows-startup-validation.json
       - uses: actions/upload-artifact@v4
         if: always()

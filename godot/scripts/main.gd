@@ -19,6 +19,10 @@ const PreferencesScript = preload("res://scripts/preferences.gd")
 const FirstRoundGuide = preload("res://scripts/first_round_guide.gd")
 const RunSaveScript = preload("res://scripts/run_save.gd")
 const StrategyFeedback = preload("res://scripts/strategy_feedback.gd")
+const SteamPlatform = preload("res://scripts/steam_platform.gd")
+const CloudProfile = preload("res://scripts/cloud_profile.gd")
+const AchievementProfile = preload("res://scripts/achievement_profile.gd")
+const PlatformUI = preload("res://scripts/platform_ui.gd")
 const INK := Color("0a1722")
 const PANEL := Color("112634")
 const MINT := Color("83e7c1")
@@ -50,6 +54,14 @@ var board_notes := true
 var preferences = PreferencesScript.new()
 var tutorial = FirstRoundGuide.new()
 var run_save = RunSaveScript.new()
+var steam_platform
+var cloud_profile = CloudProfile.new()
+var achievements = AchievementProfile.new()
+var platform_ui = PlatformUI.new()
+var cloud_profile_status: Dictionary = {}
+var achievement_save_failed := false
+var _profile_base := "user://"
+var _injected_run_path := ""
 var save_failed := false
 var save_recovered := false
 var game_speed := 1.0
@@ -105,6 +117,17 @@ const CAMERA_SPEED := 1.65
 
 func _ready() -> void:
 	get_tree().auto_accept_quit = false
+	# Existing scene tests explicitly inject a run path before entering the
+	# tree. Keep every new platform file inside that same isolated fixture.
+	if run_save.file_path != "user://sudoku-defense-run.json":
+		_injected_run_path = run_save.file_path
+		_profile_base = _injected_run_path + ".profile"
+		DirAccess.make_dir_recursive_absolute(_profile_base)
+	steam_platform = SteamPlatform.new()
+	add_child(steam_platform)
+	var platform_status: Dictionary = steam_platform.initialize()
+	_configure_profiles(platform_status)
+	platform_ui.host = self
 	var settings: Dictionary = preferences.read_settings()
 	muted = settings.muted
 	master_volume = settings.master_volume
@@ -616,6 +639,8 @@ func _style_modal_tree(node: Node) -> void:
 	for child in node.get_children(): _style_modal_tree(child)
 
 func _process(dt: float) -> void:
+	steam_platform.pump(dt)
+	achievements.pump(dt)
 	if dock.controller_workshop_cell >= 0: dock.validate_controller_context()
 	_tick_camera_controls(minf(dt,0.05))
 	# Switching hint styles rebuilds the dock. Defer it until a cursor click or
@@ -647,6 +672,7 @@ func _process(dt: float) -> void:
 	ui_elapsed += dt
 	if ui_elapsed > .15:
 		ui_elapsed = 0
+		_observe_achievements()
 		_refresh()
 	if run.phase != last_phase:
 		last_phase = run.phase
@@ -702,9 +728,10 @@ func _refresh() -> void:
 	if cleanup_fast and not _cleanup_controls_available(): cleanup_fast = false
 	# Keep a compact warning reachable at every layout without occupying the
 	# selected-square/candidate area or suppressing ordinary action feedback.
-	hud_nodes.menu.text = "Save!" if save_failed else "Menu"
-	hud_nodes.menu.tooltip_text = "Latest progress is not saved. Open to retry saving." if save_failed else "Pause / run menu"
-	hud_nodes.menu.add_theme_color_override("font_color",AMBER if save_failed else WHITE)
+	var any_save_failed := save_failed or achievement_save_failed
+	hud_nodes.menu.text = "Save!" if any_save_failed else "Menu"
+	hud_nodes.menu.tooltip_text = "Latest progress is not saved. Open to retry saving." if any_save_failed else "Pause / run menu"
+	hud_nodes.menu.add_theme_color_override("font_color",AMBER if any_save_failed else WHITE)
 	if _controller_number_cell >= 0 and (not _number_placement_allowed() or run.phase != _controller_number_phase or selected_cell != _controller_number_cell or run.board[_controller_number_cell] != 0):
 		_close_controller_numbers()
 	hud_nodes.notes.text = "Notes  ON" if board_notes else "Notes  OFF"
@@ -1240,19 +1267,73 @@ func _toast(text: String, success: bool = true) -> void:
 func _save() -> bool:
 	if tutorial.active: return true
 	if not has_active_run: return true
+	if not cloud_profile_status.get("ok",false):
+		save_failed = true
+		_toast("Save profile unavailable. Open Saves & Steam for details.",false)
+		return false
 	var was_failed := save_failed
 	save_failed = not run_save.write_run(run.save_data())
+	_observe_achievements()
 	if save_failed: _toast("PROGRESS NOT SAVED. Open Menu to retry saving.",false)
 	elif was_failed: _toast("Progress saved. You can safely close the game.")
 	_refresh()
-	return not save_failed
+	return not save_failed and not achievement_save_failed
+
+func _new_achievement_run_id() -> String:
+	# Independent of gameplay RNG so achievement tracking cannot alter a seed.
+	return Crypto.new().generate_random_bytes(16).hex_encode()
+
+func _configure_profiles(platform_status: Dictionary) -> void:
+	cloud_profile_status = cloud_profile.configure(str(platform_status.get("account_id","")),_profile_base)
+	if not _injected_run_path.is_empty() and not cloud_profile_status.get("scoped",false):
+		cloud_profile_status["run_path"] = _injected_run_path
+	# Conflict results retain their scoped paths so the player can recover them.
+	if cloud_profile_status.has("run_path"):
+		run_save.file_path = str(cloud_profile_status.run_path)
+		var staging := str(cloud_profile_status.get("staging_root",""))
+		run_save.staging_path = staging.path_join("run") if not staging.is_empty() else ""
+		achievements.configure(str(cloud_profile_status.achievement_path),staging.path_join("achievements") if not staging.is_empty() else "",str(platform_status.get("account_id","")))
+		achievement_save_failed = bool(achievements.get_status().get("save_failed",false))
+
+func _observe_achievements() -> void:
+	if tutorial.active or not has_active_run or not cloud_profile_status.get("ok",false): return
+	var was_failed := achievement_save_failed
+	achievements.observe_run(run)
+	var status: Dictionary = achievements.get_status()
+	achievement_save_failed = bool(status.get("save_failed",false))
+	if achievement_save_failed and not was_failed:
+		_toast("Achievement progress could not be saved. Open Achievements to retry.",false)
+	achievements.synchronize(steam_platform)
+
+func _can_replace_saved_run() -> bool:
+	_observe_achievements()
+	if has_active_run and achievement_save_failed:
+		platform_ui.show_achievements()
+		return false
+	if not cloud_profile_status.get("ok",false):
+		platform_ui.show_saves()
+		return false
+	# Do not adopt a changed disk snapshot until the player explicitly loads it.
+	if not run_save.check_current():
+		platform_ui.show_saves()
+		return false
+	return true
+
+func _platform_back() -> void:
+	_show_menu(not has_active_run)
+
+func _exit_tree() -> void:
+	achievements.close()
+	if is_instance_valid(steam_platform): steam_platform.shutdown()
 
 func _load() -> bool:
+	if not cloud_profile_status.get("ok",false): return false
 	dock.cancel_controller_context(true)
 	var saved: Dictionary = run_save.read_run()
 	if saved.is_empty(): return false
 	var loaded: bool = run.load_data(saved.data)
 	if loaded:
+		run.enable_achievement_tracking(_new_achievement_run_id())
 		has_active_run = true
 		save_recovered = bool(saved.recovered)
 		save_failed = false
@@ -1262,7 +1343,7 @@ func _show_unsaved_quit() -> void:
 	var box := _modal(610,400)
 	overlay.set_meta("unsaved_quit",true)
 	box.add_child(label("Progress could not be saved",25,AMBER))
-	var explanation := label("Any earlier saved progress has been kept. Retry saving, keep playing, or close without the latest changes.",17,WHITE)
+	var explanation := label("Some run or achievement progress could not be saved. Earlier saved files have been kept. Retry saving, keep playing, or close without the latest changes.",17,WHITE)
 	explanation.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(explanation)
 	var retry := button("Retry save and quit",func():
@@ -1279,13 +1360,14 @@ func _retry_save_from_menu() -> void:
 	_show_pause_menu()
 
 func _start_run() -> void:
+	if not _can_replace_saved_run(): return
 	cleanup_fast = false
 	if tutorial.active: tutorial.restore()
 	_cancel_camera_controls()
 	var input_seed: String = seed_input.text.strip_edges() if seed_input else ""
 	var chosen_seed: int = input_seed.to_int() if input_seed.is_valid_int() else int(Time.get_unix_time_from_system())%2147483647
 	has_active_run = true
-	run.new_run(chosen_seed,{"mode":mode_choice,"puzzle_difficulty":puzzle_choice,"combat_difficulty":combat_choice})
+	run.new_run(chosen_seed,{"mode":mode_choice,"puzzle_difficulty":puzzle_choice,"combat_difficulty":combat_choice,"achievement_run_id":_new_achievement_run_id()})
 	selected_cell = -1
 	selected_number = 0
 	armed_item = ""
@@ -1298,6 +1380,9 @@ func _start_run() -> void:
 	if _save(): _toast("Plant 6-8 correct answers, then prepare your defense.")
 
 func _close_overlay() -> void:
+	if is_instance_valid(overlay) and overlay.get_meta("platform_panel",false):
+		_platform_back()
+		return
 	if not has_active_run:
 		_show_menu(true)
 		return
@@ -1474,6 +1559,13 @@ func _show_menu(initial: bool = false) -> void:
 	var how := button("How to play",_help)
 	how.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(how)
+	var platform_row := HBoxContainer.new()
+	platform_row.add_theme_constant_override("separation",8)
+	setup.add_child(platform_row)
+	for action in [["Achievements",platform_ui.show_achievements],["Saves & Steam",platform_ui.show_saves]]:
+		var item := button(str(action[0]),action[1])
+		item.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		platform_row.add_child(item)
 	start.grab_focus()
 
 func _show_pause_menu() -> void:
@@ -1491,8 +1583,8 @@ func _show_pause_menu() -> void:
 	actions.add_child(label("RUN PAUSED",11,MINT))
 	actions.add_child(label("Paused",32,WHITE))
 	actions.add_child(label("ROUND %02d / %02d  ·  %s" % [run.round_no,run.max_rounds,str({"solve":"Solve", "prep":"Prepare", "battle":"Defend", "loot":"Loot", "won":"Victory", "lost":"Defeat"}.get(run.phase,run.phase)).to_upper()],13,AMBER))
-	actions.add_child(label("Latest progress is NOT saved." if save_failed else "Your progress is saved on this device.",13,AMBER if save_failed else MUTED))
-	if save_failed:
+	actions.add_child(label("Latest progress is NOT saved." if save_failed or achievement_save_failed else "Your progress is saved on this device.",13,AMBER if save_failed or achievement_save_failed else MUTED))
+	if save_failed or achievement_save_failed:
 		actions.add_child(button("Return and retry saving" if tutorial.active else "Retry saving",_retry_save_from_menu,true))
 	var resume := button("Resume run",_close_overlay,true)
 	resume.set_meta("menu_height",54)
@@ -1505,6 +1597,8 @@ func _show_pause_menu() -> void:
 	actions.add_child(button("Manage gear",func(): _close_overlay(); _toggle_dock("bag")))
 	actions.add_child(button("How to play",_help))
 	actions.add_child(button("Audio settings",_show_audio_settings))
+	actions.add_child(button("Achievements",platform_ui.show_achievements))
+	actions.add_child(button("Saves & Steam",platform_ui.show_saves))
 	actions.add_child(button("New run",func(): _show_menu(true)))
 	resume.grab_focus()
 
@@ -1649,8 +1743,10 @@ func _show_result() -> void:
 
 func _retry_same_seed() -> void:
 	if run.phase not in ["won","lost"]: return
+	if not _can_replace_saved_run(): return
 	var retry_seed: int = run.seed_value
 	var options: Dictionary = run.retry_options()
+	options["achievement_run_id"] = _new_achievement_run_id()
 	_cancel_camera_controls()
 	_close_controller_numbers()
 	run.new_run(retry_seed,options)

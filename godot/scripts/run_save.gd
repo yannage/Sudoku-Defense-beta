@@ -1,84 +1,46 @@
-extends RefCounted
-## A verified write-ahead journal makes replacement recoverable on every target.
-## Publishing .pending is the commit point. On Windows Godot's rename removes
-## an existing destination first, so loading must check the journal before the
-## primary. At no point is the only committed snapshot opened for writing.
+extends "res://scripts/journal_store.gd"
+## Run-specific schema validation over the shared recoverable journal.
 
 const Run = preload("res://scripts/run.gd")
-const MAX_BYTES := 8 * 1024 * 1024
-var file_path := "user://sudoku-defense-run.json"
+var _resolution_signature := ""
 
-func has_save() -> bool:
-	for suffix in ["", ".pending", ".bak"]:
-		if FileAccess.file_exists(file_path + suffix): return true
-	return false
+func _init() -> void:
+	file_path = "user://sudoku-defense-run.json"
 
 func read_run() -> Dictionary:
-	for suffix in [".pending", "", ".bak"]:
-		var candidate := _read_valid(file_path + suffix)
-		if not candidate.is_empty():
-			candidate["recovered"] = suffix != ""
-			candidate["source"] = file_path + suffix
-			return candidate
-	return {}
+	return read_data()
 
 func write_run(data: Dictionary) -> bool:
-	var text := JSON.stringify(data)
-	if not _valid_data(JSON.parse_string(text)): return false
-	# Finish a previously committed transaction before reusing its journal name.
-	# A failed promotion keeps that journal intact and refuses a newer write.
-	var pending := _read_valid(file_path + ".pending")
-	if not pending.is_empty():
-		if not _replace(file_path + ".pending", file_path): return false
-	elif FileAccess.file_exists(file_path + ".pending"):
-		if DirAccess.remove_absolute(file_path + ".pending") != OK: return false
-	var previous := read_run()
-	if not _write_verified(file_path + ".tmp", text): return false
-	# Stage the backup without touching the current primary. A crash during
-	# backup replacement still leaves the primary; after commit, either .pending
-	# or the new primary survives, with the previous known-good data in .bak.
-	if not previous.is_empty() and str(previous.source) != file_path + ".bak":
-		if not _write_verified(file_path + ".bak.tmp", str(previous.text)): return false
-		if not _replace(file_path + ".bak.tmp", file_path + ".bak"): return false
-	if not _replace(file_path + ".tmp", file_path + ".pending"): return false
-	if not _replace(file_path + ".pending", file_path): return false
-	return true
+	return write_data(data)
 
-func _replace(source: String, destination: String) -> bool:
-	return DirAccess.rename_absolute(source, destination) == OK
+func conflict_candidates() -> Array[Dictionary]:
+	var snapshot := recovery_snapshot()
+	_resolution_signature = str(snapshot.token)
+	var candidates: Array[Dictionary] = []
+	var labels := {"": "Saved run", ".pending": "Interrupted save", ".bak": "Last-good backup"}
+	for candidate: Dictionary in snapshot.candidates:
+		candidate["label"] = labels[str(candidate.suffix)]
+		candidates.append(candidate)
+	return candidates
 
-func _write_verified(path: String, text: String) -> bool:
-	var file := FileAccess.open(path, FileAccess.WRITE)
-	if file == null: return false
-	file.store_string(text)
-	file.flush()
-	var status := file.get_error()
-	file.close()
-	if status != OK: return false
-	var verified := _read_valid(path)
-	return not verified.is_empty() and str(verified.text) == text
-
-func _read_valid(path: String) -> Dictionary:
-	if not FileAccess.file_exists(path): return {}
-	var file := FileAccess.open(path, FileAccess.READ)
-	if file == null: return {}
-	if file.get_length() <= 0 or file.get_length() > MAX_BYTES:
-		file.close()
-		return {}
-	var text := file.get_as_text()
-	file.close()
-	var parser := JSON.new()
-	if parser.parse(text) != OK or not _valid_data(parser.data): return {}
-	return {"data": parser.data, "text": text}
-
-func _number(value: Variant) -> bool:
-	return (value is int or value is float) and is_finite(float(value))
-
+func resolve_candidate(candidate_hash: String) -> bool:
+	last_error = {}
+	if _resolution_signature.is_empty() or _signature() != _resolution_signature:
+		return _fail("external_change", "Saved files changed while choosing. Reopen the save choices before continuing; all versions have been kept.")
+	if not _check_committed() and str(last_error.get("code", "")) != "sync_conflict": return false
+	var chosen: Dictionary = {}
+	for suffix: String in ["", ".pending", ".bak"]:
+		var candidate := _read_valid(file_path + suffix)
+		if not candidate.is_empty() and str(candidate.text).sha256_text() == candidate_hash: chosen = candidate
+	if chosen.is_empty(): return _fail("invalid_choice", "That saved run is no longer available. Reopen the save choices; all versions have been kept.")
+	var result := resolve_merged(chosen.data, _resolution_signature)
+	if result: _resolution_signature = ""
+	return result
 func _valid_data(data: Variant) -> bool:
 	# Reject malformed complete JSON before the model's semantic validation.
 	# Keep version-1 files and optional future/additive fields compatible.
 	if not data is Dictionary or not data.get("state") is Dictionary: return false
-	if not _number(data.get("version")) or int(data.version) != 1: return false
+	if not _number(data.get("version")) or float(data.version) != 1: return false
 	if not str(data.get("rng_state", "")).is_valid_int(): return false
 	var state: Dictionary = data.state
 	for key in ["round_no", "max_rounds", "credits", "fragments", "health", "max_health", "score", "timer", "kills", "spawned", "spawn_total", "corruption", "combo", "round_solved", "solve_duration", "last_wave_bonus", "battle_time", "next_id", "spawn_clock"]:

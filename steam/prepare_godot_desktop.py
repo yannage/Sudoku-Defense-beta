@@ -11,18 +11,22 @@ import argparse
 from datetime import datetime, timezone
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import shutil
 import stat
 import subprocess
+import sys
 import tempfile
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "godot/scripts"))
+from desktop_package import LIBRARIES, NOTICES, expected_names, validate_payload  # noqa: E402
+
 RELEASE = ROOT / "release"
 STAGE = RELEASE / "steam-godot-desktop"
-NOTICES = ("GODOT-LICENSE.txt", "GODOT-THIRD-PARTY.txt")
 LINUX_NAME = "sudoku-defense.x86_64"
 WINDOWS_NAME = "SudokuDefense.exe"
 
@@ -36,13 +40,15 @@ def read_package(path: Path, executable: str) -> tuple[dict[str, bytes], str]:
     raw = path.read_bytes()
     with zipfile.ZipFile(path) as archive:
         names = archive.namelist()
-        if len(names) != 3 or set(names) != {executable, *NOTICES}:
-            raise ValueError(f"Expected only {executable} and both Godot notices: {path}")
+        platform = "linux" if executable == LINUX_NAME else "windows"
+        expected = expected_names(platform)
+        if len(names) != len(expected) or set(names) != expected:
+            raise ValueError(f"Expected the exact {platform} executable, runtime libraries, notices and metadata: {path}")
         for info in archive.infolist():
             file_type = stat.S_IFMT(info.external_attr >> 16)
             if info.is_dir() or info.flag_bits & 1 or file_type not in (0, stat.S_IFREG):
                 raise ValueError(f"ZIP member is not an ordinary unencrypted file: {info.filename}")
-            limit = 512 * 1024 * 1024 if info.filename == executable else 2 * 1024 * 1024
+            limit = 512 * 1024 * 1024 if info.filename == executable or info.filename in LIBRARIES[platform] else 2 * 1024 * 1024
             if not 0 < info.file_size <= limit:
                 raise ValueError(f"Unexpected ZIP member size: {info.filename}")
         # ZipFile.read checks each member's CRC while reading it.
@@ -65,13 +71,14 @@ def validate_executables(linux: bytes, windows: bytes) -> None:
 
 def verify_combined(path: Path, content: dict[str, bytes]) -> None:
     with zipfile.ZipFile(path) as archive:
-        if len(archive.namelist()) != 4 or set(archive.namelist()) != set(content):
-            raise ValueError("Combined Steam ZIP must contain both executables and both notices")
+        if len(archive.namelist()) != len(content) or set(archive.namelist()) != set(content):
+            raise ValueError("Combined Steam ZIP must contain the complete verified desktop payload")
         for name, original in content.items():
             if archive.read(name) != original:
                 raise ValueError(f"Combined ZIP changed bytes for {name}")
-        if (archive.getinfo("sudoku-defense").external_attr >> 16) & 0o777 != 0o755:
-            raise ValueError("Combined ZIP lost Linux executable permissions")
+        for name in {"sudoku-defense", *LIBRARIES["linux"]}:
+            if (archive.getinfo(name).external_attr >> 16) & 0o777 != 0o755:
+                raise ValueError(f"Combined ZIP lost Linux executable permissions: {name}")
 
 
 def main() -> None:
@@ -92,6 +99,8 @@ def main() -> None:
         linux, linux_archive_hash = read_package(args.linux_archive, LINUX_NAME)
         windows, windows_archive_hash = read_package(args.windows_archive, WINDOWS_NAME)
         validate_executables(linux[LINUX_NAME], windows[WINDOWS_NAME])
+        validate_payload(ROOT / "godot", "linux", linux, version=version, source_commit=args.source_commit)
+        validate_payload(ROOT / "godot", "windows", windows, version=version, source_commit=args.source_commit)
         validation_bytes = args.windows_validation.read_bytes()
         validation = json.loads(validation_bytes.decode("utf-8-sig"))
         expected = {
@@ -103,11 +112,11 @@ def main() -> None:
         for key, value in expected.items():
             if not isinstance(validation, dict) or validation.get(key) != value:
                 raise ValueError(f"Windows startup validation does not match {key}")
-        for name in NOTICES:
-            if linux[name] != windows[name] or linux[name] != (ROOT / "godot" / name).read_bytes():
-                raise ValueError(f"Linux, Windows, and project notices differ: {name}")
-        content = {"sudoku-defense": linux[LINUX_NAME], WINDOWS_NAME: windows[WINDOWS_NAME],
-                   **{name: linux[name] for name in NOTICES}}
+        for name in set(linux) & set(windows):
+            if linux[name] != windows[name]:
+                raise ValueError(f"Shared desktop files differ: {name}")
+        content = {**linux, **windows}
+        content["sudoku-defense"] = content.pop(LINUX_NAME)
         RELEASE.mkdir(exist_ok=True)
         archive_path = RELEASE / f"Sudoku-Defense-Godot-Steam-Desktop-{version}.zip"
         manifest_path = RELEASE / "steam-godot-desktop-manifest.json"
@@ -119,11 +128,17 @@ def main() -> None:
             for name, data in content.items():
                 target = stage / name
                 target.write_bytes(data)
-                target.chmod(0o755 if name == "sudoku-defense" else 0o644)
+                target.chmod(0o755 if name in {"sudoku-defense", *LIBRARIES["linux"]} else 0o644)
+            profile = pending / "test-profile"
+            environment = os.environ.copy()
+            for key in ("XDG_DATA_HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME"):
+                folder = profile / key.lower()
+                folder.mkdir(parents=True)
+                environment[key] = str(folder)
             result = subprocess.run(
                 [str(stage / "sudoku-defense"), "--headless", "--audio-driver", "Dummy",
-                 "--quit-after", "120", "--", "--smoke-test"], cwd=stage,
-                text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=90,
+                 "--quit-after", "120", "--", "--smoke-test", "--no-steam"], cwd=stage, env=environment,
+                text=True, encoding="utf-8", errors="replace", stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=90,
             )
             boot_log.write_text(result.stdout)
             if result.returncode or "ERROR:" in result.stdout or "Parse Error:" in result.stdout or marker not in result.stdout.splitlines():
@@ -131,10 +146,14 @@ def main() -> None:
             packed = pending / "desktop.zip"
             with zipfile.ZipFile(packed, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
                 for path in sorted(stage.iterdir()):
-                    archive.write(path, path.name)
+                    info = zipfile.ZipInfo.from_file(path, path.name)
+                    info.create_system = 3
+                    info.external_attr = (stat.S_IFREG | (0o755 if path.name in {"sudoku-defense", *LIBRARIES["linux"]} else 0o644)) << 16
+                    info.compress_type = zipfile.ZIP_DEFLATED
+                    archive.writestr(info, path.read_bytes())
             verify_combined(packed, content)
             manifest = {
-                "schema_version": 1, "app_id": "3721150", "depot_id": "3721151",
+                "schema_version": 2, "app_id": "3721150", "depot_id": "3721151",
                 "game_version": version, "source_commit": args.source_commit,
                 "prepared_at": datetime.now(timezone.utc).isoformat(),
                 "upload_status": "pending", "steam_build_id": None,
@@ -149,7 +168,7 @@ def main() -> None:
                 "windows_startup_validation": {**expected, "evidence_sha256": sha256(validation_bytes)},
                 "linux_startup": {"status": "passed", "ready_marker": marker, "log": str(boot_log)},
                 "files": [{"path": name, "bytes": len(data), "sha1": hashlib.sha1(data).hexdigest(),
-                           "sha256": sha256(data), "mode": "0o755" if name == "sudoku-defense" else "0o644"}
+                           "sha256": sha256(data), "mode": "0o755" if name in {"sudoku-defense", *LIBRARIES["linux"]} else "0o644"}
                           for name, data in sorted(content.items())],
             }
             pending_manifest = pending / "manifest.json"

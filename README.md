@@ -1,19 +1,22 @@
 # Sudoku Defense
 
-## Current Godot candidate - 0.3.18
+## Current Godot candidate - 0.3.19
 
 The maintained game on this branch is **`godot/`**, built with Godot 4.7.2 for
 native Windows, Linux / Steam Deck, and browser play. Start with
 [the Godot README](godot/README.md) and [build instructions](docs/GODOT-BUILDS.md).
 [Play the Godot edition](https://sudoku-defense-godot.yakstudios.chatgpt.site).
 
-The local 0.3.18 candidate adds optional fast-forward for long waves while
-preserving combat and rewards. It includes 0.3.17's quick controller module flow
-and the guided first round, recoverable saves, strategy previews, same-seed retry
-and audio settings from 0.3.16. See
-[the candidate notes and Deck checklist](docs/ITERATION-0.3.18.md).
-Steam's separately verified live version is 0.3.17, default build 26349224.
-This candidate has not been uploaded or activated.
+The 0.3.19 candidate adds account-specific Steam Cloud save support and 26
+purposeful achievements, with offline unlock queues, protected migration,
+conflict recovery and an in-game achievement list. It preserves 0.3.18's
+optional 8x battle speed and the existing controller, tutorial and save flows.
+See [the candidate notes and acceptance checklist](docs/ITERATION-0.3.19.md),
+[achievement research and mapping](docs/ACHIEVEMENTS-0.3.19.md), and
+[Cloud paths and recovery](docs/STEAM-CLOUD.md).
+Steam's separately verified live version is 0.3.18, default build 26354046.
+This candidate requires tested delivery before activation; app configuration
+and actual two-device acceptance are recorded separately.
 
 Version 0.3.15 adds a controller placement loop: press A on an empty square to
 focus the number tray, choose with D-pad / left stick or LB / RB, then press A

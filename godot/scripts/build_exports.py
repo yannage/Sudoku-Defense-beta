@@ -10,10 +10,13 @@ import os
 from pathlib import Path
 import re
 import shutil
+import stat
 import subprocess
 import tarfile
 import tempfile
 import zipfile
+
+from desktop_package import GODOT_NOTICES, LIBRARIES, notice_sources, write_metadata
 
 PROJECT = Path(__file__).resolve().parents[1]
 EXPECTED_VERSION = "4.7.2"
@@ -24,6 +27,11 @@ STATIC_FILE_LIMIT = 25 * 1024 * 1024
 def run(command: list[str], log: Path, expected: str | None = None) -> None:
     # UI regressions exercise real save paths. A fresh profile per suite keeps
     # the developer's actual campaign untouched, including journal sidecars.
+    command = command.copy()
+    if "--" not in command:
+        command.append("--")
+    if "--no-steam" not in command:
+        command.append("--no-steam")
     environment = os.environ.copy()
     with tempfile.TemporaryDirectory(prefix="sudoku-test-profile-") as profile:
         if "--script" in command or "--smoke-test" in command:
@@ -94,7 +102,7 @@ def verify_archive(path: Path, expected: dict[str, str]) -> None:
                 raise RuntimeError(f"ZIP content changed for {name}: {path}")
 
 
-def archive_directory(source: Path, target: Path, *, prefix: str = "", exclude_parts: set[str] | None = None, include_hidden: bool = False) -> None:
+def archive_directory(source: Path, target: Path, *, prefix: str = "", exclude_parts: set[str] | None = None, include_hidden: bool = False, executable_names: set[str] | None = None) -> None:
     # Build away from the public path so readers can never consume a partial
     # ZIP. Validate the central directory and every file before replacing it.
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -114,7 +122,14 @@ def archive_directory(source: Path, target: Path, *, prefix: str = "", exclude_p
     try:
         with zipfile.ZipFile(temporary, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
             for path, name in entries:
-                archive.write(path, name)
+                if executable_names and name in executable_names:
+                    info = zipfile.ZipInfo.from_file(path, name)
+                    info.create_system = 3
+                    info.external_attr = (stat.S_IFREG | 0o755) << 16
+                    info.compress_type = zipfile.ZIP_DEFLATED
+                    archive.writestr(info, path.read_bytes())
+                else:
+                    archive.write(path, name)
         verify_archive(temporary, expected)
         temporary.replace(target)
         verify_archive(target, expected)
@@ -122,9 +137,9 @@ def archive_directory(source: Path, target: Path, *, prefix: str = "", exclude_p
         temporary.unlink(missing_ok=True)
 
 
-def copy_license_notices(destination: Path) -> None:
-    for name in ("GODOT-LICENSE.txt", "GODOT-THIRD-PARTY.txt"):
-        source = PROJECT / name
+def copy_license_notices(destination: Path, *, native: bool = False) -> None:
+    sources = notice_sources(PROJECT) if native else {name: PROJECT / name for name in GODOT_NOTICES}
+    for name, source in sources.items():
         if not source.is_file():
             raise RuntimeError(f"Required distribution notice is missing: {source}")
         shutil.copyfile(source, destination / name)
@@ -199,10 +214,19 @@ def main() -> None:
         run([args.godot, "--headless", "--path", str(PROJECT), "--editor", "--import", "--quit"], logs / "import.log")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_run.gd"], logs / "simulation-tests.log", expected="PASS:")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_sudoku.gd"], logs / "sudoku-tests.log", expected="SUDOKU_PASS")
+    for script, marker in [
+        ("test_cloud_profile.gd", "CLOUD_PROFILE_PASS"),
+        ("test_achievement_rules.gd", "ACHIEVEMENT_RULES_PASS"),
+        ("test_achievement_profile.gd", "ACHIEVEMENT_PROFILE_PASS"),
+        ("test_steam_platform.gd", "STEAM_PLATFORM_TESTS_OK"),
+    ]:
+        run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/" + script],
+            logs / f"{script.removesuffix('.gd')}.log", expected=marker)
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_tactics.gd"], logs / "tactics-tests.log", expected="TACTICS_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_board_transition.gd"], logs / "board-transition-tests.log", expected="BOARD_TRANSITION_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_board_transition.gd", "--", "--canvas-graphics"], logs / "canvas-board-transition-tests.log", expected="BOARD_TRANSITION_PASS")
     for renderer, flags in [("native", []), ("canvas", ["--", "--canvas-graphics"])]:
+        run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_platform_ui.gd"] + flags, logs / f"{renderer}-platform-ui-tests.log", expected="PLATFORM_UI_PASS")
         run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_controller_upgrades.gd"] + flags, logs / f"{renderer}-controller-upgrades-tests.log", expected="CONTROLLER_UPGRADES_PASS")
         run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_cleanup_pacing.gd"] + flags, logs / f"{renderer}-cleanup-pacing-tests.log", expected="CLEANUP_PACING_PASS")
     for script, marker in [("test_run_save.gd", "RUN_SAVE_PASS"), ("test_strategy_feedback.gd", "STRATEGY_FEEDBACK_PASS"), ("test_results_ui.gd", "RESULTS_UI_PASS"), ("test_audio_settings.gd", "AUDIO_SETTINGS_PASS")]:
@@ -234,6 +258,8 @@ def main() -> None:
     if args.render_check:
         render_failures: list[str] = []
         for script, flag, logfile, marker in [
+            ("test_platform_ui.gd", "", "native-platform-ui-render-tests.log", "PLATFORM_UI_PASS"),
+            ("test_platform_ui.gd", "--canvas-graphics", "canvas-platform-ui-render-tests.log", "PLATFORM_UI_PASS"),
             ("test_cleanup_pacing.gd", "", "native-cleanup-pacing-render-tests.log", "CLEANUP_PACING_PASS"),
             ("test_cleanup_pacing.gd", "--canvas-graphics", "canvas-cleanup-pacing-render-tests.log", "CLEANUP_PACING_PASS"),
             ("test_controller_upgrades.gd", "", "native-controller-upgrades-render-tests.log", "CONTROLLER_UPGRADES_PASS"),
@@ -267,7 +293,7 @@ def main() -> None:
                 command += ["--", flag]
             if script == "test_camera_controls.gd":
                 command += ["--capture-camera"]
-            if script in ("test_controller_upgrades.gd", "test_cleanup_pacing.gd"):
+            if script in ("test_controller_upgrades.gd", "test_cleanup_pacing.gd", "test_platform_ui.gd"):
                 if not flag:
                     command += ["--"]
                 command += ["--render-check"]
@@ -314,10 +340,14 @@ def export_releases(args: argparse.Namespace, build: Path, downloads: Path, logs
                 raise RuntimeError(f"Missing fresh export: {staged_output}")
             shutil.copytree(staging, folder, dirs_exist_ok=True)
         output = folder / executable
-        copy_license_notices(folder)
+        copy_license_notices(folder, native=name != "web")
         if name == "web":
+            if any(path.suffix.lower() in (".dll", ".so", ".gdextension") for path in folder.rglob("*")):
+                raise RuntimeError("Browser export unexpectedly contains a native Steam dependency")
             make_web_shell(folder)
-        elif name == "linux":
+        else:
+            write_metadata(PROJECT, folder, name, app_version)
+        if name == "linux":
             output.chmod(0o755)
             if not args.skip_smoke:
                 run([str(output), "--headless", "--audio-driver", "Dummy", "--quit-after", "120", "--", "--smoke-test"], logs / "native-linux-boot.log", expected=f"SUDOKU_DEFENSE_READY version={app_version}")
@@ -328,12 +358,13 @@ def export_releases(args: argparse.Namespace, build: Path, downloads: Path, logs
                         entry = archive.gettarinfo(str(path), arcname=relative.as_posix())
                         # Windows chmod cannot set POSIX execute bits. Preserve
                         # Linux launchability when cross-building on Windows.
-                        if path == output:
+                        if path == output or relative.as_posix() in LIBRARIES["linux"]:
                             entry.mode = 0o755
                         with path.open("rb") as payload:
                             archive.addfile(entry, payload)
         if name != "web":
-            archive_directory(folder, downloads / f"Sudoku-Defense-Godot-{name.capitalize()}.zip")
+            archive_directory(folder, downloads / f"Sudoku-Defense-Godot-{name.capitalize()}.zip",
+                              executable_names={executable, *LIBRARIES["linux"]} if name == "linux" else None)
     archive_directory(
         PROJECT, downloads / "Sudoku-Defense-Godot-Source.zip",
         prefix="Sudoku-Defense-Godot", exclude_parts={"build", ".godot", "__pycache__", ".git"}, include_hidden=True,

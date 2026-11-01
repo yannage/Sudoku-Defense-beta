@@ -1,0 +1,27 @@
+"api_name (required, unique; the name your game passes to the API)",setid (optional; the id of a set that already exists),"permission (one of Client, GameServer, OfficialGameServer)",spoiler (true or false),archived (true or false),"progress_stat_name (optional; the name of a stat that already exists, blank for no progress bar)","progress_stat_min (number, no lower than the stat's own min)","progress_stat_max (number, above min and no higher than the stat's own max)"
+SD_FIRST_PLANT,,Client,false,false,,0,0
+SD_FIRST_UNIT,,Client,false,false,,0,0
+SD_FIRST_UPGRADE,,Client,false,false,,0,0
+SD_FIRST_MODULE,,Client,false,false,,0,0
+SD_FIRST_CHEST,,Client,false,false,,0,0
+SD_FIRST_BOOST,,Client,false,false,,0,0
+SD_FIRST_CLEAR,,Client,false,false,,0,0
+SD_FIRST_BOSS,,Client,false,false,,0,0
+SD_ROUND_10,,Client,false,false,,0,0
+SD_ROUND_25,,Client,false,false,,0,0
+SD_CAMPAIGN_CLEAR,,Client,false,false,,0,0
+SD_LOCKED_CLEAR,,Client,false,false,,0,0
+SD_FIRST_FAMILY,,Client,false,false,,0,0
+SD_FAMILY_FIVE,,Client,false,false,,0,0
+SD_TOWER_FIVE,,Client,false,false,,0,0
+SD_FIVE_SOCKETS,,Client,false,false,,0,0
+SD_STACK_MODULES,,Client,false,false,,0,0
+SD_THREE_EFFECTS,,Client,false,false,,0,0
+SD_TARGET_LINEUP,,Client,false,false,,0,0
+SD_NINE_FAMILIES,,Client,false,false,,0,0
+SD_HARD_GRID,,Client,false,false,,0,0
+SD_NO_HINT_GRID,,Client,false,false,,0,0
+SD_BOSS_WAVE_CLEAN,,Client,false,false,,0,0
+SD_CORRUPT_CLEAR,,Client,false,false,,0,0
+SD_UNFINISHED_CLEAR,,Client,false,false,,0,0
+SD_CLEAN_CAMPAIGN,,Client,false,false,,0,0

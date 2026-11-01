@@ -1,0 +1,40 @@
+{
+  "app_id": 3721150,
+  "configuration_status": "Prepared specification; this file does not establish Steamworks publication or cross-device verification.",
+  "mechanism": "Steam Auto-Cloud",
+  "byte_quota_per_user": 67108864,
+  "file_quota_per_user": 32,
+  "developers_only_during_acceptance": true,
+  "shared_cloud_app_id": 0,
+  "dynamic_cloud_sync": false,
+  "root": "WinAppDataRoaming",
+  "subdirectory": "Godot/app_userdata/Sudoku Defense/steam/{64BitSteamID}/cloud",
+  "os_restriction": "Cross-Platform",
+  "recursive": false,
+  "exact_patterns": [
+    "run.json",
+    "run.json.pending",
+    "run.json.bak",
+    "achievements.json",
+    "achievements.json.pending",
+    "achievements.json.bak"
+  ],
+  "root_overrides": [
+    {
+      "original_root": "WinAppDataRoaming",
+      "os": "Linux",
+      "new_root": "LinuxXdgDataHome",
+      "add_replace_path": "godot/app_userdata/Sudoku Defense/steam/{64BitSteamID}/cloud",
+      "replace_path": true
+    }
+  ],
+  "excluded": [
+    "sudoku-defense-run.json and its legacy variants",
+    "sudoku-defense-achievements.json and its legacy variants",
+    "sudoku-defense-settings.json",
+    "sudoku-defense-steam-migration.json and its journal/backup",
+    "steam/{64BitSteamID}/local/**",
+    "uncommitted *.tmp files",
+    "tutorial practice, caches, logs, test profiles"
+  ]
+}

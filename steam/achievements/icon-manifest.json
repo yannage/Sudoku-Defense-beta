@@ -1,0 +1,474 @@
+{
+	"icons": [
+		{
+			"height": 256,
+			"id": "SD_FIRST_PLANT",
+			"locked": false,
+			"png": "steam/achievements/icons/SD_FIRST_PLANT_ACHIEVED.png",
+			"sha256": "d78c299e696df2f85ea0f7a83cb230c87f82315a314d6a7a998700ba387654ee",
+			"source": "godot/assets/achievements/sd_first_plant.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_FIRST_PLANT",
+			"locked": true,
+			"png": "steam/achievements/icons/SD_FIRST_PLANT_UNACHIEVED.png",
+			"sha256": "3de49496050376d43dc1954c5a9b8e3dcd22d37077833e6e36e81460546fd816",
+			"source": "godot/assets/achievements/sd_first_plant_locked.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_FIRST_UNIT",
+			"locked": false,
+			"png": "steam/achievements/icons/SD_FIRST_UNIT_ACHIEVED.png",
+			"sha256": "ed0d87cfd0351c094f82045aab62e5ad181e31dae34568913888f58b0f4ce247",
+			"source": "godot/assets/achievements/sd_first_unit.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_FIRST_UNIT",
+			"locked": true,
+			"png": "steam/achievements/icons/SD_FIRST_UNIT_UNACHIEVED.png",
+			"sha256": "5e6d0bf9a4b7bd9059de4e3d37a4202eb9a8e2c5c581f8e9d2de7d8836e274f3",
+			"source": "godot/assets/achievements/sd_first_unit_locked.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_FIRST_UPGRADE",
+			"locked": false,
+			"png": "steam/achievements/icons/SD_FIRST_UPGRADE_ACHIEVED.png",
+			"sha256": "4f41e26fba4c6635197dfba289bbbb4275d454f6d1c16ef9d5e9d92cce682d8e",
+			"source": "godot/assets/achievements/sd_first_upgrade.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_FIRST_UPGRADE",
+			"locked": true,
+			"png": "steam/achievements/icons/SD_FIRST_UPGRADE_UNACHIEVED.png",
+			"sha256": "155474a19d0c82843643eef4ff94cb279ae0b7152cb5a4372d284d2f03c37d3c",
+			"source": "godot/assets/achievements/sd_first_upgrade_locked.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_FIRST_MODULE",
+			"locked": false,
+			"png": "steam/achievements/icons/SD_FIRST_MODULE_ACHIEVED.png",
+			"sha256": "0251a610135b3d184002b39a8d22ef21f5d89ebe1f96420205726a51d679adf1",
+			"source": "godot/assets/achievements/sd_first_module.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_FIRST_MODULE",
+			"locked": true,
+			"png": "steam/achievements/icons/SD_FIRST_MODULE_UNACHIEVED.png",
+			"sha256": "2c9041e90255e6e45e9121a43622419408673eed72d523a5f3f2d77b7a364425",
+			"source": "godot/assets/achievements/sd_first_module_locked.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_FIRST_CHEST",
+			"locked": false,
+			"png": "steam/achievements/icons/SD_FIRST_CHEST_ACHIEVED.png",
+			"sha256": "1e4da00e3955473a9083935cc337c5cd6534df4be130972f28182db3221b027e",
+			"source": "godot/assets/achievements/sd_first_chest.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_FIRST_CHEST",
+			"locked": true,
+			"png": "steam/achievements/icons/SD_FIRST_CHEST_UNACHIEVED.png",
+			"sha256": "198bfbd3d5cc1e61a201368572497ca601c036c27de1a5536a1e68c9dbcf3966",
+			"source": "godot/assets/achievements/sd_first_chest_locked.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_FIRST_BOOST",
+			"locked": false,
+			"png": "steam/achievements/icons/SD_FIRST_BOOST_ACHIEVED.png",
+			"sha256": "a0a89b99d703650e1f6b4f59fad4c856e13f21c0ba86a1b90f59d1545ef0869d",
+			"source": "godot/assets/achievements/sd_first_boost.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_FIRST_BOOST",
+			"locked": true,
+			"png": "steam/achievements/icons/SD_FIRST_BOOST_UNACHIEVED.png",
+			"sha256": "328ebbc91b476c7030ed4ad809eceb176226d839bd1df81d2862a66d59eb706e",
+			"source": "godot/assets/achievements/sd_first_boost_locked.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_FIRST_CLEAR",
+			"locked": false,
+			"png": "steam/achievements/icons/SD_FIRST_CLEAR_ACHIEVED.png",
+			"sha256": "0e7370ce679c02c270548ec557338a6adb28102341d21f18368a24406bd068dc",
+			"source": "godot/assets/achievements/sd_first_clear.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_FIRST_CLEAR",
+			"locked": true,
+			"png": "steam/achievements/icons/SD_FIRST_CLEAR_UNACHIEVED.png",
+			"sha256": "4fd86d1440a6f7dc19603f63cf61476000fe14d61ea405ae6b03bebab3609e82",
+			"source": "godot/assets/achievements/sd_first_clear_locked.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_FIRST_BOSS",
+			"locked": false,
+			"png": "steam/achievements/icons/SD_FIRST_BOSS_ACHIEVED.png",
+			"sha256": "66ec2e5f7c612a65e81686bf46227f68cae0934ccd8c80001090eee45051720b",
+			"source": "godot/assets/achievements/sd_first_boss.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_FIRST_BOSS",
+			"locked": true,
+			"png": "steam/achievements/icons/SD_FIRST_BOSS_UNACHIEVED.png",
+			"sha256": "8252c9d044645f1fd95d1076daf4430c8cb41a0027589892422ff67d9dec8958",
+			"source": "godot/assets/achievements/sd_first_boss_locked.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_ROUND_10",
+			"locked": false,
+			"png": "steam/achievements/icons/SD_ROUND_10_ACHIEVED.png",
+			"sha256": "c216fe3f5cb12e7ddf47d58e46a25988f61a33085fd7bd9d13c48b3d88863def",
+			"source": "godot/assets/achievements/sd_round_10.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_ROUND_10",
+			"locked": true,
+			"png": "steam/achievements/icons/SD_ROUND_10_UNACHIEVED.png",
+			"sha256": "d3bbc1906a1991c6a5f608618c4661471dfc2365b78de826ec104d138ab2feb6",
+			"source": "godot/assets/achievements/sd_round_10_locked.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_ROUND_25",
+			"locked": false,
+			"png": "steam/achievements/icons/SD_ROUND_25_ACHIEVED.png",
+			"sha256": "667808070a29c09277174275e2319b318ccd9d1e5c8623e406e7c4947b69b8ea",
+			"source": "godot/assets/achievements/sd_round_25.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_ROUND_25",
+			"locked": true,
+			"png": "steam/achievements/icons/SD_ROUND_25_UNACHIEVED.png",
+			"sha256": "1dbfebe7c8d7642ac040bbd838cdf22b3b845578823df62937f54f3062700368",
+			"source": "godot/assets/achievements/sd_round_25_locked.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_CAMPAIGN_CLEAR",
+			"locked": false,
+			"png": "steam/achievements/icons/SD_CAMPAIGN_CLEAR_ACHIEVED.png",
+			"sha256": "683d088b9a8a413240cfd2c0aafa8ddda8ac897b6829d7147163c3b29062996f",
+			"source": "godot/assets/achievements/sd_campaign_clear.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_CAMPAIGN_CLEAR",
+			"locked": true,
+			"png": "steam/achievements/icons/SD_CAMPAIGN_CLEAR_UNACHIEVED.png",
+			"sha256": "20114dbe63b4e090968598b71d47996a52bed97e3398535009a35ce1c620f1c5",
+			"source": "godot/assets/achievements/sd_campaign_clear_locked.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_LOCKED_CLEAR",
+			"locked": false,
+			"png": "steam/achievements/icons/SD_LOCKED_CLEAR_ACHIEVED.png",
+			"sha256": "b87e2795326740ba24025cdfff18dee2299a56d3714fb6be98a6d62123695272",
+			"source": "godot/assets/achievements/sd_locked_clear.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_LOCKED_CLEAR",
+			"locked": true,
+			"png": "steam/achievements/icons/SD_LOCKED_CLEAR_UNACHIEVED.png",
+			"sha256": "2312c2f27c81fe5346335826f769fcc9219ebfca25eddd5609aee218cd6c2acc",
+			"source": "godot/assets/achievements/sd_locked_clear_locked.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_FIRST_FAMILY",
+			"locked": false,
+			"png": "steam/achievements/icons/SD_FIRST_FAMILY_ACHIEVED.png",
+			"sha256": "97abdd90f3f8ff2d401debdfcb8fba4f0fb78903da709e9e6dd9a28e8614dbbc",
+			"source": "godot/assets/achievements/sd_first_family.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_FIRST_FAMILY",
+			"locked": true,
+			"png": "steam/achievements/icons/SD_FIRST_FAMILY_UNACHIEVED.png",
+			"sha256": "36401e3155c5132aa5935feaa0290e4243e86a2dfb2fbd4396f28c76c7fbef9c",
+			"source": "godot/assets/achievements/sd_first_family_locked.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_FAMILY_FIVE",
+			"locked": false,
+			"png": "steam/achievements/icons/SD_FAMILY_FIVE_ACHIEVED.png",
+			"sha256": "f607deff71cac3d259ddc6962410cef68d365080a1b49bc31a9c3f8ace6a3027",
+			"source": "godot/assets/achievements/sd_family_five.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_FAMILY_FIVE",
+			"locked": true,
+			"png": "steam/achievements/icons/SD_FAMILY_FIVE_UNACHIEVED.png",
+			"sha256": "10e1749f743d9e17652e3ae4d49b001e6419a3ff0f6a442c1a3ac7187f215608",
+			"source": "godot/assets/achievements/sd_family_five_locked.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_TOWER_FIVE",
+			"locked": false,
+			"png": "steam/achievements/icons/SD_TOWER_FIVE_ACHIEVED.png",
+			"sha256": "82dc9257463d912632a20d2046c3ca1713d969c8f9e8830933ae79fbde318637",
+			"source": "godot/assets/achievements/sd_tower_five.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_TOWER_FIVE",
+			"locked": true,
+			"png": "steam/achievements/icons/SD_TOWER_FIVE_UNACHIEVED.png",
+			"sha256": "c1e20f110f9522248e5d77fc2b248621f80b135942f1e5aa672bee77c0569ee7",
+			"source": "godot/assets/achievements/sd_tower_five_locked.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_FIVE_SOCKETS",
+			"locked": false,
+			"png": "steam/achievements/icons/SD_FIVE_SOCKETS_ACHIEVED.png",
+			"sha256": "93eee027e77d3594121e9fa07c404f54101b84706a5809e7b3d05ddad01ecb7d",
+			"source": "godot/assets/achievements/sd_five_sockets.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_FIVE_SOCKETS",
+			"locked": true,
+			"png": "steam/achievements/icons/SD_FIVE_SOCKETS_UNACHIEVED.png",
+			"sha256": "bca1ac2f80763fb3251709c5ee65f5ee8b5f47ca8f17cea81c1c174ed922f9d7",
+			"source": "godot/assets/achievements/sd_five_sockets_locked.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_STACK_MODULES",
+			"locked": false,
+			"png": "steam/achievements/icons/SD_STACK_MODULES_ACHIEVED.png",
+			"sha256": "95c4a91ed3515be88e33960eefc3f7e5435890973f4db7cf0b647605c54fd646",
+			"source": "godot/assets/achievements/sd_stack_modules.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_STACK_MODULES",
+			"locked": true,
+			"png": "steam/achievements/icons/SD_STACK_MODULES_UNACHIEVED.png",
+			"sha256": "e6d86c37791c88a2321327e8e4df49130622f41a0eccd746c832ce53112fb828",
+			"source": "godot/assets/achievements/sd_stack_modules_locked.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_THREE_EFFECTS",
+			"locked": false,
+			"png": "steam/achievements/icons/SD_THREE_EFFECTS_ACHIEVED.png",
+			"sha256": "b14c6536080624d9b933c4cd9a5a1d49e2e8bd46ed340419c6ef65b44ac3966d",
+			"source": "godot/assets/achievements/sd_three_effects.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_THREE_EFFECTS",
+			"locked": true,
+			"png": "steam/achievements/icons/SD_THREE_EFFECTS_UNACHIEVED.png",
+			"sha256": "7bd0ca67918ba8fc57b6b378dc0cab0cd1d51f245311473ca7882306da0136bd",
+			"source": "godot/assets/achievements/sd_three_effects_locked.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_TARGET_LINEUP",
+			"locked": false,
+			"png": "steam/achievements/icons/SD_TARGET_LINEUP_ACHIEVED.png",
+			"sha256": "7c4e6f76434a30e6df5006d2ad779c5589406c921d667c92baa4df3a9d0b616e",
+			"source": "godot/assets/achievements/sd_target_lineup.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_TARGET_LINEUP",
+			"locked": true,
+			"png": "steam/achievements/icons/SD_TARGET_LINEUP_UNACHIEVED.png",
+			"sha256": "2f11a78877266abd7e649f6ff98d282733004925484f20b974b30d92a1373bde",
+			"source": "godot/assets/achievements/sd_target_lineup_locked.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_NINE_FAMILIES",
+			"locked": false,
+			"png": "steam/achievements/icons/SD_NINE_FAMILIES_ACHIEVED.png",
+			"sha256": "e37f5970415f63256d0c58de42ac1b139ed7a6e9a722eece5e99ea3a3848e7ea",
+			"source": "godot/assets/achievements/sd_nine_families.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_NINE_FAMILIES",
+			"locked": true,
+			"png": "steam/achievements/icons/SD_NINE_FAMILIES_UNACHIEVED.png",
+			"sha256": "4d3283455a24c1d167a5b86ffa2cdbb78dbafc1b2f42fac52732c21cc8f024dc",
+			"source": "godot/assets/achievements/sd_nine_families_locked.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_HARD_GRID",
+			"locked": false,
+			"png": "steam/achievements/icons/SD_HARD_GRID_ACHIEVED.png",
+			"sha256": "c1eecd5af9d24e2a820894a540d42c809c17bd391a8a98e1f09d52807eda08ef",
+			"source": "godot/assets/achievements/sd_hard_grid.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_HARD_GRID",
+			"locked": true,
+			"png": "steam/achievements/icons/SD_HARD_GRID_UNACHIEVED.png",
+			"sha256": "a54dc54949cb70d38afdc79f8549269fad950a36e425c0d0c0726d0ca3a17ee3",
+			"source": "godot/assets/achievements/sd_hard_grid_locked.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_NO_HINT_GRID",
+			"locked": false,
+			"png": "steam/achievements/icons/SD_NO_HINT_GRID_ACHIEVED.png",
+			"sha256": "3e1275b16737411034b0adc74e61b7429963e84c01673c6c92aea3bbabed569b",
+			"source": "godot/assets/achievements/sd_no_hint_grid.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_NO_HINT_GRID",
+			"locked": true,
+			"png": "steam/achievements/icons/SD_NO_HINT_GRID_UNACHIEVED.png",
+			"sha256": "0b95d20a8a259a8e21ddf51d9edaa9bd425921bed079f54fdd934cf880bb3b73",
+			"source": "godot/assets/achievements/sd_no_hint_grid_locked.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_BOSS_WAVE_CLEAN",
+			"locked": false,
+			"png": "steam/achievements/icons/SD_BOSS_WAVE_CLEAN_ACHIEVED.png",
+			"sha256": "856aaa0c35fba9f57dcde22d99881140d0dfd41e81b46552b2b2b86054084b5f",
+			"source": "godot/assets/achievements/sd_boss_wave_clean.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_BOSS_WAVE_CLEAN",
+			"locked": true,
+			"png": "steam/achievements/icons/SD_BOSS_WAVE_CLEAN_UNACHIEVED.png",
+			"sha256": "43b0861f8cf58e69f14a331d933befba93fcd0b6aca509a488d7ecbc9894e8c9",
+			"source": "godot/assets/achievements/sd_boss_wave_clean_locked.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_CORRUPT_CLEAR",
+			"locked": false,
+			"png": "steam/achievements/icons/SD_CORRUPT_CLEAR_ACHIEVED.png",
+			"sha256": "fa323b6a7180054210f16a40f6617c9a51004033f8fb7daf251180ed109d6409",
+			"source": "godot/assets/achievements/sd_corrupt_clear.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_CORRUPT_CLEAR",
+			"locked": true,
+			"png": "steam/achievements/icons/SD_CORRUPT_CLEAR_UNACHIEVED.png",
+			"sha256": "d4ea81801bf1c33cf25fefb95525fcc1be2962ce05371e931d4426ef00e5deae",
+			"source": "godot/assets/achievements/sd_corrupt_clear_locked.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_UNFINISHED_CLEAR",
+			"locked": false,
+			"png": "steam/achievements/icons/SD_UNFINISHED_CLEAR_ACHIEVED.png",
+			"sha256": "8036f616e257c2564a41c08f86fb4835bc99d7c682c0f5e0b089ce963a9e10f0",
+			"source": "godot/assets/achievements/sd_unfinished_clear.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_UNFINISHED_CLEAR",
+			"locked": true,
+			"png": "steam/achievements/icons/SD_UNFINISHED_CLEAR_UNACHIEVED.png",
+			"sha256": "0bfb69141e21dbfdedaa99e6c16631f7098b18d314d6767611f29bfd4ae14dc7",
+			"source": "godot/assets/achievements/sd_unfinished_clear_locked.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_CLEAN_CAMPAIGN",
+			"locked": false,
+			"png": "steam/achievements/icons/SD_CLEAN_CAMPAIGN_ACHIEVED.png",
+			"sha256": "d5dab253a71df621f76a240fb0f85dccfe499c43b4a7dd0d2453a4b94b476196",
+			"source": "godot/assets/achievements/sd_clean_campaign.svg",
+			"width": 256
+		},
+		{
+			"height": 256,
+			"id": "SD_CLEAN_CAMPAIGN",
+			"locked": true,
+			"png": "steam/achievements/icons/SD_CLEAN_CAMPAIGN_UNACHIEVED.png",
+			"sha256": "7236ff1f6504243d51b7043a3e3441265c7cafbba1f529826631852d3cbc1012",
+			"source": "godot/assets/achievements/sd_clean_campaign_locked.svg",
+			"width": 256
+		}
+	],
+	"renderer": "4.7.2-stable (official)",
+	"style": "Original geometric voxel artwork; no fonts or external images"
+}

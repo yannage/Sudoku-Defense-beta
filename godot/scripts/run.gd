@@ -3,6 +3,7 @@ extends RefCounted
 
 const Sudoku = preload("res://scripts/sudoku.gd")
 const Loot = preload("res://scripts/loot.gd")
+const AchievementFacts = preload("res://scripts/achievement_facts.gd")
 const COLORS: Array[String] = ["6de8ff", "a4c7ff", "c6a0ff", "ffae68", "fb86c3", "9be878", "ffe188", "bb9bff", "dec3ed"]
 const DIFFICULTIES: Dictionary = {
 	"easy":{"clues":48, "duration":150.0, "hp":0.72, "speed":0.85, "count":0.85, "reward":0.9},
@@ -60,6 +61,81 @@ var _locked_puzzle: String = "easy"
 var _locked_combat: String = "easy"
 var _hinting: bool = false
 var combat_report: Dictionary = {"complete":true,"damage":0.0,"core_damage":0,"leaks":{},"towers":{}}
+var achievement_stats: Dictionary = AchievementFacts.create("",false)
+
+func achievement_snapshot() -> Dictionary:
+	var result: Dictionary = achievement_stats.duplicate(true)
+	result.merge({"mode":mode,"phase":phase,"round":round_no,"max_rounds":max_rounds,"puzzle_difficulty":puzzle_difficulty,"combat_difficulty":combat_difficulty})
+	return result
+
+# The application provides IDs only for real player runs, never guide/test runs.
+# Attaching an ID to an older save does not invent its missing history.
+func enable_achievement_tracking(run_id: String) -> bool:
+	if run_id.is_empty() or not AchievementFacts.valid_id(run_id): return false
+	if not str(achievement_stats.run_id).is_empty(): return achievement_stats.run_id == run_id
+	achievement_stats.run_id = run_id
+	return true
+
+func _achievement_board() -> void:
+	if bool(achievement_stats.current_round.board_complete): return
+	for cell in range(81):
+		if board[cell] != solution[cell]: return
+	achievement_stats.current_round.board_complete = true
+	achievement_stats.current_round.board_complete_in_solve = phase == "solve"
+	AchievementFacts.count(achievement_stats,"completed_boards")
+	if puzzle_difficulty == "hard": AchievementFacts.earn(achievement_stats,"SD_HARD_GRID")
+	if bool(achievement_stats.current_round.complete_history) and int(achievement_stats.current_round.counters.hints) == 0:
+		achievement_stats.current_round.board_complete_no_hints = true
+		AchievementFacts.earn(achievement_stats,"SD_NO_HINT_GRID")
+
+func _achievement_modules(cell: int) -> void:
+	var attachments: Array = towers[cell].attachments
+	var kinds: Dictionary = {}
+	var biggest_stack: int = 0
+	for item: Dictionary in attachments:
+		var kind: String = str(item.kind)
+		kinds[kind] = int(kinds.get(kind,0)) + 1
+		biggest_stack = maxi(biggest_stack,int(kinds[kind]))
+		AchievementFacts.see(achievement_stats,"module_kinds",kind)
+	AchievementFacts.maximum(achievement_stats,"modules_on_tower",attachments.size())
+	AchievementFacts.maximum(achievement_stats,"distinct_module_kinds",kinds.size())
+	AchievementFacts.maximum(achievement_stats,"same_module_kind",biggest_stack)
+	AchievementFacts.earn(achievement_stats,"SD_FIRST_MODULE")
+	if attachments.size() == 5: AchievementFacts.earn(achievement_stats,"SD_FIVE_SOCKETS")
+	if biggest_stack >= 2: AchievementFacts.earn(achievement_stats,"SD_STACK_MODULES")
+	if kinds.size() >= 3: AchievementFacts.earn(achievement_stats,"SD_THREE_EFFECTS")
+
+func _achievement_wave() -> void:
+	AchievementFacts.count(achievement_stats,"waves_cleared")
+	var families: Array[int] = []
+	var priorities: Array[String] = []
+	for tower: Dictionary in towers.values():
+		if bool(tower.illegal): continue
+		var number: int = int(tower.number)
+		var priority: String = str(tower.get("target_priority","first"))
+		if not families.has(number): families.append(number)
+		if not priorities.has(priority): priorities.append(priority)
+	var incomplete: bool = false
+	for cell in range(81):
+		if board[cell] != solution[cell]: incomplete = true
+	var record: Dictionary = achievement_stats.current_round.duplicate(true)
+	record.merge({"mode":mode,"puzzle_difficulty":puzzle_difficulty,"combat_difficulty":combat_difficulty,"legal_families":families.size(),"target_priorities":priorities.size(),"grid_incomplete":incomplete})
+	achievement_stats.waves.append(record)
+	AchievementFacts.earn(achievement_stats,"SD_FIRST_CLEAR")
+	if families.size() == 9: AchievementFacts.earn(achievement_stats,"SD_NINE_FAMILIES")
+	if priorities.size() == 3: AchievementFacts.earn(achievement_stats,"SD_TARGET_LINEUP")
+	if incomplete: AchievementFacts.earn(achievement_stats,"SD_UNFINISHED_CLEAR")
+	if int(record.counters.illegal_placements) >= 3: AchievementFacts.earn(achievement_stats,"SD_CORRUPT_CLEAR")
+	if round_no % 5 == 0 and bool(record.complete_history) and int(record.counters.leaks) == 0 and int(record.counters.boss_kills) > 0:
+		AchievementFacts.earn(achievement_stats,"SD_BOSS_WAVE_CLEAN")
+	if mode in ["campaign","locked"]:
+		if round_no == 10: AchievementFacts.earn(achievement_stats,"SD_ROUND_10")
+		if round_no == 25: AchievementFacts.earn(achievement_stats,"SD_ROUND_25")
+		if round_no == 50 and max_rounds == 50:
+			AchievementFacts.earn(achievement_stats,"SD_CAMPAIGN_CLEAR")
+			if mode == "locked": AchievementFacts.earn(achievement_stats,"SD_LOCKED_CLEAR")
+			if bool(achievement_stats.complete_history) and achievement_stats.waves.size() == 50 and int(achievement_stats.counters.illegal_placements) == 0:
+				AchievementFacts.earn(achievement_stats,"SD_CLEAN_CAMPAIGN")
 
 func _empty_combat_report(complete: bool) -> Dictionary:
 	return {"complete":complete,"damage":0.0,"core_damage":0,"leaks":{},"towers":{}}
@@ -110,6 +186,7 @@ func new_run(run_seed: int, options: Dictionary = {}) -> void:
 	score = 0
 	kills = 0
 	combat_report = _empty_combat_report(true)
+	achievement_stats = AchievementFacts.create(str(options.get("achievement_run_id","")))
 	_next_id = 1
 	family_levels.clear()
 	inventory.clear()
@@ -134,6 +211,7 @@ func _id() -> int:
 	return result
 
 func _new_board() -> void:
+	achievement_stats.current_round = AchievementFacts.new_round(round_no)
 	var puzzle: Dictionary = Sudoku.make_puzzle(seed_value + round_no * 7919, puzzle_difficulty)
 	board.assign(puzzle.board)
 	solution.assign(puzzle.solution)
@@ -195,17 +273,22 @@ func place(cell: int, number: int) -> Dictionary:
 	var correct: bool = solution[cell] == number
 	var illegal: bool = not correct or not Sudoku.legal(board, cell, number)
 	if phase == "solve" and illegal:
+		AchievementFacts.count(achievement_stats,"wrong_answers")
 		combo = 0
 		return _fail("That is not the answer for this square. Notes show numbers allowed by the current board.", cell)
 	if phase == "battle":
 		if inventory[number] <= 0: return _fail("Buy a reserve seed for 6 credits first.", cell)
 		inventory[number] -= 1
 	board[cell] = number
+	if phase == "battle": AchievementFacts.count(achievement_stats,"battle_placements")
 	towers[cell] = {"id":_id(),"cell":cell,"number":number,"illegal":illegal,"level":1,"attachments":[],"growth":0.0,"cooldown":rng.randf_range(0.0,0.20),"aim":cell_position(cell) + Vector2(0,-1),"target_priority":"first"}
 	_emit("plant", {"cell":cell,"pos":cell_position(cell),"number":number,"illegal":illegal,"color":color_for(number),"text":"Emergency seed" if illegal else "Seed planted"})
 	if illegal:
 		corruption += 1
+		AchievementFacts.count(achievement_stats,"illegal_placements")
 	else:
+		AchievementFacts.count(achievement_stats,"hinted_placements" if _hinting else "manual_placements")
+		if not _hinting: AchievementFacts.earn(achievement_stats,"SD_FIRST_PLANT")
 		round_solved += 1
 		recent_moves.append(cell)
 		if recent_moves.size() > 12: recent_moves.pop_front()
@@ -218,6 +301,8 @@ func place(cell: int, number: int) -> Dictionary:
 		else:
 			combo = 0
 		_check_units(cell, not _hinting)
+		AchievementFacts.maximum(achievement_stats,"combo",combo)
+		_achievement_board()
 		if phase == "solve": _build_route()
 	return _ok("Emergency tower planted. Corruption gives later enemies more health." if illegal else "Seed planted. Select it to add modules or upgrade.", {"cell":cell,"illegal":illegal})
 
@@ -238,6 +323,8 @@ func _check_units(cell: int, award: bool) -> void:
 		if complete:
 			_rewarded_units.append(key)
 			if award:
+				AchievementFacts.count(achievement_stats,"completed_rows" if key.begins_with("r") else ("completed_columns" if key.begins_with("c") else "completed_boxes"))
+				AchievementFacts.earn(achievement_stats,"SD_FIRST_UNIT")
 				credits += 8
 				score += 300
 				_emit("reward", {"cell":cell,"pos":cell_position(cell),"text":"Unit complete · +8","color":Color("ffe188")})
@@ -256,6 +343,7 @@ func hint(cell: int = -1) -> Dictionary:
 					fewest = count
 	if cell < 0: return _fail("The grid is complete.")
 	credits -= 6
+	AchievementFacts.count(achievement_stats,"hints")
 	_hinting = true
 	var result: Dictionary = place(cell, solution[cell])
 	_hinting = false
@@ -345,6 +433,10 @@ func upgrade_tower(cell: int) -> Dictionary:
 	if credits < cost: return _fail("Need %d credits to upgrade this tower." % cost,cell)
 	credits -= cost
 	towers[cell].level += 1
+	AchievementFacts.count(achievement_stats,"tower_upgrades")
+	AchievementFacts.maximum(achievement_stats,"tower_level",int(towers[cell].level))
+	AchievementFacts.earn(achievement_stats,"SD_FIRST_UPGRADE")
+	if int(towers[cell].level) >= 5: AchievementFacts.earn(achievement_stats,"SD_TOWER_FIVE")
 	_emit("upgrade", {"cell":cell,"pos":cell_position(cell),"color":color_for(towers[cell].number),"text":"LEVEL %d" % int(tower_stats(cell).level)})
 	return _ok("Tower upgraded. Damage increased by one level.",{"cost":cost})
 
@@ -355,6 +447,10 @@ func upgrade_family(number: int) -> Dictionary:
 	if credits < cost: return _fail("Need %d credits to upgrade every %d." % [cost,number])
 	credits -= cost
 	family_levels[number] += 1
+	AchievementFacts.count(achievement_stats,"family_upgrades")
+	AchievementFacts.maximum(achievement_stats,"family_level",family_levels[number])
+	AchievementFacts.earn(achievement_stats,"SD_FIRST_FAMILY")
+	if family_levels[number] >= 5: AchievementFacts.earn(achievement_stats,"SD_FAMILY_FIVE")
 	_emit("upgrade", {"number":number,"color":color_for(number),"text":"ALL %ds · LEVEL %d" % [number,family_levels[number]]})
 	return _ok("Every current and future %d gains a level for this run." % number,{"cost":cost})
 
@@ -370,6 +466,8 @@ func equip_item(cell: int, item_id: Variant) -> Dictionary:
 	var item: Dictionary = items[index]
 	items.remove_at(index)
 	towers[cell].attachments.append(item)
+	AchievementFacts.count(achievement_stats,"module_equips")
+	_achievement_modules(cell)
 	_emit("equip", {"cell":cell,"pos":cell_position(cell),"kind":item.kind,"color":Color(str(item.color)),"text":item.name})
 	return _ok("%s equipped." % item.name,{"item":item})
 
@@ -390,6 +488,8 @@ func move_attachment(source: int, slot: int, target: int) -> Dictionary:
 	var item: Dictionary = towers[source].attachments[slot]
 	towers[source].attachments.remove_at(slot)
 	towers[target].attachments.append(item)
+	AchievementFacts.count(achievement_stats,"module_moves")
+	_achievement_modules(target)
 	_emit("equip", {"cell":target,"pos":cell_position(target),"kind":item.kind,"color":Color(str(item.color)),"text":"Module transferred"})
 	return _ok("Module transferred.")
 
@@ -402,6 +502,8 @@ func swap_attachment(cell: int, slot: int, item_id: Variant) -> Dictionary:
 	var item: Dictionary = items[index]
 	towers[cell].attachments[slot] = item
 	items[index] = old
+	AchievementFacts.count(achievement_stats,"module_swaps")
+	_achievement_modules(cell)
 	_emit("equip", {"cell":cell,"slot":slot,"pos":cell_position(cell),"kind":item.kind,"color":Color(str(item.color)),"text":"Module swapped"})
 	return _ok("Module swapped. The previous module is back in Gear.")
 
@@ -437,6 +539,9 @@ func use_item(item_id: Variant) -> Dictionary:
 		if not refreshed: active_effects.append({"id":_id(),"kind":kind,"name":item.name,"remaining":duration,"duration":duration})
 	items.remove_at(index)
 	_emit("item_used", {"kind":kind,"text":item.name,"color":Color(str(item.color))})
+	AchievementFacts.count(achievement_stats,"consumables_used")
+	AchievementFacts.see(achievement_stats,"consumable_kinds",kind)
+	if phase == "battle" and kind in ["overclock","overcharge","freeze"]: AchievementFacts.earn(achievement_stats,"SD_FIRST_BOOST")
 	return _ok("Core repaired." if kind == "repair" else "%s active." % item.name,{"item":item})
 
 func chest_price(rarity: String = "common") -> int:
@@ -469,6 +574,9 @@ func open_chest(chest_id: Variant) -> Dictionary:
 		items.append(item)
 		rewards.append(item)
 	_emit("chest_open", {"rarity":chest.rarity,"color":Loot.rarity_color(chest.rarity),"text":rewards[0].name})
+	AchievementFacts.count(achievement_stats,"chests_opened")
+	AchievementFacts.see(achievement_stats,"chest_rarities",str(chest.rarity))
+	AchievementFacts.earn(achievement_stats,"SD_FIRST_CHEST")
 	return _ok("%d item%s recovered." % [count,"s" if count > 1 else ""],{"rewards":rewards,"rarity":chest.rarity})
 
 func buy_chest(rarity: String = "common") -> Dictionary:
@@ -492,6 +600,8 @@ func buy_passive(kind: String) -> Dictionary:
 	if credits < cost: return _fail("Need %d credits for this run upgrade." % cost)
 	credits -= cost
 	passives[kind] += 1
+	AchievementFacts.count(achievement_stats,"passives_bought")
+	AchievementFacts.maximum(achievement_stats,"passives_total",int(passives.power)+int(passives.salvage)+int(passives.vitality))
 	if kind == "vitality":
 		max_health += 4.0
 		health = minf(max_health,health + 4.0)
@@ -635,6 +745,10 @@ func _damage(enemy: Dictionary, amount: float, color: Color, quiet: bool = false
 	if not quiet: _emit("hit", {"pos":enemy.pos,"color":color,"amount":amount})
 	if float(enemy.hp) > 0.0: return
 	kills += 1
+	AchievementFacts.count(achievement_stats,"kills")
+	if str(enemy.kind) == "boss":
+		AchievementFacts.count(achievement_stats,"boss_kills")
+		AchievementFacts.earn(achievement_stats,"SD_FIRST_BOSS")
 	score += roundi(float(enemy.max_hp)*2.0)
 	var earned: int = 12 if str(enemy.kind) == "boss" else (2 if str(enemy.kind) == "tank" else 1)
 	credits += earned
@@ -752,6 +866,9 @@ func _step(dt: float) -> void:
 			var core_damage: int = _core_damage(kind)
 			combat_report.core_damage += core_damage
 			combat_report.leaks[kind] = int(combat_report.leaks.get(kind,0))+1
+			AchievementFacts.count(achievement_stats,"leaks")
+			AchievementFacts.count(achievement_stats,"core_damage",core_damage)
+			if kind == "boss": AchievementFacts.count(achievement_stats,"boss_leaks")
 			health -= core_damage
 			_emit("leak", {"pos":enemy.pos,"text":"%s: -%d CORE" % [kind.to_upper(),core_damage],"color":Color("ff7289")})
 	if health <= 0.0:
@@ -785,6 +902,7 @@ func _finish_wave() -> void:
 			for item: Dictionary in tower.attachments: items.append(item)
 			removed.append(cell)
 	for cell in removed: towers.erase(cell)
+	_achievement_wave()
 	last_wave_bonus = roundi((22.0 + round_no*2.0)*float(DIFFICULTIES[combat_difficulty].reward))
 	credits += last_wave_bonus
 	score += roundi(500.0+health*10.0)
@@ -806,7 +924,7 @@ func save_data() -> Dictionary:
 		"corruption":corruption,"combo":combo,"round_solved":round_solved,"solve_duration":solve_duration,
 		"last_wave_bonus":last_wave_bonus,"battle_time":battle_time,"next_id":_next_id,"spawn_clock":_spawn_clock,
 		"settled":_settled,"rewarded_units":_rewarded_units.duplicate(),"locked_puzzle":_locked_puzzle,"locked_combat":_locked_combat,
-		"towers":[],"enemies":[],"route":[],"combat_report":combat_report.duplicate(true)
+		"towers":[],"enemies":[],"route":[],"combat_report":combat_report.duplicate(true),"achievement_stats":achievement_stats.duplicate(true)
 	}
 	for tower: Dictionary in towers.values():
 		var saved: Dictionary = tower.duplicate(true)
@@ -906,6 +1024,7 @@ func load_data(data: Dictionary) -> bool:
 	_locked_puzzle = str(state.locked_puzzle)
 	_locked_combat = str(state.locked_combat)
 	combat_report = _read_combat_report(state.get("combat_report"))
+	achievement_stats = AchievementFacts.read(state.get("achievement_stats"),round_no)
 	towers.clear()
 	for value in state.towers:
 		var tower: Dictionary = value.duplicate(true)
