@@ -1931,6 +1931,9 @@ func _controller_navigate(direction: Vector2i) -> void:
 	if _controller_number_cell >= 0:
 		_cycle_controller_number(1 if direction.x > 0 or direction.y > 0 else -1)
 		return
+	if menu_open and is_instance_valid(overlay) and bool(overlay.get_meta("achievements_panel",false)) and direction.y != 0:
+		platform_ui.navigate_achievements(direction.y)
+		return
 	if menu_open and is_instance_valid(overlay) and bool(overlay.get_meta("wave_intel",false)) and direction.y != 0:
 		# Intel is an informational list. Let the stick / D-pad scroll its text,
 		# without turning every enemy description into a nonfunctional button.

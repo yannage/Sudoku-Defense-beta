@@ -8,9 +8,9 @@ func _text(box: VBoxContainer, value: String, color: Color, size: int = 17) -> L
 	box.add_child(node)
 	return node
 
-func _back(box: VBoxContainer) -> Button:
+func _back(box: VBoxContainer, id: String = "platform:back") -> Button:
 	var button: Button = host.button("Back",host._platform_back,true)
-	button.set_meta("focus_id","platform:back")
+	button.set_meta("focus_id",id)
 	box.add_child(button)
 	return button
 
@@ -48,6 +48,7 @@ func show_achievements() -> void:
 				show_achievements()
 			))
 	_text(box,"Practice does not unlock achievements. Notes, accessibility settings and battle speed are always allowed.",host.MUTED,15)
+	_text(box,"D-pad / left stick: scroll | Up at the top: save action | A: select | B: back" if state.get("save_failed",false) else "D-pad / left stick: scroll | A / B: back",host.MINT,14)
 	var back := _back(box)
 	for item: Dictionary in host.achievements.entries():
 		var card := PanelContainer.new()
@@ -71,8 +72,42 @@ func show_achievements() -> void:
 		_text(detail,str(item.description),host.MUTED,16)
 		_text(detail,"Unlocked · awaiting Steam" if unlocked and item.get("pending",false) else ("Unlocked" if unlocked else "Locked"),host.AMBER if unlocked else host.MUTED,13)
 		card.set_meta("achievement_id",str(item.id))
-	_back(box)
+	_back(box,"platform:back_bottom")
 	back.grab_focus()
+
+func navigate_achievements(direction: int) -> void:
+	# Cards are informational. Scroll through them without skipping straight
+	# between the Back buttons, while leaving save recovery above the list usable.
+	var scroll: ScrollContainer = host.overlay.find_children("*","ScrollContainer",true,false)[0]
+	var buttons: Array[Control] = host._controller_buttons(host.overlay)
+	var top: Control
+	var bottom: Control
+	for control in buttons:
+		match str(control.get_meta("focus_id","")):
+			"platform:back": top = control
+			"platform:back_bottom": bottom = control
+	var focused: Control = host.get_viewport().gui_get_focus_owner()
+	var index := buttons.find(focused)
+	var top_index := buttons.find(top)
+	if scroll.scroll_vertical == 0 and index >= 0 and index <= top_index:
+		if direction < 0:
+			buttons[maxi(0,index-1)].grab_focus()
+			return
+		if direction > 0 and index < top_index:
+			buttons[index+1].grab_focus()
+			return
+	if focused != top and focused != bottom:
+		# Pointer scrolling can leave a save action focused above the viewport.
+		# Once the controller browses the cards, A must safely lead back.
+		scroll.follow_focus = false
+		top.grab_focus()
+		scroll.follow_focus = true
+	var limit: int = maxi(0,int(scroll.get_v_scroll_bar().max_value-scroll.size.y))
+	scroll.scroll_vertical = clampi(scroll.scroll_vertical+direction*maxi(80,int(scroll.size.y*0.3)),0,limit)
+	if scroll.scroll_vertical == 0:
+		top.grab_focus()
+	elif scroll.scroll_vertical >= limit:
+		bottom.grab_focus()
 
 func show_saves() -> void:
 	var box: VBoxContainer = host._modal(720,660)

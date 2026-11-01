@@ -121,7 +121,7 @@ func write_json(path: String, value: Dictionary) -> void:
 	file.store_string(JSON.stringify(value))
 	file.close()
 
-func capture(stage: String, size := Vector2i(1280,800)) -> void:
+func capture(stage: String, size := Vector2i(1280,800), check_focus := true) -> void:
 	if not rendered: return
 	scene._layout_ui()
 	scene._refresh()
@@ -141,7 +141,7 @@ func capture(stage: String, size := Vector2i(1280,800)) -> void:
 			colors[color.to_rgba32()] = true
 			if color.r+color.g+color.b > 1.2: bright += 1
 	check(colors.size() > 100 and bright > 100, stage + ": visible text and graphics")
-	focus_visible(stage)
+	if check_focus: focus_visible(stage)
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(output))
 	check(image.save_png(output.path_join(variant+"-"+stage+".png")) == OK, stage + ": capture saved")
 
@@ -211,6 +211,51 @@ func gameplay_and_practice() -> void:
 	check(scene.run.achievement_stats.run_id != id and scene.run.achievement_stats.run_id.length() == 32, "Same seed retry receives a fresh tracking identity")
 	check(scene.run.rng.state == reference.rng.state and scene.run.board == reference.board, "Retry tracking does not change seed gameplay")
 
+func achievement_navigation() -> void:
+	check(texts().contains("D-pad / left stick: scroll"), "Achievement list explains controller scrolling")
+	var scroll: ScrollContainer = scene.overlay.find_children("*", "ScrollContainer", true, false)[0]
+	var limit := int(scroll.get_v_scroll_bar().max_value-scroll.size.y)
+	check(limit > scroll.size.y and scroll.scroll_vertical == 0, "Achievement list starts at its top and spans multiple screens")
+	await press(JOY_BUTTON_DPAD_DOWN)
+	check(scroll.scroll_vertical > 0 and scroll.scroll_vertical < limit, "First D-pad Down reveals interior cards without jumping to the bottom")
+	await capture("achievements-middle-deck",Vector2i(1280,800),false)
+	for step in range(64):
+		if scroll.scroll_vertical >= limit: break
+		await press(JOY_BUTTON_DPAD_DOWN)
+	check(scroll.scroll_vertical >= limit and focused_id() == "platform:back_bottom", "Repeated Down reaches the bottom with a useful Back action")
+	var last_card: Control
+	for node in scene.overlay.find_children("*", "PanelContainer", true, false):
+		if node.has_meta("achievement_id"): last_card = node
+	check(is_instance_valid(last_card) and scroll.get_global_rect().grow(2).encloses(last_card.get_global_rect()), "Last achievement card is visible after controller scrolling")
+	await capture("achievements-bottom-deck")
+	await press(JOY_BUTTON_A)
+	check(button_named("Resume run") != null, "A on bottom Back returns to pause")
+	button_named("Achievements").pressed.emit()
+	await frames()
+	scroll = scene.overlay.find_children("*", "ScrollContainer", true, false)[0]
+	for step in range(64):
+		if scroll.scroll_vertical >= limit: break
+		await press(JOY_BUTTON_DPAD_DOWN)
+	await press(JOY_BUTTON_DPAD_UP)
+	check(scroll.scroll_vertical > 0 and scroll.scroll_vertical < limit, "First Up from the bottom returns to interior cards")
+	for step in range(64):
+		if scroll.scroll_vertical == 0: break
+		await press(JOY_BUTTON_DPAD_UP)
+	check(scroll.scroll_vertical == 0 and focused_id() == "platform:back", "Repeated Up returns to the top Back action")
+	await press(JOY_BUTTON_A)
+	check(button_named("Resume run") != null, "A on achievement Back returns to pause")
+	button_named("Achievements").pressed.emit()
+	await frames()
+	await press(JOY_BUTTON_DPAD_DOWN)
+	await press(JOY_BUTTON_B)
+	check(button_named("Resume run") != null, "B returns from the middle of achievement list")
+	# A also remains a predictable Back action while reading interior cards.
+	button_named("Achievements").pressed.emit()
+	await frames()
+	await press(JOY_BUTTON_DPAD_DOWN)
+	await press(JOY_BUTTON_A)
+	check(button_named("Resume run") != null, "A backs out while reading interior achievement cards")
+
 func panels() -> void:
 	scene._show_pause_menu()
 	check(button_named("Achievements") != null and button_named("Saves & Steam") != null, "Pause offers both platform panels")
@@ -228,7 +273,7 @@ func panels() -> void:
 	check(cards == 26 and icons == 26, "All26 achievements have descriptions and readable icon resources")
 	check(texts().contains("Local achievements") and texts().contains("awaiting Steam"), "Local unlocks accurately show pending Steam status")
 	await capture("achievements-deck")
-	await press(JOY_BUTTON_B)
+	await achievement_navigation()
 	check(not scene.overlay.get_meta("platform_panel",false) and button_named("Resume run") != null, "B returns from achievements to pause")
 	focus_visible("achievement return")
 	button_named("Saves & Steam").pressed.emit()
@@ -280,7 +325,32 @@ func panels() -> void:
 	var recover := button_named("Recover saved unlocks")
 	check(recover != null and texts().contains("archives every original"), "Achievements offers explicit explained recovery action")
 	if recover != null:
-		recover.grab_focus()
+		check(texts().contains("Up at the top: save action"), "Recovery panel explains how to reach its action")
+		await press(JOY_BUTTON_DPAD_UP)
+		check(root.gui_get_focus_owner() == recover, "Up from top Back reaches explicit recovery without pointer assistance")
+		focus_visible("achievement recovery action")
+		await press(JOY_BUTTON_DPAD_UP)
+		check(root.gui_get_focus_owner() == recover, "Up at the first recovery action retains useful focus")
+		await press(JOY_BUTTON_DPAD_DOWN)
+		check(focused_id() == "platform:back", "Down from recovery returns to top Back before scrolling")
+		await press(JOY_BUTTON_DPAD_DOWN)
+		var scroll: ScrollContainer = scene.overlay.find_children("*", "ScrollContainer", true, false)[0]
+		check(scroll.scroll_vertical > 0 and root.gui_get_focus_owner() != recover, "Scrolling recovery panel cannot leave recovery selected")
+		for step in range(64):
+			if scroll.scroll_vertical == 0: break
+			await press(JOY_BUTTON_DPAD_UP)
+		await press(JOY_BUTTON_DPAD_UP)
+		check(root.gui_get_focus_owner() == recover, "Recovery remains reachable after browsing cards")
+		# Model wheel/touch scrolling while the recovery button retains GUI focus.
+		scroll.scroll_vertical = 200
+		await frames()
+		await press(JOY_BUTTON_DPAD_DOWN)
+		check(scroll.scroll_vertical > 200 and focused_id() == "platform:back", "Switching from pointer scrolling to controller replaces hidden recovery focus with Back")
+		for step in range(64):
+			if scroll.scroll_vertical == 0: break
+			await press(JOY_BUTTON_DPAD_UP)
+		await press(JOY_BUTTON_DPAD_UP)
+		check(root.gui_get_focus_owner() == recover, "Explicit recovery remains reachable after changing input methods")
 		await press(JOY_BUTTON_A)
 		check(scene.cloud_profile_status.get("ok",false) and not scene.achievement_save_failed, "Recovery UI refreshes overall profile status")
 		check(scene.achievements.unlocked.has("SD_FIRST_PLANT") and scene.achievements.unlocked.has("SD_FIRST_BOSS"), "Recovery UI retains union of both saved unlock sets")
