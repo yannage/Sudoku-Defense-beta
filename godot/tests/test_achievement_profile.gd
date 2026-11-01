@@ -12,6 +12,19 @@ class Evidence:
 	extends RefCounted
 	var achievement_stats := {"run_id": "", "earned": {}}
 
+class InterruptedStore:
+	extends Profile.ProfileStore
+	var stop_at := 0
+	var operations: Array[String] = []
+	func _write_verified(path: String, text: String) -> bool:
+		operations.append("write:" + path.get_file())
+		if operations.size() == stop_at: return false
+		return super._write_verified(path, text)
+	func _replace(source: String, destination: String) -> bool:
+		operations.append("replace:" + destination.get_file())
+		if operations.size() == stop_at: return false
+		return super._replace(source, destination)
+
 class FakePlatform:
 	extends RefCounted
 	signal stats_stored(success: bool)
@@ -277,5 +290,90 @@ func exercise() -> void:
 	other = Profile.new()
 	other.configure(profile.store.file_path, profile.store.staging_path, "76561198000000001")
 	check(not other.get_status().recoverable and not other.recover_conflict(), "Explicit recovery cannot bypass future-schema protection")
+	check_acknowledgement_write_interruptions()
+	check_reconfigured_platform_callbacks()
+	check_inflight_conflict_recovery()
 	print("ACHIEVEMENT_PROFILE_PASS %d checks / %d failures" % [checks, failures])
 	quit(1 if failures else 0)
+
+
+func check_acknowledgement_write_interruptions() -> void:
+	# Crash/failure points span the verified snapshot, backup copy, backup
+	# replacement, pending publication and final primary replacement.
+	for stop_at in range(1, 6):
+		var profile = fresh()
+		profile.observe_run(evidence(["SD_FIRST_PLANT"]))
+		var before := FileAccess.get_file_as_string(profile.store.file_path)
+		var interrupted := InterruptedStore.new()
+		interrupted.file_path = profile.store.file_path
+		interrupted.staging_path = profile.store.staging_path
+		check(not interrupted.read_data().is_empty(), "Ack fixture baseline observed at stage %d" % stop_at)
+		interrupted.stop_at = stop_at
+		profile.store = interrupted
+		var steam := FakePlatform.new()
+		check(profile.synchronize(steam), "Ack fixture submits at stage %d" % stop_at)
+		steam.finish(true)
+		check(interrupted.operations.size() == stop_at and profile.get_status().save_failed, "Ack persistence reports injected failure at stage %d" % stop_at)
+		check(profile.unlocked.has("SD_FIRST_PLANT") and profile.confirmed.has("SD_FIRST_PLANT"), "Acknowledged evidence survives failure in memory at stage %d" % stop_at)
+		check(FileAccess.get_file_as_string(interrupted.file_path) == before, "Ack failure preserves original primary at stage %d" % stop_at)
+		var restarted = Profile.new()
+		check(restarted.configure(interrupted.file_path, interrupted.staging_path, "76561198000000001").ok, "Ack interrupted journal restarts at stage %d" % stop_at)
+		check(restarted.unlocked.has("SD_FIRST_PLANT"), "Restart retains earned evidence at stage %d" % stop_at)
+		check(restarted.confirmed.has("SD_FIRST_PLANT") == (stop_at == 5), "Only published pending ack counts as durable at stage %d" % stop_at)
+		interrupted.stop_at = 0
+		check(profile.retry_save() and not profile.get_status().save_failed, "Ack journal retry succeeds at stage %d" % stop_at)
+		var durable = Profile.new()
+		check(durable.configure(interrupted.file_path, interrupted.staging_path, "76561198000000001").ok and durable.pending_keys().is_empty(), "Retried acknowledgement survives reload at stage %d" % stop_at)
+		profile.close()
+
+
+func check_reconfigured_platform_callbacks() -> void:
+	for replacement_account in ["76561198000000001", "76561198000000002"]:
+		var profile = fresh()
+		var previous := FakePlatform.new()
+		profile.observe_run(evidence(["SD_FIRST_PLANT"]))
+		profile.synchronize(previous)
+		if replacement_account != previous.account_id:
+			var next_path: String = profile.store.file_path.get_base_dir().path_join("other-account.json")
+			check(profile.configure(next_path, "", replacement_account).ok, "Reconfigure into fresh account while previous callback waits")
+			profile.observe_run(evidence(["SD_FIRST_MODULE"]))
+		var expected_key := "SD_FIRST_PLANT" if replacement_account == previous.account_id else "SD_FIRST_MODULE"
+		var replacement := FakePlatform.new()
+		replacement.account_id = replacement_account
+		check(profile.synchronize(replacement), "Replacement adapter submits its own pending batch")
+		previous.finish(true)
+		previous.finish(false)
+		check(profile.get_status().store_pending and profile.confirmed.is_empty(), "Detached adapter's late success/failure cannot confirm replacement batch")
+		replacement.finish(true)
+		check(profile.confirmed.keys() == [expected_key], "Only active adapter confirms the selected account's evidence")
+		var saved := FileAccess.get_file_as_string(profile.store.file_path)
+		previous.finish(true)
+		replacement.finish(true)
+		check(FileAccess.get_file_as_string(profile.store.file_path) == saved, "Duplicate and foreign callbacks cause no extra journal write")
+		profile.close()
+
+
+func check_inflight_conflict_recovery() -> void:
+	for external_account in ["76561198000000001", "76561198000000002"]:
+		var profile = fresh()
+		var steam := FakePlatform.new()
+		profile.observe_run(evidence(["SD_FIRST_PLANT"]))
+		profile.synchronize(steam)
+		var alternate := {"version": 1, "account_id": external_account, "unlocked": {"SD_FIRST_BOSS": true}, "confirmed": {}}
+		write_json(profile.store.file_path, alternate)
+		var external := FileAccess.get_file_as_string(profile.store.file_path)
+		check(not profile.observe_run(evidence(["SD_FIRST_MODULE"])), "In-flight new evidence detects external profile replacement")
+		steam.finish(true)
+		check(profile.get_status().blocked and profile.confirmed.has("SD_FIRST_PLANT"), "Acknowledgement cannot bypass a conflicted journal")
+		check(FileAccess.get_file_as_string(profile.store.file_path) == external, "In-flight acknowledgement preserves externally replaced bytes")
+		if external_account == steam.account_id:
+			check(profile.recover_conflict(), "Same-account recovery combines acknowledgement, disk and in-memory evidence")
+			check(profile.unlocked.size() == 3 and profile.confirmed.keys() == ["SD_FIRST_PLANT"], "Recovery confirms only submitted key; later and external evidence stays pending")
+			var archive: String = profile.store.last_archive_path
+			check(FileAccess.get_file_as_string(archive.path_join(profile.store.file_path.get_file())) == external, "In-flight conflict recovery archives exact external original")
+			var restarted = Profile.new()
+			check(restarted.configure(profile.store.file_path, profile.store.staging_path, steam.account_id).ok and restarted.pending_keys().size() == 2, "Recovered pending evidence survives restart")
+		else:
+			check(not profile.get_status().recoverable and not profile.recover_conflict(), "Foreign-account external evidence cannot merge even after own acknowledgement")
+			check(FileAccess.get_file_as_string(profile.store.file_path) == external, "Rejected in-flight cross-account recovery keeps original bytes")
+		profile.close()

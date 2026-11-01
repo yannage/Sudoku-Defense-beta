@@ -33,13 +33,18 @@ func exercise() -> void:
 	scene.set_process(false)
 	save_path = "user://guide-test-%d.json" % Time.get_ticks_usec()
 	scene.run_save.file_path = save_path
-	scene.run.new_run(91237,{"mode":"locked","puzzle_difficulty":"medium","combat_difficulty":"hard"})
+	scene.achievements.configure(save_path + ".achievements", "", "")
+	scene.run.new_run(91237,{"mode":"locked","puzzle_difficulty":"medium","combat_difficulty":"hard","achievement_run_id":"guide-owner-run"})
+	var initial_cell: int = scene.run.board.find(0)
+	scene.run.place(initial_cell,scene.run.solution[initial_cell])
 	scene.has_active_run = true
 	scene.manual_pause = true
 	scene.game_speed = 4.0
 	scene._save()
 	var original: String = JSON.stringify(scene.run.save_data())
 	var original_file: String = FileAccess.get_file_as_string(save_path)
+	var original_achievements: String = FileAccess.get_file_as_string(save_path + ".achievements")
+	check(scene.achievements.pending_keys() == ["SD_FIRST_PLANT"],"Real run starts with one durable offline unlock before practice")
 	for size in [Vector2i(1280,800),Vector2i(720,1280)]:
 		root.size = size
 		scene._layout_ui()
@@ -117,8 +122,15 @@ func exercise() -> void:
 		for event: Dictionary in scene.run.drain_events(): scene.tutorial.event_seen(event)
 		scene.tutorial.observe()
 		check(scene.tutorial.step == 7,"Only a collected reward completes guide")
+		check(scene.run.achievement_stats.counters.manual_placements >= 6 and scene.run.achievement_stats.counters.module_equips > 0 and scene.run.achievement_stats.counters.waves_cleared == 1 and scene.run.achievement_stats.counters.chests_opened == 1,"Completed practice exercised real placement, gear, wave and chest counters")
+		check(scene.run.achievement_stats.run_id.is_empty() and preload("res://scripts/achievement_rules.gd").evaluate(scene.run).is_empty(),"Complete practice has no eligible achievement evidence")
+		scene._observe_achievements()
 		scene._save()
 		check(FileAccess.get_file_as_string(save_path) == original_file,"Practice never changes saved campaign")
+		check(FileAccess.get_file_as_string(save_path + ".achievements") == original_achievements,"Full practice preserves the original offline achievement journal byte-for-byte")
+		var restarted_profile = preload("res://scripts/achievement_profile.gd").new()
+		restarted_profile.configure(save_path + ".achievements", "", "")
+		check(restarted_profile.pending_keys() == ["SD_FIRST_PLANT"],"Restart after practice retains only the real run's queued unlock")
 		scene.tutorial.finish()
 		await frames()
 		check(JSON.parse_string(JSON.stringify(scene.run.save_data())) == JSON.parse_string(original),"Finishing restores exact active run including RNG")
@@ -135,6 +147,7 @@ func exercise() -> void:
 		await frames()
 		check(scene.menu_open and not scene.has_active_run,"Skipping from initial menu returns to new-run setup")
 		check(FileAccess.get_file_as_string(save_path) == original_file,"Menu practice preserves existing disk save")
+		check(FileAccess.get_file_as_string(save_path + ".achievements") == original_achievements,"Replay and menu practice preserve the achievement journal")
 		scene.run.load_data(JSON.parse_string(original))
 		scene.has_active_run = true
 	print("FIRST_ROUND_GUIDE_PASS: %d checks" % checks if failures == 0 else "First round guide failures: %d" % failures)
@@ -142,4 +155,5 @@ func exercise() -> void:
 	await frames()
 	for suffix in ["", ".bak", ".pending", ".tmp", ".bak.tmp"]:
 		if FileAccess.file_exists(save_path+suffix): DirAccess.remove_absolute(save_path+suffix)
+		if FileAccess.file_exists(save_path+".achievements"+suffix): DirAccess.remove_absolute(save_path+".achievements"+suffix)
 	quit(1 if failures else 0)

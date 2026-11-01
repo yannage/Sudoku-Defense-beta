@@ -1,17 +1,19 @@
 # Sudoku Defense
 
-## Current local Godot candidate - 0.3.20
+## Current local Godot candidate - 0.3.21
 
 The maintained game on this branch is **`godot/`**, built with Godot 4.7.2 for
 native Windows, Linux / Steam Deck, and browser play. Start with
 [the Godot README](godot/README.md) and [build instructions](docs/GODOT-BUILDS.md).
 [Play the Godot edition](https://sudoku-defense-godot.yakstudios.chatgpt.site).
 
-The local 0.3.20 candidate fixes achievement Back focus outlines, narrow
-landscape footer overlap, singular count text, and interrupted migration
-ownership. See [the local candidate record](docs/ITERATION-0.3.20.md).
-It is separate from the uploaded 0.3.19 candidate and has not been delivered
-or activated on Steam.
+The local 0.3.21 candidate fixes account changes during Steam achievement
+reads and external save changes during journal transactions. It adds targeted
+interruption, migration, acknowledgement and complete-practice regressions.
+See [the local candidate record](docs/ITERATION-0.3.21.md).
+It includes [0.3.20's polish and migration ownership fixes](docs/ITERATION-0.3.20.md).
+This remains an unapproved local candidate, with no push, upload or Steam
+activation. The uploaded 0.3.19 candidate remains on safety hold.
 
 The 0.3.19 foundation adds account-specific Steam Cloud save support and 26
 purposeful achievements, with offline unlock queues, protected migration,

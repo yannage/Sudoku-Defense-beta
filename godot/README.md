@@ -4,11 +4,12 @@ A native Godot 4.7.2 version of the pre-Unity Sudoku Defense game. The same GDSc
 
 ## Play
 
-Local candidate **0.3.20** fixes narrow landscape footer spacing, achievement
-Back focus outlines, singular count text, and migration ownership if the first
-Steam-account copy is interrupted. It retains 0.3.19's 26 achievements and
-account-specific Cloud save integration. See
-[the local candidate record](../docs/ITERATION-0.3.20.md) for validation and
+Local candidate **0.3.21** rejects achievement reads when Steam identity changes
+during the call and protects journal transactions from detected external changes.
+It adds interruption, migration and acknowledgement regressions, including a
+complete practice round that preserves the player's achievement queue. It retains
+0.3.20's layout, focus, copy and migration ownership fixes. See
+[the local candidate record](../docs/ITERATION-0.3.21.md) for validation and
 remaining device acceptance. It has not been uploaded or activated on Steam.
 
 Version **0.3.18** offers **Fast-forward 8x** once a wave has run for 45 battle

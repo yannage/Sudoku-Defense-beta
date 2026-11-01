@@ -152,7 +152,9 @@ func query_achievement(api_key: String) -> Dictionary:
 	if not _valid_key(api_key) or not _check_identity() or not _ready:
 		return {"known": false, "achieved": false, "pending": false}
 	var response: Variant = _gateway.call("getAchievement", api_key)
-	if not response is Dictionary:
+	# The client identity may change during a native call. Never hand a read
+	# from the replacement account to the previous account's durable profile.
+	if not _check_identity() or not response is Dictionary:
 		return {"known": false, "achieved": false, "pending": false}
 	var pending := _volatile_keys.has(api_key)
 	# GetAchievement includes in-memory SetAchievement writes. Do not let those

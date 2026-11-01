@@ -236,6 +236,8 @@ def main() -> None:
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_sudoku.gd"], logs / "sudoku-tests.log", expected="SUDOKU_PASS")
     for script, marker in [
         ("test_cloud_profile.gd", "CLOUD_PROFILE_PASS"),
+        ("test_migration_faults.gd", "MIGRATION_FAULTS_PASS"),
+        ("test_journal_faults.gd", "JOURNAL_FAULTS_PASS"),
         ("test_achievement_rules.gd", "ACHIEVEMENT_RULES_PASS"),
         ("test_achievement_profile.gd", "ACHIEVEMENT_PROFILE_PASS"),
         ("test_steam_platform.gd", "STEAM_PLATFORM_TESTS_OK"),
