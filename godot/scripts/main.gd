@@ -53,6 +53,7 @@ var run_save = RunSaveScript.new()
 var save_failed := false
 var save_recovered := false
 var game_speed := 1.0
+var cleanup_fast := false
 var last_phase := ""
 var ui_elapsed := 0.0
 var controller_used := false
@@ -146,6 +147,7 @@ func _ready() -> void:
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
+		cleanup_fast = false
 		_camera_window_focused = false
 		_close_controller_numbers()
 		_cancel_camera_controls()
@@ -562,7 +564,7 @@ func _refresh_portrait_text() -> void:
 	match run.phase:
 		"solve": phase_detail.text = "SOLVE  %02d:%02d" % [int(run.timer)/60,int(run.timer)%60]
 		"prep": phase_detail.text = "PREPARE"
-		"battle": phase_detail.text = "DEFEND  ·  %d enemies left" % _wave_enemies_remaining()
+		"battle": phase_detail.text = "%s · %d left" % ["CLEANUP 8x" if cleanup_fast else "DEFEND",_wave_enemies_remaining()]
 		"loot": phase_detail.text = "LOOT"
 		_: phase_detail.text = "RUN COMPLETE"
 	if selected_cell >= 0:
@@ -624,8 +626,9 @@ func _process(dt: float) -> void:
 		_dock_was_open = dock.is_open()
 		_layout_ui()
 	var blocked: bool = menu_open or manual_pause or dock.is_open() or not armed_item.is_empty()
+	if cleanup_fast and not _cleanup_controls_available(): cleanup_fast = false
 	if not blocked and not (tutorial.active and run.phase == "solve"):
-		run.update(minf(dt,0.05)*game_speed if run.phase == "battle" else minf(dt,0.05))
+		_advance_gameplay(dt)
 	if world.has_method("set_panel_open"): world.set_panel_open(dock.is_open())
 	_update_attachment_preview()
 	world.tick(minf(dt,0.05))
@@ -660,11 +663,43 @@ func _process(dt: float) -> void:
 		save_elapsed = 0
 		_save()
 
+func _cleanup_available() -> bool:
+	# A long wave with no reinforcements left. This is not a promise of safety:
+	# control builds can still hold a large, dangerous group on the route.
+	return not tutorial.active and run.phase == "battle" and run.spawn_total > 0 and run.spawned >= run.spawn_total and not run.enemies.is_empty() and run.battle_time >= 45.0
+
+func _cleanup_controls_available() -> bool:
+	return _cleanup_available() and not menu_open and not manual_pause and not dock.is_open() and armed_item.is_empty() and not camera_mode and _controller_number_cell < 0
+
+func _toggle_cleanup() -> void:
+	if cleanup_fast: cleanup_fast = false
+	elif _cleanup_controls_available(): cleanup_fast = true
+	_refresh()
+
+func _advance_gameplay(dt: float) -> void:
+	if menu_open or manual_pause or dock.is_open() or not armed_item.is_empty() or (tutorial.active and run.phase == "solve"): return
+	if cleanup_fast and not _cleanup_controls_available(): cleanup_fast = false
+	var frame_step: float = minf(dt,0.05)
+	if not cleanup_fast:
+		run.update(frame_step*game_speed if run.phase == "battle" else frame_step)
+		return
+	# Repeat the ordinary selected-speed update, including its substep pattern.
+	# Multiplying dt by 8 instead would change targeting/physics boundaries at
+	# common frame rates. No combat, RNG, reward or control values change here.
+	for repeat in range(8 / int(game_speed)):
+		var health_before: float = run.health
+		run.update(frame_step*game_speed)
+		if run.phase != "battle" or run.health < health_before or not _cleanup_available():
+			cleanup_fast = false
+			break
+
 func _cycle_speed() -> void:
+	cleanup_fast = false
 	game_speed = 2.0 if game_speed == 1.0 else 4.0 if game_speed == 2.0 else 1.0
 	_refresh()
 
 func _refresh() -> void:
+	if cleanup_fast and not _cleanup_controls_available(): cleanup_fast = false
 	# Keep a compact warning reachable at every layout without occupying the
 	# selected-square/candidate area or suppressing ordinary action feedback.
 	hud_nodes.menu.text = "Save!" if save_failed else "Menu"
@@ -673,7 +708,8 @@ func _refresh() -> void:
 	if _controller_number_cell >= 0 and (not _number_placement_allowed() or run.phase != _controller_number_phase or selected_cell != _controller_number_cell or run.board[_controller_number_cell] != 0):
 		_close_controller_numbers()
 	hud_nodes.notes.text = "Notes  ON" if board_notes else "Notes  OFF"
-	hud_nodes.speed.text = "%dx" % int(game_speed)
+	hud_nodes.speed.text = "%dx" % (8 if cleanup_fast else int(game_speed))
+	hud_nodes.speed.tooltip_text = "Fast-forward: all enemies and towers run at 8x. Y / Enter or Stop fast-forward returns to %dx. Core hits and opening controls stop it." % int(game_speed) if cleanup_fast else "Battle speed: 1x / 2x / 4x. Sudoku time stays normal."
 	resources.text = "CORE %d/%d   CREDITS %d   FRAGMENTS %d" % [int(run.health),int(run.max_health),run.credits,run.fragments]
 	var phases := ["solve","prep","battle","loot"]
 	for i in range(4): phase_badges[i].modulate = MINT if run.phase == phases[i] else Color("647d85")
@@ -691,8 +727,10 @@ func _refresh() -> void:
 			next_button.text = "Launch wave"
 		"battle":
 			phase_detail.text = "HOLD THE LINE\n\n%d / %d enemies left\n%d towers active\n%d corruption" % [_wave_enemies_remaining(),run.spawn_total,count,run.corruption]
+			if _cleanup_available():
+				phase_detail.text = "WAVE CLEANUP\n\n%d enemies on route\n%s\nAll enemies speed up." % [run.enemies.size(),"Fast-forward active: 8x" if cleanup_fast else "Optional fast-forward: 8x"]
 			progress.value = 100.0*(run.spawn_total-_wave_enemies_remaining())/maxi(1,run.spawn_total)
-			next_button.text = "Wave in progress"
+			next_button.text = ("Stop fast-forward" if cleanup_fast else "Fast-forward 8x") if _cleanup_available() else "Wave in progress"
 		"loot":
 			phase_detail.text = "WAVE CLEAR\n\nOpen your chests.\nVisit Camp for upgrades.\nStart the next round."
 			progress.value = 100
@@ -700,7 +738,8 @@ func _refresh() -> void:
 		_:
 			phase_detail.text = "RUN COMPLETE"
 			next_button.text = "Run results"
-	next_button.disabled = run.phase == "battle"
+	next_button.disabled = run.phase == "battle" and not _cleanup_controls_available()
+	next_button.tooltip_text = "Optional 8x after 45 battle seconds and the final spawn. All enemies also speed up. Y / Enter toggles; B stops. Menus, tower inspection and core hits return to your normal speed." if _cleanup_available() else ""
 	hud_nodes.intel.visible = run.phase == "prep"
 	phase_detail.visible = not (portrait_layout and run.phase == "prep")
 	phase_detail.size.y = 50 if portrait_layout else 64 if run.phase == "prep" else 105 if layout_size.y < 700 else 115
@@ -749,6 +788,7 @@ func _refresh() -> void:
 	if controller_used and not _controller_pointer_active():
 		if dock.controller_context_active(): controls_label.text = "A choose / equip module   B back   LB / RB next available tower"
 		elif run.phase == "prep" and run.towers.has(selected_cell) and not dock.is_open(): controls_label.text = "A open module slot   LB / RB next available tower   X gear   Y launch"
+		elif _cleanup_controls_available(): controls_label.text = "Y stop fast-forward   B stop   A inspect   X gear" if cleanup_fast else "Y fast-forward 8x (enemies too)   A inspect   X gear"
 	if controller_used and not armed_item.is_empty(): controls_label.text = "D-PAD / STICK choose tower     A attach module     B cancel"
 	if _controller_pointer_active(): controls_label.text = "RS cursor   R3 click   RT drag   LT precision   L3 camera   D-PAD grid"
 	hud_nodes.plant_caption.text = "CHOOSE A NUMBER" if _controller_number_cell >= 0 else "PLANT A NUMBER"
@@ -886,6 +926,7 @@ func _open_controller_numbers(cell: int) -> bool:
 		_toast("No reserve numbers available. Buy a reserve first." if run.phase == "battle" else "All numbers are complete.",false)
 		return false
 	_controller_number_cell = cell
+	cleanup_fast = false
 	_controller_number_phase = run.phase
 	selected_cell = cell
 	if not choices.has(selected_number): selected_number = choices[0]
@@ -1078,6 +1119,9 @@ func _action(result: Dictionary) -> void:
 
 func _advance() -> void:
 	if not tutorial.can_advance(): return
+	if run.phase == "battle":
+		_toggle_cleanup()
+		return
 	_close_controller_numbers()
 	if run.phase == "loot":
 		dock.close_panel()
@@ -1089,6 +1133,7 @@ func _advance() -> void:
 
 func _toggle_dock(kind: String) -> void:
 	if menu_open: return
+	cleanup_fast = false
 	_close_controller_numbers()
 	_cancel_camera_controls()
 	if dock.is_open() and dock.current_panel == kind: dock.close_panel()
@@ -1234,6 +1279,7 @@ func _retry_save_from_menu() -> void:
 	_show_pause_menu()
 
 func _start_run() -> void:
+	cleanup_fast = false
 	if tutorial.active: tutorial.restore()
 	_cancel_camera_controls()
 	var input_seed: String = seed_input.text.strip_edges() if seed_input else ""
@@ -1263,6 +1309,7 @@ func _close_overlay() -> void:
 	_refresh()
 
 func _modal(width: float = 650, height: float = 640) -> VBoxContainer:
+	cleanup_fast = false
 	if dock != null and dock.controller_workshop_cell >= 0: dock.cancel_controller_context(true)
 	_close_controller_numbers()
 	_cancel_camera_controls()
@@ -1540,6 +1587,7 @@ Controller: press L3, use the right stick, R3 to reset, B to finish.",15,MUTED)
 	box.add_child(button("Sound: " + ("OFF" if muted else "ON"),func(): _toggle_sound(); _help()))
 	box.add_child(button("Notes: " + ("ON" if board_notes else "OFF"),func(): _toggle_notes(); _help()))
 	box.add_child(button("Battle speed: %dx" % int(game_speed),func(): _cycle_speed(); _help()))
+	box.add_child(label("Long waves: after 45 battle seconds and the final spawn, Fast-forward 8x becomes available. Tap it or press Y / Enter. It speeds up enemies too. Press again or B to stop. Core hits, menus and tower inspection return to your normal speed; it never carries into the next wave.",15,MUTED))
 	if has_active_run and selected_cell >= 0 and not run.givens[selected_cell] and not run.towers.has(selected_cell):
 		box.add_child(button("Reveal selected square · 6 credits",func(): _action(run.hint(selected_cell)); _close_overlay()))
 	box.add_child(label("Version " + str(ProjectSettings.get_setting("application/config/version")),11,MUTED))
@@ -1835,6 +1883,7 @@ func _controller_action(action: String) -> void:
 		_refresh()
 		if _controller_number_cell < 0 and action == "confirm": return
 		if _controller_number_cell >= 0:
+			if action == "advance" and run.phase == "battle": return
 			if action == "confirm":
 				if _controller_number_choices().has(selected_number): _choose_number(selected_number)
 				else: _cycle_controller_number(1)
@@ -1871,6 +1920,7 @@ func _controller_action(action: String) -> void:
 		elif menu_open: _close_overlay()
 		elif dock.controller_back(): pass
 		elif dock.is_open(): dock.close_panel()
+		elif cleanup_fast: _toggle_cleanup()
 		else:
 			armed_item = ""
 			dock.clear_armed()

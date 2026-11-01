@@ -204,6 +204,7 @@ def main() -> None:
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_board_transition.gd", "--", "--canvas-graphics"], logs / "canvas-board-transition-tests.log", expected="BOARD_TRANSITION_PASS")
     for renderer, flags in [("native", []), ("canvas", ["--", "--canvas-graphics"])]:
         run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_controller_upgrades.gd"] + flags, logs / f"{renderer}-controller-upgrades-tests.log", expected="CONTROLLER_UPGRADES_PASS")
+        run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_cleanup_pacing.gd"] + flags, logs / f"{renderer}-cleanup-pacing-tests.log", expected="CLEANUP_PACING_PASS")
     for script, marker in [("test_run_save.gd", "RUN_SAVE_PASS"), ("test_strategy_feedback.gd", "STRATEGY_FEEDBACK_PASS"), ("test_results_ui.gd", "RESULTS_UI_PASS"), ("test_audio_settings.gd", "AUDIO_SETTINGS_PASS")]:
         for renderer, flags in [("native", []), ("canvas", ["--", "--canvas-graphics"])]:
             run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/" + script] + flags, logs / f"{renderer}-{script.removesuffix('.gd')}.log", expected=marker)
@@ -233,6 +234,8 @@ def main() -> None:
     if args.render_check:
         render_failures: list[str] = []
         for script, flag, logfile, marker in [
+            ("test_cleanup_pacing.gd", "", "native-cleanup-pacing-render-tests.log", "CLEANUP_PACING_PASS"),
+            ("test_cleanup_pacing.gd", "--canvas-graphics", "canvas-cleanup-pacing-render-tests.log", "CLEANUP_PACING_PASS"),
             ("test_controller_upgrades.gd", "", "native-controller-upgrades-render-tests.log", "CONTROLLER_UPGRADES_PASS"),
             ("test_controller_upgrades.gd", "--canvas-graphics", "canvas-controller-upgrades-render-tests.log", "CONTROLLER_UPGRADES_PASS"),
             ("test_prerelease_render.gd", "", "native-prerelease-render-tests.log", "PRERELEASE_RENDER_PASS"),
@@ -264,7 +267,7 @@ def main() -> None:
                 command += ["--", flag]
             if script == "test_camera_controls.gd":
                 command += ["--capture-camera"]
-            if script == "test_controller_upgrades.gd":
+            if script in ("test_controller_upgrades.gd", "test_cleanup_pacing.gd"):
                 if not flag:
                     command += ["--"]
                 command += ["--render-check"]

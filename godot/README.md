@@ -4,6 +4,15 @@ A native Godot 4.7.2 version of the pre-Unity Sudoku Defense game. The same GDSc
 
 ## Play
 
+Version **0.3.18** offers **Fast-forward 8x** once a wave has run for 45 battle
+seconds and all enemies have spawned. Tap the phase button or press **Y / Enter**
+to toggle it; **B** also stops it. The HUD shows how many enemies remain. Enemies
+speed up too: this does not skip combat or change rewards. Core hits, opening
+controls and the end of the wave return to the selected normal speed. Normal
+**1x / 2x / 4x** and Sudoku timing are unchanged. See
+[the pacing measurements](../docs/BALANCE-0.3.18.md) and
+[the candidate checklist](../docs/ITERATION-0.3.18.md).
+
 Version **0.3.17** streamlines controller equipment: **A on a tower → A on its
 empty (+) socket → A on a module**. After equipping, selection moves to the
 nearest other tower with room for another available module. LB/RB cycle eligible

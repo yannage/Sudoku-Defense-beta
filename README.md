@@ -1,16 +1,19 @@
 # Sudoku Defense
 
-## Current Godot candidate - 0.3.16
+## Current Godot candidate - 0.3.18
 
 The maintained game on this branch is **`godot/`**, built with Godot 4.7.2 for
 native Windows, Linux / Steam Deck, and browser play. Start with
 [the Godot README](godot/README.md) and [build instructions](docs/GODOT-BUILDS.md).
 [Play the Godot edition](https://sudoku-defense-godot.yakstudios.chatgpt.site).
 
-The local 0.3.16 candidate adds a replayable guided first round, recoverable run
-saves, strategy previews, combat results with same-seed retry, and saved audio
-levels. See [the candidate notes and Deck checklist](docs/ITERATION-0.3.16.md).
-Published builds remain at their separately verified versions.
+The local 0.3.18 candidate adds optional fast-forward for long waves while
+preserving combat and rewards. It includes 0.3.17's quick controller module flow
+and the guided first round, recoverable saves, strategy previews, same-seed retry
+and audio settings from 0.3.16. See
+[the candidate notes and Deck checklist](docs/ITERATION-0.3.18.md).
+Steam's separately verified live version is 0.3.17, default build 26349224.
+This candidate has not been uploaded or activated.
 
 Version 0.3.15 adds a controller placement loop: press A on an empty square to
 focus the number tray, choose with D-pad / left stick or LB / RB, then press A
