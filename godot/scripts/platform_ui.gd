@@ -157,6 +157,7 @@ func _show_conflict_choices(box: VBoxContainer) -> void:
 func _confirm_save(candidate: Dictionary) -> void:
 	var box: VBoxContainer = host._modal(700,460)
 	host.overlay.set_meta("platform_panel",true)
+	host.overlay.set_meta("save_confirmation",true)
 	_text(box,"USE THIS SAVED RUN?",host.AMBER,25)
 	var state: Dictionary = candidate.get("data",{}).get("state",{})
 	_text(box,"Round %d · %s\nSeed %s" % [int(state.get("round_no",0)),str(state.get("phase","")),str(state.get("seed_value",""))],host.WHITE,21)
@@ -164,7 +165,18 @@ func _confirm_save(candidate: Dictionary) -> void:
 	var cancel: Button = host.button("Keep both / go back",show_saves,true)
 	box.add_child(cancel)
 	box.add_child(host.button("Use this run",func():
+		# Reconfiguring after recovery reloads achievement evidence from disk.
+		# Never discard an earned unlock that still exists only in memory.
+		host._observe_achievements()
+		var achievements_saved: bool = host.achievements.retry_save()
+		host.achievement_save_failed = bool(host.achievements.get_status().get("save_failed",false))
+		if not achievements_saved:
+			show_achievements()
+			return
 		if host.run_save.resolve_candidate(str(candidate.get("hash",""))):
+			# End practice before loading the chosen run, so its old snapshot
+			# cannot later replace this explicit recovery when the guide exits.
+			if host.tutorial.active: host.tutorial.restore()
 			host._configure_profiles(host.steam_platform.get_status())
 			if host._load():
 				host.world.setup(host.run)

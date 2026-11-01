@@ -339,6 +339,7 @@ func _build_ui() -> void:
 	positioned(notice,Rect2(300,640,680,44))
 	notice.hide()
 	dock = DockScript.new()
+	dock.focus_allowed = func(): return not menu_open
 	ui.add_child(dock)
 	dock.setup(run)
 	dock.set_reduced_motion(reduced_motion)
@@ -1323,7 +1324,10 @@ func _can_replace_saved_run() -> bool:
 	return true
 
 func _platform_back() -> void:
-	_show_menu(not has_active_run)
+	if is_instance_valid(overlay) and overlay.get_meta("save_confirmation",false):
+		platform_ui.show_saves()
+	else:
+		_show_menu(not has_active_run)
 
 func _exit_tree() -> void:
 	achievements.close()
@@ -1394,6 +1398,7 @@ func _close_overlay() -> void:
 	menu_open = false
 	_seed_editing = false
 	_release_ui_focus()
+	if controller_used and dock.is_open(): dock._focus_current.call_deferred()
 	_refresh()
 
 func _modal(width: float = 650, height: float = 640) -> VBoxContainer:
@@ -1658,6 +1663,9 @@ func _help() -> void:
 		return
 	var box := _modal(720,652)
 	box.add_child(label("HOW TO PLAY",26,MINT))
+	# Keep the initial safe action visible above the long instructions.
+	var back := button("Got it",_close_overlay,true)
+	box.add_child(back)
 	box.add_child(button("Play guided first round",func(): tutorial.start(self),true))
 	box.add_child(button("Audio settings",_show_audio_settings))
 	for text in [
@@ -1679,17 +1687,23 @@ Controller: press L3, use the right stick, R3 to reset, B to finish.",15,MUTED)
 	var input_label := label("Left stick / D-pad: grid, numbers or menu  ·  LB / RB: number / tab\nA on an empty square: choose a number below\nA on a number: plant and return to that square  ·  B: back\nRight stick: free cursor  ·  R3: click  ·  Hold RT: click / drag\nHold LT: precise cursor  ·  Hover at list edges to scroll\nX: gear  ·  Y: next phase  ·  Start: pause menu  ·  View: help",15,MUTED)
 	box.add_child(input_label)
 	box.add_child(label("Tower modules: A on a tower focuses its first empty + socket. A opens available modules; A fits one, then selects the nearest other available tower. B returns one step.\nLB / RB cycle available towers in the workshop or on a selected tower during Prepare. Elsewhere they retain number / tab controls. Full towers focus Close; navigate to a filled socket to remove a module.",15,MUTED))
-	var reduce := button("Reduced motion: " + ("ON" if reduced_motion else "OFF"),func(): _toggle_reduced_motion(); _help())
+	var reduce := button("Reduced motion: " + ("ON" if reduced_motion else "OFF"),_toggle_reduced_motion)
+	reduce.pressed.connect(func(): reduce.text = "Reduced motion: " + ("ON" if reduced_motion else "OFF"))
 	box.add_child(reduce)
-	box.add_child(button("Sound: " + ("OFF" if muted else "ON"),func(): _toggle_sound(); _help()))
-	box.add_child(button("Notes: " + ("ON" if board_notes else "OFF"),func(): _toggle_notes(); _help()))
-	box.add_child(button("Battle speed: %dx" % int(game_speed),func(): _cycle_speed(); _help()))
+	var sound_toggle := button("Sound: " + ("OFF" if muted else "ON"),_toggle_sound)
+	sound_toggle.pressed.connect(func(): sound_toggle.text = "Sound: " + ("OFF" if muted else "ON"))
+	box.add_child(sound_toggle)
+	var notes := button("Notes: " + ("ON" if board_notes else "OFF"),_toggle_notes)
+	notes.pressed.connect(func(): notes.text = "Notes: " + ("ON" if board_notes else "OFF"))
+	box.add_child(notes)
+	var speed := button("Battle speed: %dx" % int(game_speed),_cycle_speed)
+	speed.pressed.connect(func(): speed.text = "Battle speed: %dx" % int(game_speed))
+	box.add_child(speed)
 	box.add_child(label("Long waves: after 45 battle seconds and the final spawn, Fast-forward 8x becomes available. Tap it or press Y / Enter. It speeds up enemies too. Press again or B to stop. Core hits, menus and tower inspection return to your normal speed; it never carries into the next wave.",15,MUTED))
 	if has_active_run and selected_cell >= 0 and not run.givens[selected_cell] and not run.towers.has(selected_cell):
 		box.add_child(button("Reveal selected square · 6 credits",func(): _action(run.hint(selected_cell)); _close_overlay()))
 	box.add_child(label("Version " + str(ProjectSettings.get_setting("application/config/version")),11,MUTED))
-	var back := button("Got it",_close_overlay,true)
-	box.add_child(back)
+	box.add_child(button("Got it",_close_overlay,true))
 	back.grab_focus()
 
 func _show_next_round() -> void:

@@ -251,6 +251,8 @@ def main() -> None:
     for renderer, flags in [("native", []), ("canvas", ["--", "--canvas-graphics"])]:
         run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_hud_polish.gd"] + flags, logs / f"{renderer}-hud-polish-tests.log", expected="HUD_POLISH_PASS")
         run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_platform_ui.gd"] + flags, logs / f"{renderer}-platform-ui-tests.log", expected="PLATFORM_UI_PASS")
+        for script, marker in [("test_recovery_controller.gd", "RECOVERY_CONTROLLER_PASS"), ("test_controller_edges.gd", "CONTROLLER_EDGES_PASS"), ("test_overlay_transitions.gd", "OVERLAY_TRANSITIONS_PASS")]:
+            run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/" + script] + flags, logs / f"{renderer}-{script.removesuffix('.gd')}.log", expected=marker)
         run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_controller_upgrades.gd"] + flags, logs / f"{renderer}-controller-upgrades-tests.log", expected="CONTROLLER_UPGRADES_PASS")
         run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_cleanup_pacing.gd"] + flags, logs / f"{renderer}-cleanup-pacing-tests.log", expected="CLEANUP_PACING_PASS")
     for script, marker in [("test_run_save.gd", "RUN_SAVE_PASS"), ("test_strategy_feedback.gd", "STRATEGY_FEEDBACK_PASS"), ("test_results_ui.gd", "RESULTS_UI_PASS"), ("test_audio_settings.gd", "AUDIO_SETTINGS_PASS")]:
@@ -286,6 +288,8 @@ def main() -> None:
             ("test_hud_polish.gd", "--canvas-graphics", "canvas-hud-polish-render-tests.log", "HUD_POLISH_PASS"),
             ("test_platform_ui.gd", "", "native-platform-ui-render-tests.log", "PLATFORM_UI_PASS"),
             ("test_platform_ui.gd", "--canvas-graphics", "canvas-platform-ui-render-tests.log", "PLATFORM_UI_PASS"),
+            ("test_overlay_transitions.gd", "", "native-overlay-transitions-render-tests.log", "OVERLAY_TRANSITIONS_PASS"),
+            ("test_overlay_transitions.gd", "--canvas-graphics", "canvas-overlay-transitions-render-tests.log", "OVERLAY_TRANSITIONS_PASS"),
             ("test_cleanup_pacing.gd", "", "native-cleanup-pacing-render-tests.log", "CLEANUP_PACING_PASS"),
             ("test_cleanup_pacing.gd", "--canvas-graphics", "canvas-cleanup-pacing-render-tests.log", "CLEANUP_PACING_PASS"),
             ("test_controller_upgrades.gd", "", "native-controller-upgrades-render-tests.log", "CONTROLLER_UPGRADES_PASS"),
@@ -319,7 +323,7 @@ def main() -> None:
                 command += ["--", flag]
             if script == "test_camera_controls.gd":
                 command += ["--capture-camera"]
-            if script in ("test_controller_upgrades.gd", "test_cleanup_pacing.gd", "test_platform_ui.gd", "test_hud_polish.gd"):
+            if script in ("test_controller_upgrades.gd", "test_cleanup_pacing.gd", "test_platform_ui.gd", "test_hud_polish.gd", "test_overlay_transitions.gd"):
                 if not flag:
                     command += ["--"]
                 command += ["--render-check"]

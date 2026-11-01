@@ -4,11 +4,11 @@ A native Godot 4.7.2 version of the pre-Unity Sudoku Defense game. The same GDSc
 
 ## Play
 
-Local candidate **0.3.22** preserves combat timer precision across save/recovery
-and adds seeded Campaign/Locked In resume regressions. All 26 achievements have
-documented real-gameplay witnesses. It retains 0.3.21's account/journal safeguards
-and 0.3.20's layout, focus, copy and migration ownership fixes. See
-[the local candidate record](../docs/ITERATION-0.3.22.md) and
+Local candidate **0.3.23** protects run recovery during practice and failed
+achievement saves, corrects recovery Back behavior, and keeps controller focus
+in the active dialog or workshop. Help starts on a visible safe action and
+settings keep their focus. It retains the previous save, account and achievement
+safeguards. See [the candidate record](../docs/ITERATION-0.3.23.md) and
 [progression evidence and acceptance](../docs/PROGRESSION-ACCEPTANCE-0.3.22.md).
 It has not been uploaded or activated on Steam.
 

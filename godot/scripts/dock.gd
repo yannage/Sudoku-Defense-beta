@@ -53,6 +53,7 @@ var _portrait: bool = false
 var _layout_size: Vector2 = Vector2(1280, 800)
 var _board_bottom: float = 760.0
 var controller_mode: bool = false
+var focus_allowed: Callable
 var _hovered_family: int = 0
 var _focused_family: int = 0
 var _bag_filter: String = "all"
@@ -298,6 +299,8 @@ func open_panel(kind: String, cell: int = -1, preserve_controller_context: bool 
 	tween.tween_property(_shell, "modulate:a", 1.0, 0.16)
 
 func _focus_current() -> void:
+	# A queued workshop refresh must not take focus from a covering dialog.
+	if focus_allowed.is_valid() and not focus_allowed.call(): return
 	if _opened and is_instance_valid(_focus_target) and _focus_target.is_inside_tree():
 		_focus_target.grab_focus()
 		if str(_focus_target.get_meta("focus_id","")) == _controller_focus_id: _controller_focus_id = ""
