@@ -4,7 +4,12 @@ A native Godot 4.7.2 version of the pre-Unity Sudoku Defense game. The same GDSc
 
 ## Play
 
-Local candidate **0.3.23** protects run recovery during practice and failed
+Local candidate **0.3.24** keeps local Continue and New Run available if Steam
+initializes without a valid account identity. A later disconnect retains the
+already verified account's files and offline achievement queue. See
+[the startup fix and release handoff](../docs/ITERATION-0.3.24.md).
+
+It retains **0.3.23** protections for run recovery during practice and failed
 achievement saves, corrects recovery Back behavior, and keeps controller focus
 in the active dialog or workshop. Help starts on a visible safe action and
 settings keep their focus. It retains the previous save, account and achievement

@@ -65,11 +65,14 @@ func initialize(mock_gateway: Object = null, mock_context: Dictionary = {}) -> D
 		_status = "steam_app_mismatch"
 		shutdown()
 		return get_status()
-	_account_id = str(_gateway.call("getSteamID"))
-	if not _account_id.is_valid_int() or int(_account_id) <= 0:
+	var account_id := str(_gateway.call("getSteamID"))
+	if not account_id.is_valid_int() or int(account_id) <= 0:
 		_status = "steam_account_unavailable"
 		shutdown()
 		return get_status()
+	# Only publish a verified identity. An unavailable initial account must
+	# select the ordinary local profile, not an invalid account-scoped path.
+	_account_id = account_id
 	_available = true
 	_ready = true # Steamworks 1.65 loads local stats before launching the game.
 	_status = "steam_ready"

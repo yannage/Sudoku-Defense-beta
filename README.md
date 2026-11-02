@@ -1,13 +1,18 @@
 # Sudoku Defense
 
-## Current local Godot candidate - 0.3.23
+## Current local Godot candidate - 0.3.24
 
 The maintained game on this branch is **`godot/`**, built with Godot 4.7.2 for
 native Windows, Linux / Steam Deck, and browser play. Start with
 [the Godot README](godot/README.md) and [build instructions](docs/GODOT-BUILDS.md).
 [Play the Godot edition](https://sudoku-defense-godot.yakstudios.chatgpt.site).
 
-The local 0.3.23 candidate protects selected run recovery from stale practice
+The local 0.3.24 candidate keeps local Continue and New Run usable when Steam
+initialization returns no valid account identity. It publishes the identity
+only after validation, while retaining an already verified account after a
+later disconnect. See [the startup fix and release handoff](docs/ITERATION-0.3.24.md).
+
+The previous 0.3.23 candidate protects selected run recovery from stale practice
 snapshots and unsaved achievement evidence. It corrects recovery Back behavior,
 workshop/dialog focus ownership, and Help focus and settings controls. See
 [the controller/recovery candidate record](docs/ITERATION-0.3.23.md).
