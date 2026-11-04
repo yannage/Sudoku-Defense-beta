@@ -4,6 +4,13 @@ A native Godot 4.7.2 version of the pre-Unity Sudoku Defense game. The same GDSc
 
 ## Play
 
+The **0.3.15-penalty.1 browser preview** adds a five-second penalty for each wrong
+Solve answer. The timer clamps to zero and enters preparation immediately. A red
+square/X and a map callout show the actual time lost; repeated guesses still cost
+time. Correct answers, hints, printed clues, and Battle reserve rules are unchanged.
+The deducted time is saved immediately. This feature preview is based on 0.3.15
+and is not a replacement for later Steam development builds.
+
 Version **0.3.15** adds a controller placement loop: press **A** on an empty
 square to focus the number tray, choose with the D-pad / left stick or LB / RB,
 then press **A** to plant and return to that same square. **B** returns without
