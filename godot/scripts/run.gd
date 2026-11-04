@@ -12,6 +12,7 @@ const DIFFICULTIES: Dictionary = {
 const CHEST_PRICES: Dictionary = {"common":30,"uncommon":50,"rare":90,"epic":160,"legendary":280}
 const TARGET_PRIORITIES: Array[String] = ["first", "strongest", "nearest"]
 const ENEMY_KINDS: Array[String] = ["grunt", "runner", "swarm", "tank", "boss"]
+const WRONG_GUESS_PENALTY_SECONDS: float = 5.0
 
 var phase: String = "solve"
 var round_no: int = 1
@@ -163,7 +164,19 @@ func place(cell: int, number: int) -> Dictionary:
 	var illegal: bool = not correct or not Sudoku.legal(board, cell, number)
 	if phase == "solve" and illegal:
 		combo = 0
-		return _fail("That is not the answer for this square. Notes show numbers allowed by the current board.", cell)
+		var before: float = timer
+		timer = maxf(0.0,timer-WRONG_GUESS_PENALTY_SECONDS)
+		var penalty: float = before-timer
+		var seconds: String = ("%.2f" % penalty).trim_suffix("0").trim_suffix("0").trim_suffix(".")
+		if penalty > 0.0 and penalty < 0.01: seconds = "<0.01"
+		var message: String = "Wrong answer · −%ss." % seconds
+		if timer <= 0.0: message += " Solve time is up. Prepare your defense."
+		var result: Dictionary = {"ok":false,"message":message,"reason":"wrong_answer","cell":cell,"number":number,"time_penalty":penalty,"remaining_time":timer}
+		_emit("invalid", {"text":message,"reason":"wrong_answer","cell":cell,"number":number,"pos":cell_position(cell),"time_penalty":penalty,"remaining_time":timer,"color":Color("ff7289")})
+		# End Solve synchronously, so another input in this frame cannot guess or
+		# plant after the penalty consumed the remaining time.
+		if timer <= 0.0: advance_phase()
+		return result
 	if phase == "battle":
 		if inventory[number] <= 0: return _fail("Buy a reserve seed for 6 credits first.", cell)
 		inventory[number] -= 1

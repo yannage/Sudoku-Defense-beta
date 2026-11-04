@@ -12,6 +12,7 @@ const ControllerCursorScript = preload("res://scripts/controller_cursor.gd")
 const SeedPointerScript = preload("res://scripts/seed_pointer.gd")
 const QuickIconScript = preload("res://scripts/quick_icon.gd")
 const GearFeedbackScript = preload("res://scripts/gear_feedback.gd")
+const WrongGuessFeedbackScript = preload("res://scripts/wrong_guess_feedback.gd")
 const UISkin = preload("res://scripts/ui_skin.gd")
 const MenuChoice = preload("res://scripts/menu_choice.gd")
 const MenuArt = preload("res://scripts/menu_diorama.gd")
@@ -55,6 +56,8 @@ var _controller_number_phase := ""
 var seed_pointer
 var board_input
 var gear_feedback
+var wrong_guess_feedback
+var penalty_notice_remaining := 0.0
 var _seed_text := ""
 var _seed_editing := false
 var _seed_return_initial := true
@@ -333,6 +336,10 @@ func _build_ui() -> void:
 	gear_feedback.host = self
 	gear_feedback.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.add_child(gear_feedback)
+	wrong_guess_feedback = WrongGuessFeedbackScript.new()
+	wrong_guess_feedback.host = self
+	wrong_guess_feedback.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	ui.add_child(wrong_guess_feedback)
 	controller_cursor = ControllerCursorScript.new()
 	ui.add_child(controller_cursor)
 	controller_cursor.setup(self)
@@ -595,6 +602,7 @@ func _style_modal_tree(node: Node) -> void:
 	for child in node.get_children(): _style_modal_tree(child)
 
 func _process(dt: float) -> void:
+	penalty_notice_remaining = maxf(0.0,penalty_notice_remaining-dt)
 	_tick_camera_controls(minf(dt,0.05))
 	# Switching hint styles rebuilds the dock. Defer it until a cursor click or
 	# drag has finished so its pressed Control survives through release.
@@ -612,6 +620,7 @@ func _process(dt: float) -> void:
 	for event in run.drain_events():
 		world.play_event(event)
 		sound.play_event(event)
+		wrong_guess_feedback.play_event(event)
 		if str(event.get("type", "")) == "loot": gear_feedback.chest_recovered(event)
 	if notice_time > 0:
 		notice_time -= dt
@@ -643,6 +652,8 @@ func _cycle_speed() -> void:
 	_refresh()
 
 func _refresh() -> void:
+	phase_detail.add_theme_color_override("font_color",Color("ff9aa9") if penalty_notice_remaining > 0.0 else MUTED)
+	progress.modulate = Color("ff7289") if penalty_notice_remaining > 0.0 else Color.WHITE
 	if _controller_number_cell >= 0 and (not _number_placement_allowed() or run.phase != _controller_number_phase or selected_cell != _controller_number_cell or run.board[_controller_number_cell] != 0):
 		_close_controller_numbers()
 	hud_nodes.notes.text = "Notes  ON" if board_notes else "Notes  OFF"
@@ -963,6 +974,10 @@ func _move_selection(direction: Vector2i) -> void:
 
 func _action(result: Dictionary) -> void:
 	if result.has("message"): _toast(str(result.message),bool(result.get("ok",false)))
+	# A rejected guess still changes the run. Persist the time cost immediately.
+	if str(result.get("reason","")) == "wrong_answer":
+		penalty_notice_remaining = 2.0
+		_save()
 	if result.get("ok",false):
 		_save()
 		if not armed_item.is_empty() and not run.items.any(func(item): return str(item.id)==armed_item):
@@ -1040,7 +1055,10 @@ func _load() -> bool:
 	var data = JSON.parse_string(file.get_as_text())
 	if not data is Dictionary: return false
 	var loaded: bool = run.load_data(data)
-	if loaded: has_active_run = true
+	if loaded:
+		has_active_run = true
+		wrong_guess_feedback.clear_feedback()
+		penalty_notice_remaining = 0.0
 	return loaded
 
 func _start_run() -> void:
@@ -1049,6 +1067,8 @@ func _start_run() -> void:
 	var chosen_seed: int = input_seed.to_int() if input_seed.is_valid_int() else int(Time.get_unix_time_from_system())%2147483647
 	has_active_run = true
 	run.new_run(chosen_seed,{"mode":mode_choice,"puzzle_difficulty":puzzle_choice,"combat_difficulty":combat_choice})
+	wrong_guess_feedback.clear_feedback()
+	penalty_notice_remaining = 0.0
 	selected_cell = -1
 	selected_number = 0
 	armed_item = ""
@@ -1301,7 +1321,7 @@ func _help() -> void:
 	var box := _modal(720,652)
 	box.add_child(label("HOW TO PLAY",26,MINT))
 	for text in [
-		"01  SOLVE  ·  Fill each row, column and 3×3 box with 1–9, without repeats. Tap a square, then a number, or drag a number onto the board. Correct answers grow towers and earn credits. You can move on before finishing the puzzle.",
+		"01  SOLVE  ·  Fill each row, column and 3×3 box with 1–9. Tap a square, then a number, or drag a number onto the board. Correct answers grow towers. Wrong answers cost 5 seconds. At zero, preparation begins. You may move on early.",
 		"02  PREPARE  ·  Read Wave intel before launching. Select a tower to upgrade it and choose First (nearest exit), Strongest (highest current health), or Nearest (closest to tower). Open Gear to fit modules; each tower has five slots. Menus pause the game.",
 		"03  DEFEND  ·  Your recent answers shape the route before battle. During the wave, use reserve seeds to add towers. Wrong numbers are allowed, but add corruption: later enemies have more health, and those towers disappear after the wave.",
 		"04  LOOT  ·  Defeated enemies drop fragments to open chests. Collect gear, buy upgrades in Camp, then start the next round. Credits, gear and number upgrades carry over. Equipped modules return to Gear when the board resets."
@@ -1350,6 +1370,8 @@ func _show_next_round() -> void:
 			return
 		selected_cell = -1
 		selected_number = 0
+		wrong_guess_feedback.clear_feedback()
+		penalty_notice_remaining = 0.0
 		world.setup(run)
 		_close_overlay()
 		_save()
