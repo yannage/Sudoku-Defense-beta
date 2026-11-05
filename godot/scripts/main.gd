@@ -12,6 +12,7 @@ const ControllerCursorScript = preload("res://scripts/controller_cursor.gd")
 const SeedPointerScript = preload("res://scripts/seed_pointer.gd")
 const QuickIconScript = preload("res://scripts/quick_icon.gd")
 const GearFeedbackScript = preload("res://scripts/gear_feedback.gd")
+const WrongGuessFeedbackScript = preload("res://scripts/wrong_guess_feedback.gd")
 const UISkin = preload("res://scripts/ui_skin.gd")
 const MenuChoice = preload("res://scripts/menu_choice.gd")
 const MenuArt = preload("res://scripts/menu_diorama.gd")
@@ -78,6 +79,8 @@ var _controller_number_phase := ""
 var seed_pointer
 var board_input
 var gear_feedback
+var wrong_guess_feedback
+var penalty_notice_remaining := 0.0
 var _seed_text := ""
 var _seed_editing := false
 var _seed_return_initial := true
@@ -378,6 +381,10 @@ func _build_ui() -> void:
 	gear_feedback.host = self
 	gear_feedback.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.add_child(gear_feedback)
+	wrong_guess_feedback = WrongGuessFeedbackScript.new()
+	wrong_guess_feedback.host = self
+	wrong_guess_feedback.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	ui.add_child(wrong_guess_feedback)
 	controller_cursor = ControllerCursorScript.new()
 	ui.add_child(controller_cursor)
 	controller_cursor.setup(self)
@@ -643,6 +650,7 @@ func _style_modal_tree(node: Node) -> void:
 	for child in node.get_children(): _style_modal_tree(child)
 
 func _process(dt: float) -> void:
+	penalty_notice_remaining = maxf(0.0,penalty_notice_remaining-dt)
 	steam_platform.pump(dt)
 	achievements.pump(dt)
 	if dock.controller_workshop_cell >= 0: dock.validate_controller_context()
@@ -665,6 +673,7 @@ func _process(dt: float) -> void:
 		tutorial.event_seen(event)
 		world.play_event(event)
 		sound.play_event(event)
+		wrong_guess_feedback.play_event(event)
 		if str(event.get("type", "")) == "loot": gear_feedback.chest_recovered(event)
 	tutorial.observe()
 	if notice_time > 0:
@@ -729,6 +738,8 @@ func _cycle_speed() -> void:
 	_refresh()
 
 func _refresh() -> void:
+	phase_detail.add_theme_color_override("font_color",Color("ff9aa9") if penalty_notice_remaining > 0.0 else MUTED)
+	progress.modulate = Color("ff7289") if penalty_notice_remaining > 0.0 else Color.WHITE
 	if cleanup_fast and not _cleanup_controls_available(): cleanup_fast = false
 	# Keep a compact warning reachable at every layout without occupying the
 	# selected-square/candidate area or suppressing ordinary action feedback.
@@ -1140,6 +1151,11 @@ func _move_selection(direction: Vector2i) -> void:
 
 func _action(result: Dictionary) -> void:
 	if result.has("message"): _toast(str(result.message),bool(result.get("ok",false)))
+	# A rejected Solve guess changes durable progress. Use the existing guarded
+	# save path, including practice exclusion and unresolved-profile protection.
+	if str(result.get("reason","")) == "wrong_answer":
+		penalty_notice_remaining = 2.0
+		_save()
 	if result.get("ok",false):
 		_save()
 		if not armed_item.is_empty() and not run.items.any(func(item): return str(item.id)==armed_item):
@@ -1333,6 +1349,10 @@ func _exit_tree() -> void:
 	achievements.close()
 	if is_instance_valid(steam_platform): steam_platform.shutdown()
 
+func _clear_wrong_guess_feedback() -> void:
+	wrong_guess_feedback.clear_feedback()
+	penalty_notice_remaining = 0.0
+
 func _load() -> bool:
 	if not cloud_profile_status.get("ok",false): return false
 	dock.cancel_controller_context(true)
@@ -1340,6 +1360,7 @@ func _load() -> bool:
 	if saved.is_empty(): return false
 	var loaded: bool = run.load_data(saved.data)
 	if loaded:
+		_clear_wrong_guess_feedback()
 		run.enable_achievement_tracking(_new_achievement_run_id())
 		has_active_run = true
 		save_recovered = bool(saved.recovered)
@@ -1375,6 +1396,7 @@ func _start_run() -> void:
 	var chosen_seed: int = input_seed.to_int() if input_seed.is_valid_int() else int(Time.get_unix_time_from_system())%2147483647
 	has_active_run = true
 	run.new_run(chosen_seed,{"mode":mode_choice,"puzzle_difficulty":puzzle_choice,"combat_difficulty":combat_choice,"achievement_run_id":_new_achievement_run_id()})
+	_clear_wrong_guess_feedback()
 	selected_cell = -1
 	selected_number = 0
 	armed_item = ""
@@ -1669,7 +1691,7 @@ func _help() -> void:
 	box.add_child(button("Play guided first round",func(): tutorial.start(self),true))
 	box.add_child(button("Audio settings",_show_audio_settings))
 	for text in [
-		"01  SOLVE  ·  Fill each row, column and 3×3 box with 1–9, without repeats. Tap a square, then a number, or drag a number onto the board. Correct answers grow towers and earn credits. You can move on before finishing the puzzle.",
+		"01  SOLVE  ·  Fill each row, column and 3x3 box with 1-9. Tap a square, then a number, or drag a number onto the board. Correct answers grow towers. Wrong answers cost 5 seconds. At zero, preparation begins. You may move on early.",
 		"02  PREPARE  ·  Read Wave intel before launching. Select a tower to upgrade it and choose First (nearest exit), Strongest (highest current health), or Nearest (closest to tower). Open Gear to fit modules; each tower has five slots. Menus pause the game.",
 		"03  DEFEND  ·  Your recent answers shape the route before battle. During the wave, use reserve seeds to add towers. Wrong numbers are allowed, but add corruption: later enemies have more health, and those towers disappear after the wave.",
 		"04  LOOT  ·  Defeated enemies drop fragments to open chests. Collect gear, buy upgrades in Camp, then start the next round. Credits, gear and number upgrades carry over. Equipped modules return to Gear when the board resets."
@@ -1726,6 +1748,7 @@ func _show_next_round() -> void:
 			return
 		selected_cell = -1
 		selected_number = 0
+		_clear_wrong_guess_feedback()
 		world.setup(run)
 		_close_overlay()
 		_save()
@@ -1767,6 +1790,7 @@ func _retry_same_seed() -> void:
 	_cancel_camera_controls()
 	_close_controller_numbers()
 	run.new_run(retry_seed,options)
+	_clear_wrong_guess_feedback()
 	mode_choice = str(options.mode)
 	puzzle_choice = str(options.puzzle_difficulty)
 	combat_choice = str(options.combat_difficulty)

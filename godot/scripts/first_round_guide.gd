@@ -30,6 +30,7 @@ func start(game) -> void:
 	reward_opened = false
 	reward_ready = false
 	host.run.new_run(784217,{"mode":"campaign","puzzle_difficulty":"easy","combat_difficulty":"easy"})
+	host._clear_wrong_guess_feedback()
 	host.has_active_run = true
 	host.game_speed = 1.0
 	host.manual_pause = false
@@ -85,6 +86,9 @@ func event_seen(event: Dictionary) -> void:
 func can_advance() -> bool:
 	if not active: return true
 	observe()
+	# Wrong guesses can exhaust practice Solve before any tower exists. Keep
+	# the normal phase path available instead of requiring impossible equipment.
+	if host.run.phase == "prep" and host.run.towers.is_empty(): return true
 	if (host.run.phase == "solve" and host.run.towers.size() < 6) or (host.run.phase == "prep" and step < 4) or host.run.phase in ["loot","won","lost"]:
 		show_step()
 		return false
@@ -98,6 +102,7 @@ func apply_hud() -> void:
 	if not host.portrait_layout:
 		var hints := ["Plant the highlighted answer. Help reopens this step.","Plant six towers. Recent answers shape the route.","Ready: prepare now. The whole Sudoku is optional.","Open Gear. Select a module, then a planted tower.","Gear fitted! Read Wave intel, then launch.","Watch the route and towers. Gear panels pause battle.","Open Chests and claim a practice reward.","Reward collected! Press Next to finish.","Try another defense, or leave practice."]
 		host.phase_detail.text = hints[clampi(step,0,8)]
+		if step == 3 and host.run.towers.is_empty(): host.phase_detail.text = "No towers planted. Launch the wave or use Help to return."
 	if step == 7: host.next_button.text = "Finish guide"
 
 func show_step() -> void:
@@ -105,6 +110,10 @@ func show_step() -> void:
 	var box: VBoxContainer = host._modal(650,590)
 	host.overlay.set_meta("first_round_guide",true)
 	var titles := ["Plant your first tower","Shape the route","You can battle before finishing","Fit your first module","Launch your defense","Watch your defense work","Claim your reward","You know the loop","A defense to learn from"]
+	var empty_defense: bool = host.run.towers.is_empty()
+	if empty_defense:
+		titles[3] = "Solve time ran out"
+		titles[7] = "Practice round finished"
 	box.add_child(host.label("GUIDED FIRST ROUND / PRACTICE",13,host.MINT))
 	box.add_child(host.label(titles[clampi(step,0,8)],27,host.WHITE))
 	var cell: int = target_cell if target_cell >= 0 else next_blank()
@@ -112,7 +121,7 @@ func show_step() -> void:
 	if cell >= 0:
 		placement = "Try row %d, column %d: its answer is %d. " % [cell/9+1,cell%9+1,host.run.solution[cell]]
 	var descriptions := [
-		placement+"Select the highlighted square, then its number below. On controller: A opens the number tray; choose the number and press A to plant and return. Each row, column and 3x3 box uses 1-9 once. The timer is paused while you learn.",
+		placement+"Select the highlighted square, then its number below. On controller: A opens the number tray; choose the number and press A to plant and return. Each row, column and 3x3 box uses 1-9 once. The clock is paused while you learn; wrong answers still cost 5 seconds.",
 		"That answer became a tower and earned credits. Plant five more answers. "+placement+"The last answers you place pull the enemy route toward them when you prepare. Spread towers around the route so enemies stay in range. Help reopens this guide at any time.",
 		"Six towers are enough to try the first easy wave. You do NOT need to finish the Sudoku. Press Prepare defense (Y on controller). Watch the route change around your recent answers; numbers become firing towers.",
 		"Open Gear (X), choose an Attack or Support module, then select a planted tower and confirm. Every tower has five sockets. Try Rapid, Lightning or Frost from your starting bag. Equipping changes that tower; number-family upgrades help all planted towers with that number.",
@@ -122,13 +131,16 @@ func show_step() -> void:
 		"You placed answers, shaped a route, fitted gear, fought a wave and collected a reward. In a real campaign, credits, modules and number-family levels carry into the next board. You can replay this practice from How to play. Your previous run and its save are preserved.",
 		"Enemies reached the exit before your towers stopped them. Try more coverage along the route and equip modules before launch. You can replay the practice or return to your own run."
 	]
+	if empty_defense:
+		descriptions[3] = "Wrong answers used the remaining Solve time before you planted a tower. You can launch this practice wave and use reserve seeds during battle, or return to your own run. There is no tower to equip yet."
+		descriptions[7] = "You finished this practice wave. Try another practice to plant answers and fit modules before launching. Your previous run and its save are preserved."
 	box.add_child(host.label(descriptions[clampi(step,0,8)],19,host.WHITE))
 	box.add_child(host.label("Practice progress stays separate from your saved run.",14,host.MUTED))
 	var primary: Button
 	if step in [7,8]:
 		primary = host.button("Return to my run" if previous_active else "Choose my own run",finish,true)
 	else:
-		primary = host.button("Open Gear" if step == 3 else ("Open Chests" if step == 6 else "Try it"),continue_step,true)
+		primary = host.button(("Launch wave" if empty_defense else "Open Gear") if step == 3 else ("Open Chests" if step == 6 else "Try it"),continue_step,true)
 	primary.set_meta("focus_id","guide:continue")
 	box.add_child(primary)
 	var skip: Button = host.button("Skip guide / return",finish)
@@ -139,7 +151,9 @@ func show_step() -> void:
 func continue_step() -> void:
 	if not active: return
 	host._close_overlay()
-	if step == 3: host._toggle_dock("bag")
+	if step == 3:
+		if host.run.towers.is_empty(): host._advance()
+		else: host._toggle_dock("bag")
 	elif step == 6: host._toggle_dock("loot")
 	elif step in [4,5]: host.dock.close_panel()
 	elif step in [0,1] and target_cell >= 0 and host.run.board[target_cell] == 0:
@@ -148,6 +162,7 @@ func continue_step() -> void:
 func restore() -> void:
 	if not active: return
 	active = false
+	host._clear_wrong_guess_feedback()
 	host._close_controller_numbers()
 	host.dock.reset_for_run()
 	if previous_active: host.run.load_data(previous)

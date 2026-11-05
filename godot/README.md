@@ -4,6 +4,13 @@ A native Godot 4.7.2 version of the pre-Unity Sudoku Defense game. The same GDSc
 
 ## Play
 
+Local candidate **0.3.25** deducts five seconds for each wrong Solve answer,
+clamps at zero, and immediately enters Prepare when time expires. A shared
+map overlay marks the square with a red X and the actual time lost. Correct
+retries clear the marker; the reduced timer is saved immediately. This is
+ported onto 0.3.24 and retains its save, account and offline protections.
+See [the penalty handoff](../docs/ITERATION-0.3.25.md).
+
 Local candidate **0.3.24** keeps local Continue and New Run available if Steam
 initializes without a valid account identity. A later disconnect retains the
 already verified account's files and offline achievement queue. See
