@@ -1,6 +1,6 @@
 {
-  "mode": "disabled",
-  "verified": false,
-  "url": "",
-  "notice": ""
+  "mode": "form",
+  "verified": true,
+  "url": "https://sudoku-defense-feedback.yakstudios.chatgpt.site",
+  "notice": "No account is needed. Submitted reports are private to YAKStudios and its Trello triage board."
 }

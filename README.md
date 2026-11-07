@@ -8,8 +8,9 @@ native Windows, Linux / Steam Deck, and browser play. Start with
 [Play the Godot edition](https://sudoku-defense-godot.yakstudios.chatgpt.site).
 
 The isolated **0.3.26-dev** candidate adds controller button/trigger mappings
-and a feedback handoff. The online feedback route is disabled until a verified
-intake and Trello routing are configured. See [the candidate record](docs/ITERATION-0.3.26-dev.md).
+and a no-account feedback handoff to the [live private intake](https://sudoku-defense-feedback.yakstudios.chatgpt.site).
+The hourly Trello router is enabled; this game client is still unreleased. See
+[the candidate record](docs/ITERATION-0.3.26-dev.md).
 The frozen 0.3.25 source and Steam delivery artifacts remain unchanged.
 
 The earlier local 0.3.24 candidate keeps local Continue and New Run usable when Steam

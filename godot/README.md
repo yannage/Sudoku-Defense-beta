@@ -5,8 +5,8 @@ A native Godot 4.7.2 version of the pre-Unity Sudoku Defense game. The same GDSc
 ## Play
 
 Local development candidate **0.3.26-dev** adds saved controller button/trigger
-mappings and a privacy-conscious feedback handoff. Its online feedback route
-remains disabled pending destination/routing approval and live verification.
+mappings and a privacy-conscious, no-account feedback handoff. Its configured
+form is live with hourly private Trello routing; the client remains unreleased.
 See [the feature candidate notes](../docs/ITERATION-0.3.26-dev.md).
 
 

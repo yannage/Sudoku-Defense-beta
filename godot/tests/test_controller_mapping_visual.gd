@@ -36,6 +36,10 @@ func exercise() -> void:
 	await frames()
 	scene.sound.set_muted(true)
 	scene.set_process(false)
+	# These screenshot fixtures never open a browser or touch the clipboard.
+	scene.feedback_ui.service.opener = func(_url: String) -> int: return ERR_CANT_OPEN
+	scene.feedback_ui.copy_writer = func(_text: String): pass
+	var installed_route: Dictionary = scene.feedback_ui.service.route.duplicate(true)
 	var renderer := "canvas" if "--canvas-graphics" in OS.get_cmdline_user_args() else "native"
 	for size in [Vector2i(1280,800),Vector2i(390,844)]:
 		root.size = size
@@ -53,12 +57,20 @@ func exercise() -> void:
 				break
 		await capture(prefix+"-reset")
 		scene._close_overlay()
+		scene.feedback_ui.service.route = {}
 		scene.feedback_ui.show_panel()
 		await capture(prefix+"-feedback-disabled")
-		scene.feedback_ui.service.route = {"mode":"github", "verified":true, "url":scene.feedback_ui.service.GITHUB_ISSUES}
+		scene.feedback_ui.service.route = {"mode":"form", "verified":true, "url":"https://example.com/feedback", "notice":"No account is needed. Submitted reports are private to YAKStudios and its Trello triage board."}
+		scene.feedback_ui.show_panel()
+		await capture(prefix+"-feedback-enabled")
 		scene.feedback_ui._confirm("bug")
 		await capture(prefix+"-feedback-confirmation")
-		scene.feedback_ui.service.route = {}
+		scene.feedback_ui.service.route = installed_route.duplicate(true)
+		scene.feedback_ui.show_panel()
+		await capture(prefix+"-feedback-installed")
+		if scene.feedback_ui.service.configured():
+			scene.feedback_ui._confirm("bug")
+			await capture(prefix+"-feedback-installed-confirmation")
 		scene._close_overlay()
 	scene.queue_free()
 	await frames()

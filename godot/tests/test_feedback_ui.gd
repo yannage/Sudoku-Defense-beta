@@ -39,6 +39,24 @@ func exercise() -> void:
 	var feedback = scene.feedback_ui
 	feedback.service.opener = func(url: String) -> int: opened.append(url); return ERR_CANT_OPEN
 	feedback.copy_writer = func(text: String): copied.append(text)
+	# Exercise the installed route through injected browser/clipboard boundaries.
+	var installed_enabled: bool = feedback.service.configured()
+	if feedback.service.route.get("verified", false):
+		check(installed_enabled, "Verified release route is valid")
+	feedback.show_panel()
+	await frames()
+	check(action("bug").disabled == (not installed_enabled) and action("idea").disabled == (not installed_enabled), "Installed route controls online actions")
+	if installed_enabled:
+		await activate("bug")
+		check(action("cancel").has_focus() and opened.is_empty(), "Installed route requires deliberate confirmation")
+		feedback.service.opener = func(url: String) -> int: opened.append(url); return OK
+		await activate("open")
+		check(opened.size() == 1 and opened[0] == feedback.service.report_url("bug", feedback._version(), feedback._platform()), "Installed route opens only its expected URL via the stub")
+		check(copied.is_empty(), "Installed route attaches no report outline automatically")
+		await press(JOY_BUTTON_B)
+	opened.clear()
+	feedback.service.opener = func(url: String) -> int: opened.append(url); return ERR_CANT_OPEN
+	feedback.service.route = {} # Explicit disabled fixture; never depend on release config.
 	feedback.show_panel()
 	await frames()
 	check(action("bug").disabled and action("idea").disabled, "Unconfigured online actions disabled")
@@ -47,7 +65,8 @@ func exercise() -> void:
 	check(copied.size() == 1 and copied[0].contains("Platform:"), "Explicit local copy")
 	await press(JOY_BUTTON_B)
 	check(scene.menu_open and not scene.overlay.get_meta("feedback_panel", false), "Back returns to start menu")
-	feedback.service.route = {"mode":"github", "url":feedback.service.GITHUB_ISSUES, "verified":true}
+	feedback.service.route = {"mode":"form", "url":"https://example.com/feedback", "verified":true, "notice":"No account is needed. Submitted reports are private to YAKStudios and its Trello triage board."}
+	check(feedback.service.privacy_notice().contains("No account"), "Form privacy notice includes account requirements")
 	feedback.show_panel()
 	await frames()
 	await activate("bug")
@@ -62,6 +81,7 @@ func exercise() -> void:
 	await activate("open")
 	feedback._open()
 	check(opened.size() == 2 and action("open").disabled, "Repeated open cannot launch twice")
+	check(opened.all(func(url: String): return url == "https://example.com/feedback"), "Form opens only its exact URL without metadata")
 	await press(JOY_BUTTON_B)
 	check(scene.overlay.get_meta("feedback_panel", false) and not scene.overlay.get_meta("feedback_confirmation", false), "B backs out of confirmation")
 	scene._start_run()
