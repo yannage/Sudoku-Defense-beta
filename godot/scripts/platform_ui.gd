@@ -53,7 +53,7 @@ func show_achievements() -> void:
 				show_achievements()
 			))
 	_text(box,"Practice does not unlock achievements. Notes, accessibility settings and battle speed are always allowed.",host.MUTED,15)
-	_text(box,"D-pad / left stick: scroll | Up at the top: save action | A: select | B: back" if state.get("save_failed",false) else "D-pad / left stick: scroll | A / B: back",host.MINT,14)
+	_text(box,host._controller_hint("D-pad / left stick: scroll | Up at the top: save action | A: select | B: back" if state.get("save_failed",false) else "D-pad / left stick: scroll | A / B: back"),host.MINT,14)
 	var back := _back(box)
 	for item: Dictionary in host.achievements.entries():
 		var card := PanelContainer.new()

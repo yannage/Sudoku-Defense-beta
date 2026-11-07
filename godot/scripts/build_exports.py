@@ -242,6 +242,7 @@ def main() -> None:
         ("test_achievement_rules.gd", "ACHIEVEMENT_RULES_PASS"),
         ("test_achievement_profile.gd", "ACHIEVEMENT_PROFILE_PASS"),
         ("test_steam_platform.gd", "STEAM_PLATFORM_TESTS_OK"),
+        ("test_feedback_link.gd", "FEEDBACK LINK TESTS: PASS"),
     ]:
         run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/" + script],
             logs / f"{script.removesuffix('.gd')}.log", expected=marker)
@@ -257,7 +258,7 @@ def main() -> None:
             run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/" + script] + flags, logs / f"{renderer}-{script.removesuffix('.gd')}.log", expected=marker)
         run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_controller_upgrades.gd"] + flags, logs / f"{renderer}-controller-upgrades-tests.log", expected="CONTROLLER_UPGRADES_PASS")
         run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_cleanup_pacing.gd"] + flags, logs / f"{renderer}-cleanup-pacing-tests.log", expected="CLEANUP_PACING_PASS")
-    for script, marker in [("test_run_save.gd", "RUN_SAVE_PASS"), ("test_strategy_feedback.gd", "STRATEGY_FEEDBACK_PASS"), ("test_results_ui.gd", "RESULTS_UI_PASS"), ("test_audio_settings.gd", "AUDIO_SETTINGS_PASS")]:
+    for script, marker in [("test_run_save.gd", "RUN_SAVE_PASS"), ("test_strategy_feedback.gd", "STRATEGY_FEEDBACK_PASS"), ("test_results_ui.gd", "RESULTS_UI_PASS"), ("test_audio_settings.gd", "AUDIO_SETTINGS_PASS"), ("test_controller_mapping.gd", "CONTROLLER_MAPPING_PASS"), ("test_feedback_ui.gd", "FEEDBACK UI TESTS: PASS")]:
         for renderer, flags in [("native", []), ("canvas", ["--", "--canvas-graphics"])]:
             run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/" + script] + flags, logs / f"{renderer}-{script.removesuffix('.gd')}.log", expected=marker)
     for script, marker in [("test_camera_orbit.gd", "CAMERA_ORBIT_PASS"), ("test_camera_controls.gd", "CAMERA_CONTROLS_PASS"), ("test_enemy_health.gd", "ENEMY_HEALTH_PASS"), ("test_preferences.gd", "PREFERENCES_PASS"), ("test_tactics_ui.gd", "TACTICS_UI_PASS"), ("test_controller_number_picker.gd", "CONTROLLER_NUMBER_PICKER_PASS"), ("test_first_round_guide.gd", "FIRST_ROUND_GUIDE_PASS"), ("test_wrong_guess_feedback.gd", "WRONG_GUESS_FEEDBACK_PASS")]:
@@ -286,6 +287,8 @@ def main() -> None:
     if args.render_check:
         render_failures: list[str] = []
         for script, flag, logfile, marker in [
+            ("test_controller_mapping_visual.gd", "", "native-mapping-feedback-visual-tests.log", "CONTROLLER_MAPPING_VISUAL_PASS"),
+            ("test_controller_mapping_visual.gd", "--canvas-graphics", "canvas-mapping-feedback-visual-tests.log", "CONTROLLER_MAPPING_VISUAL_PASS"),
             ("test_wrong_guess_feedback.gd", "", "native-wrong-guess-feedback-render-tests.log", "WRONG_GUESS_FEEDBACK_PASS"),
             ("test_wrong_guess_feedback.gd", "--canvas-graphics", "canvas-wrong-guess-feedback-render-tests.log", "WRONG_GUESS_FEEDBACK_PASS"),
             ("test_hud_polish.gd", "", "native-hud-polish-render-tests.log", "HUD_POLISH_PASS"),

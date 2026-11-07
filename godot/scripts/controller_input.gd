@@ -13,13 +13,69 @@ signal pointer_button_changed(source: String, pressed: bool)
 signal pointer_precision_changed(pressed: bool)
 signal pointer_reset()
 
-const BUTTONS: Dictionary = {
-	JOY_BUTTON_A: "confirm", JOY_BUTTON_B: "cancel",
-	JOY_BUTTON_X: "gear", JOY_BUTTON_Y: "advance",
-	JOY_BUTTON_LEFT_SHOULDER: "previous", JOY_BUTTON_RIGHT_SHOULDER: "next",
-	JOY_BUTTON_START: "pause", JOY_BUTTON_BACK: "help",
-	JOY_BUTTON_LEFT_STICK: "camera",
-}
+const Bindings = preload("res://scripts/controller_bindings.gd")
+signal binding_captured(token: String)
+signal capture_canceled()
+var bindings: Dictionary = Bindings.DEFAULTS.duplicate()
+var settings_mode := false
+var capturing := false
+var _held: Dictionary = {}
+var _blocked: Dictionary = {}
+var _axes_held: Dictionary = {}
+var _axes_blocked: Dictionary = {}
+var _capture_device := -1
+
+func set_bindings(value: Dictionary) -> void:
+	bindings = Bindings.validate(value)
+	reset_navigation()
+	reset_pointer()
+	_blocked = _held.duplicate()
+	_axes_blocked = _axes_held.duplicate()
+
+func set_settings_mode(enabled: bool) -> void:
+	settings_mode = enabled
+	cancel_capture()
+	reset_navigation()
+	reset_pointer()
+	_blocked = _held.duplicate()
+	_axes_blocked = _axes_held.duplicate()
+
+func begin_capture() -> void:
+	reset_navigation()
+	reset_pointer()
+	_blocked = _held.duplicate()
+	_axes_blocked = _axes_held.duplicate()
+	_capture_device = active_device
+	capturing = true
+
+func cancel_capture() -> void:
+	var was_capturing := capturing
+	capturing = false
+	_blocked = _held.duplicate()
+	_axes_blocked = _axes_held.duplicate()
+	reset_navigation()
+	reset_pointer()
+	if was_capturing: capture_canceled.emit()
+
+func _binding_action(token: String) -> String:
+	for action: String in bindings:
+		if bindings[action] == token: return action
+	return ""
+
+func _dispatch_binding(token: String, pressed: bool, device: int) -> void:
+	var action := _binding_action(token)
+	if action in ["click","drag","precision"]:
+		if pressed: _claim_pointer(device)
+		elif active_device != device: return
+		if action == "precision":
+			_precision = pressed
+			pointer_precision_changed.emit(pressed)
+		else: _set_pointer_button("stick" if action == "click" else "trigger",pressed)
+	elif not action.is_empty():
+		if pressed:
+			_claim(device)
+			action_pressed.emit(action)
+
 const DPAD: Dictionary = {
 	JOY_BUTTON_DPAD_LEFT: Vector2i.LEFT, JOY_BUTTON_DPAD_RIGHT: Vector2i.RIGHT,
 	JOY_BUTTON_DPAD_UP: Vector2i.UP, JOY_BUTTON_DPAD_DOWN: Vector2i.DOWN,
@@ -49,12 +105,21 @@ func _ready() -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
 		_window_focused = false
+		cancel_capture()
 		reset_navigation()
 		reset_pointer()
 	elif what == NOTIFICATION_WM_WINDOW_FOCUS_IN:
 		_window_focused = true
 
 func _connection_changed(device: int, connected: bool) -> void:
+	if not connected:
+		for states: Dictionary in [_held,_blocked]:
+			for key: String in states.keys():
+				if key.begins_with(str(device)+"b") or key.begins_with(str(device)+"t"): states.erase(key)
+		for states: Dictionary in [_axes_held,_axes_blocked]:
+			for key: String in states.keys():
+				if key.begins_with(str(device)+":"): states.erase(key)
+	if capturing: cancel_capture()
 	if connected:
 		if active_device < 0: active_device = device
 	elif device == active_device:
@@ -96,29 +161,82 @@ func _set_pointer_button(source: String, pressed: bool) -> void:
 	pointer_button_changed.emit(source,pressed)
 
 func _input(event: InputEvent) -> void:
-	if not _window_focused and (event is InputEventJoypadButton or event is InputEventJoypadMotion):
+	if capturing and (event is InputEventJoypadButton or event is InputEventJoypadMotion) and _capture_device >= 0 and event.device != _capture_device:
+		get_viewport().set_input_as_handled()
+		cancel_capture()
+		return
+	if event is InputEventJoypadMotion and event.axis in [JOY_AXIS_LEFT_X,JOY_AXIS_LEFT_Y,JOY_AXIS_RIGHT_X,JOY_AXIS_RIGHT_Y]:
+		var axis_key := str(event.device)+":"+str(event.axis)
+		if absf(event.axis_value) > POINTER_DEADZONE: _axes_held[axis_key] = true
+		else: _axes_held.erase(axis_key)
+		if _axes_blocked.has(axis_key):
+			if absf(event.axis_value) <= POINTER_DEADZONE: _axes_blocked.erase(axis_key)
+			get_viewport().set_input_as_handled()
+			return
+	if capturing and event is InputEventJoypadButton and event.pressed and event.button_index == JOY_BUTTON_DPAD_LEFT:
+		get_viewport().set_input_as_handled()
+		cancel_capture()
+		return
+	if capturing and event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+		get_viewport().set_input_as_handled()
+		cancel_capture()
+		return
+	var token := ""
+	var pressed := false
+	if event is InputEventJoypadButton:
+		token = "b%d" % event.button_index
+		pressed = event.pressed
+	elif event is InputEventJoypadMotion and event.axis in [JOY_AXIS_TRIGGER_LEFT, JOY_AXIS_TRIGGER_RIGHT]:
+		token = "t%d" % event.axis
+		pressed = event.axis_value >= (TRIGGER_RELEASE if _held.has(str(event.device)+token) else TRIGGER_PRESS)
+	if not token.is_empty():
+		var key := str(event.device)+token
+		var was_pressed: bool = _held.has(key)
+		if pressed: _held[key] = true
+		else: _held.erase(key)
+		if not _window_focused:
+			if not pressed: _blocked.erase(key)
+			else: _blocked[key] = true
+			get_viewport().set_input_as_handled()
+			return
+		if _blocked.has(key):
+			if not pressed: _blocked.erase(key)
+			get_viewport().set_input_as_handled()
+			return
+		if capturing:
+			get_viewport().set_input_as_handled()
+			if pressed and not was_pressed and Bindings.INPUTS.has(token):
+				capturing = false
+				_blocked = _held.duplicate()
+				_axes_blocked = _axes_held.duplicate()
+				binding_captured.emit(token)
+			return
+		if settings_mode and Bindings.INPUTS.has(token):
+			get_viewport().set_input_as_handled()
+			if pressed and not was_pressed:
+				_claim(event.device)
+				if token == "b0": action_pressed.emit("confirm")
+				elif token in ["b1","b6"]: action_pressed.emit("cancel")
+			return
+		if Bindings.INPUTS.has(token):
+			get_viewport().set_input_as_handled()
+			if pressed != was_pressed: _dispatch_binding(token,pressed,event.device)
+			return
+	if (capturing or not _window_focused) and (event is InputEventJoypadButton or event is InputEventJoypadMotion):
+		get_viewport().set_input_as_handled()
+		return
+	if settings_mode and event is InputEventJoypadMotion and event.axis in [JOY_AXIS_RIGHT_X, JOY_AXIS_RIGHT_Y]:
 		get_viewport().set_input_as_handled()
 		return
 	if event is InputEventJoypadButton:
-		if event.button_index == JOY_BUTTON_RIGHT_STICK:
-			get_viewport().set_input_as_handled()
-			if event.pressed: _claim_pointer(event.device)
-			elif active_device != event.device: return
-			_set_pointer_button("stick",event.pressed)
-			get_viewport().set_input_as_handled()
-			return
-		if not BUTTONS.has(event.button_index) and not DPAD.has(event.button_index): return
 		get_viewport().set_input_as_handled()
+		if not DPAD.has(event.button_index): return
 		if event.pressed: _claim(event.device)
 		elif active_device != event.device: return
-		if DPAD.has(event.button_index):
-			var step: Vector2i = DPAD[event.button_index]
-			if event.pressed: _pad = step
-			elif _pad == step: _pad = Vector2i.ZERO
-			_update_direction()
-		elif event.pressed:
-			action_pressed.emit(str(BUTTONS[event.button_index]))
-		get_viewport().set_input_as_handled()
+		var step: Vector2i = DPAD[event.button_index]
+		if event.pressed: _pad = step
+		elif _pad == step: _pad = Vector2i.ZERO
+		_update_direction()
 	elif event is InputEventJoypadMotion and event.axis in [JOY_AXIS_RIGHT_X, JOY_AXIS_RIGHT_Y]:
 		get_viewport().set_input_as_handled()
 		var axis: Vector2 = _right_axis if active_device == event.device or active_device < 0 else Vector2.ZERO
@@ -128,17 +246,6 @@ func _input(event: InputEvent) -> void:
 		elif active_device >= 0 and active_device != event.device: return
 		_right_axis = axis
 		pointer_axis_changed.emit(_right_axis)
-		get_viewport().set_input_as_handled()
-	elif event is InputEventJoypadMotion and event.axis in [JOY_AXIS_TRIGGER_RIGHT,JOY_AXIS_TRIGGER_LEFT]:
-		get_viewport().set_input_as_handled()
-		var old: bool = (bool(_pointer_buttons.trigger) if event.axis == JOY_AXIS_TRIGGER_RIGHT else _precision) if active_device == event.device else false
-		var pressed: bool = event.axis_value >= (TRIGGER_RELEASE if old else TRIGGER_PRESS)
-		if pressed and not old: _claim_pointer(event.device)
-		elif active_device != event.device: return
-		if event.axis == JOY_AXIS_TRIGGER_RIGHT: _set_pointer_button("trigger",pressed)
-		elif _precision != pressed:
-			_precision = pressed
-			pointer_precision_changed.emit(pressed)
 		get_viewport().set_input_as_handled()
 	elif event is InputEventJoypadMotion and event.axis in [JOY_AXIS_LEFT_X, JOY_AXIS_LEFT_Y]:
 		get_viewport().set_input_as_handled()
@@ -162,7 +269,7 @@ func _update_direction() -> void:
 		if next != Vector2i.ZERO: navigated.emit(next)
 
 func _process(delta: float) -> void:
-	if not _window_focused or _direction == Vector2i.ZERO: return
+	if capturing or not _window_focused or _direction == Vector2i.ZERO: return
 	_repeat -= delta
 	if _repeat <= 0:
 		_repeat = REPEAT_INTERVAL

@@ -1,13 +1,18 @@
 # Sudoku Defense
 
-## Current local Godot candidate - 0.3.24
+## Local feature candidate - 0.3.26-dev
 
 The maintained game on this branch is **`godot/`**, built with Godot 4.7.2 for
 native Windows, Linux / Steam Deck, and browser play. Start with
 [the Godot README](godot/README.md) and [build instructions](docs/GODOT-BUILDS.md).
 [Play the Godot edition](https://sudoku-defense-godot.yakstudios.chatgpt.site).
 
-The local 0.3.24 candidate keeps local Continue and New Run usable when Steam
+The isolated **0.3.26-dev** candidate adds controller button/trigger mappings
+and a feedback handoff. The online feedback route is disabled until a verified
+intake and Trello routing are configured. See [the candidate record](docs/ITERATION-0.3.26-dev.md).
+The frozen 0.3.25 source and Steam delivery artifacts remain unchanged.
+
+The earlier local 0.3.24 candidate keeps local Continue and New Run usable when Steam
 initialization returns no valid account identity. It publishes the identity
 only after validation, while retaining an already verified account after a
 later disconnect. See [the startup fix and release handoff](docs/ITERATION-0.3.24.md).

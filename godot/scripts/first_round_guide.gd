@@ -131,6 +131,7 @@ func show_step() -> void:
 		"You placed answers, shaped a route, fitted gear, fought a wave and collected a reward. In a real campaign, credits, modules and number-family levels carry into the next board. You can replay this practice from How to play. Your previous run and its save are preserved.",
 		"Enemies reached the exit before your towers stopped them. Try more coverage along the route and equip modules before launch. You can replay the practice or return to your own run."
 	]
+	for index in [0,2,3,4]: descriptions[index] = host._controller_hint(descriptions[index])
 	if empty_defense:
 		descriptions[3] = "Wrong answers used the remaining Solve time before you planted a tower. You can launch this practice wave and use reserve seeds during battle, or return to your own run. There is no tower to equip yet."
 		descriptions[7] = "You finished this practice wave. Try another practice to plant answers and fit modules before launching. Your previous run and its save are preserved."

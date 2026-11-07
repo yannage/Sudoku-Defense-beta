@@ -4,6 +4,12 @@ A native Godot 4.7.2 version of the pre-Unity Sudoku Defense game. The same GDSc
 
 ## Play
 
+Local development candidate **0.3.26-dev** adds saved controller button/trigger
+mappings and a privacy-conscious feedback handoff. Its online feedback route
+remains disabled pending destination/routing approval and live verification.
+See [the feature candidate notes](../docs/ITERATION-0.3.26-dev.md).
+
+
 Local candidate **0.3.25** deducts five seconds for each wrong Solve answer,
 clamps at zero, and immediately enters Prepare when time expires. A shared
 map overlay marks the square with a red X and the actual time lost. Correct

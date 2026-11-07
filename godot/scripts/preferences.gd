@@ -1,12 +1,13 @@
 extends RefCounted
 ## Device-local accessibility and presentation choices, independent of run saves.
 
+const Bindings = preload("res://scripts/controller_bindings.gd")
 const DEFAULTS := {"muted": false, "reduced_motion": false, "board_notes": true,
-	"master_volume": 0.85, "music_volume": 1.0, "effects_volume": 1.0}
+	"master_volume": 0.85, "music_volume": 1.0, "effects_volume": 1.0, "controller_bindings": Bindings.DEFAULTS}
 var file_path := "user://sudoku-defense-settings.json"
 
 func read_settings() -> Dictionary:
-	var settings := DEFAULTS.duplicate()
+	var settings := validate({})
 	if not FileAccess.file_exists(file_path): return settings
 	var file := FileAccess.open(file_path, FileAccess.READ)
 	if file == null: return settings
@@ -16,7 +17,7 @@ func read_settings() -> Dictionary:
 	return validate(parser.data)
 
 func validate(settings: Dictionary) -> Dictionary:
-	var validated := DEFAULTS.duplicate()
+	var validated := DEFAULTS.duplicate(true)
 	for key: String in DEFAULTS:
 		var value: Variant = settings.get(key)
 		# Legacy boolean settings keep their meaning; strings never become true.
@@ -24,6 +25,7 @@ func validate(settings: Dictionary) -> Dictionary:
 			if typeof(value) == TYPE_BOOL: validated[key] = value
 		elif typeof(value) in [TYPE_FLOAT, TYPE_INT] and is_finite(float(value)):
 			validated[key] = clampf(float(value), 0.0, 1.0)
+	validated["controller_bindings"] = Bindings.validate(settings.get("controller_bindings"))
 	return validated
 
 func write_settings(settings: Dictionary) -> bool:

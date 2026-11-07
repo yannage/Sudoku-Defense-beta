@@ -53,6 +53,7 @@ var _portrait: bool = false
 var _layout_size: Vector2 = Vector2(1280, 800)
 var _board_bottom: float = 760.0
 var controller_mode: bool = false
+var controller_hint: Callable
 var focus_allowed: Callable
 var _hovered_family: int = 0
 var _focused_family: int = 0
@@ -67,6 +68,9 @@ var controller_context_phase := ""
 var _controller_focus_id := ""
 var _controller_tower: Dictionary = {}
 var _controller_picker_count := -1
+
+func _hint(text: String) -> String:
+	return str(controller_hint.call(text)) if controller_hint.is_valid() else text
 
 func controller_context_active() -> bool:
 	return _opened and controller_workshop_cell >= 0 and current_panel in ["tower","bag"] and selected_cell == controller_workshop_cell and run != null and run.phase == controller_context_phase and run._gear_phase() and run.towers.has(controller_workshop_cell) and is_same(run.towers[controller_workshop_cell],_controller_tower)
@@ -148,7 +152,7 @@ func _choose_controller_module(item_id: String) -> void:
 
 func _controller_picker_panel(content: VBoxContainer) -> void:
 	_note(content,"Fit a module to tower %d / R%d C%d" % [int(run.towers[controller_workshop_cell].number),controller_workshop_cell/9+1,controller_workshop_cell%9+1],MINT)
-	_note(content,"A equips once. B returns to this tower. LB / RB choose another tower.")
+	_note(content,_hint("A equips once. B returns to this tower. LB / RB choose another tower."))
 	var back := _button("Back to tower",controller_back,false,false,42,"upgrade:back")
 	content.add_child(back)
 	var available := _controller_modules()
@@ -166,7 +170,7 @@ func _controller_picker_panel(content: VBoxContainer) -> void:
 		var card: Button = Card.new()
 		card.configure(item,false,true,true,_recent_item_ids.has(id))
 		for text in card.find_children("*","Label",true,false):
-			if text.text == "A SELECT": text.text = "A EQUIP"
+			if text.text == "A SELECT": text.text = _hint("A EQUIP")
 		card.pressed.connect(func(): _choose_controller_module(id))
 		grid.add_child(card)
 
@@ -372,9 +376,9 @@ func refresh(preserve_focus: bool = true) -> void:
 	var title: Label = _label(str(names.get(current_panel, "LOADOUT")), 17, TEXT)
 	title.clip_text = true
 	heading_text.add_child(title)
-	var close_button: Button = _button("B" if controller_mode else "X", close_panel, false, false, 34, "close")
+	var close_button: Button = _button(_hint("B") if controller_mode else "X", close_panel, false, false, 34, "close")
 	close_button.custom_minimum_size = Vector2(34, 34)
-	close_button.tooltip_text = "Close panel · B / Escape"
+	close_button.tooltip_text = _hint("Close panel · B / Escape")
 	top.add_child(close_button)
 	_focus_target = close_button
 	var tabs: HBoxContainer = HBoxContainer.new()
@@ -689,6 +693,8 @@ func _bag_panel(content: VBoxContainer) -> void:
 		var data: Dictionary = item
 		var card: Button = Card.new()
 		card.configure(data,str(data.id) == _armed_id,controller_mode,true,_recent_item_ids.has(str(data.id)))
+		for text in card.find_children("*","Label",true,false):
+			if text.text in ["A SELECT","A USE"]: text.text = _hint(text.text)
 		card.pressed.connect(func():
 			if str(data.get("type","")) == "consumable":
 				_act("use_item",[data.id])
@@ -797,7 +803,7 @@ func _camp_panel(content: VBoxContainer) -> void:
 
 func _mini_grid(content: VBoxContainer, heading: bool = true) -> void:
 	var selected_family: int = int(run.towers[selected_cell].number) if run.towers.has(selected_cell) else 0
-	if heading: _section(content, "MATCHING TOWERS" if selected_family > 0 else "YOUR TOWERS", "Gold: selected" if selected_family > 0 else "A inspects" if controller_mode else "Tap to inspect")
+	if heading: _section(content, "MATCHING TOWERS" if selected_family > 0 else "YOUR TOWERS", "Gold: selected" if selected_family > 0 else _hint("A inspects") if controller_mode else "Tap to inspect")
 	var center: CenterContainer = CenterContainer.new()
 	content.add_child(center)
 	var grid: GridContainer = GridContainer.new()

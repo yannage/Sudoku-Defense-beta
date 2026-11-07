@@ -72,6 +72,12 @@ var ui_elapsed := 0.0
 var controller_used := false
 var _pointer_hint_owner := -2 # -1 mouse, >=0 native touch, -2 no pending handoff
 var controller
+const FeedbackUIScript = preload("res://scripts/feedback_ui.gd")
+var feedback_ui = FeedbackUIScript.new()
+const ControllerBindings = preload("res://scripts/controller_bindings.gd")
+var _bindings_draft: Dictionary = {}
+var _binding_target := ""
+var _binding_message := ""
 var controller_cursor
 var _cursor_gesture_canceled := false
 var _controller_number_cell := -1
@@ -131,6 +137,7 @@ func _ready() -> void:
 	var platform_status: Dictionary = steam_platform.initialize()
 	_configure_profiles(platform_status)
 	platform_ui.host = self
+	feedback_ui.host = self
 	var settings: Dictionary = preferences.read_settings()
 	muted = settings.muted
 	master_volume = settings.master_volume
@@ -152,6 +159,9 @@ func _ready() -> void:
 	sound.set_effects_volume(effects_volume)
 	_build_ui()
 	controller = ControllerScript.new()
+	controller.set_bindings(settings.controller_bindings)
+	controller.binding_captured.connect(_controller_binding_captured)
+	controller.capture_canceled.connect(_controller_capture_canceled)
 	controller.activity.connect(_controller_activity)
 	controller.action_pressed.connect(_controller_action)
 	controller.navigated.connect(_controller_navigate)
@@ -163,6 +173,7 @@ func _ready() -> void:
 	controller.pointer_reset.connect(_controller_pointer_reset)
 	add_child(controller)
 	controller_used = not Input.get_connected_joypads().is_empty()
+	dock.controller_hint = _controller_hint
 	dock.set_controller_mode(controller_used)
 	get_viewport().size_changed.connect(_queue_layout)
 	_update_canvas_scale()
@@ -799,7 +810,7 @@ func _refresh() -> void:
 		selected_label.text = "ROW %d  /  COLUMN %d" % [selected_cell/9+1,selected_cell%9+1]
 		if run.towers.has(selected_cell):
 			var t: Dictionary = run.towers[selected_cell]
-			candidate_label.text = "Tower %d · Level %d\n%d / 5 modules\n%s" % [t.number,run.tower_stats(selected_cell).level,t.attachments.size(),"A customize" if controller_used else "Click to customize"]
+			candidate_label.text = "Tower %d · Level %d\n%d / 5 modules\n%s" % [t.number,run.tower_stats(selected_cell).level,t.attachments.size(),_controller_hint("A customize") if controller_used else "Click to customize"]
 		elif run.givens[selected_cell]:
 			candidate_label.text = "Fixed clue.\nPlant towers in\nempty squares."
 		elif board_notes:
@@ -833,9 +844,10 @@ func _refresh() -> void:
 		elif _cleanup_controls_available(): controls_label.text = "Y stop fast-forward   B stop   A inspect   X gear" if cleanup_fast else "Y fast-forward 8x (enemies too)   A inspect   X gear"
 	if controller_used and not armed_item.is_empty(): controls_label.text = "D-PAD / STICK choose tower     A attach module     B cancel"
 	if _controller_pointer_active(): controls_label.text = "RS cursor   R3 click   RT drag   LT precision   L3 camera   D-PAD grid"
+	if controller_used: controls_label.text = _controller_hint(controls_label.text)
 	hud_nodes.plant_caption.text = "CHOOSE A NUMBER" if _controller_number_cell >= 0 else "PLANT A NUMBER"
 	if _controller_number_cell >= 0:
-		controls_label.text = "D-PAD / STICK number   LB / RB number   A place   B back to square"
+		controls_label.text = _controller_hint("D-PAD / STICK number   LB / RB number   A place   B back to square")
 	hud_nodes.camera.text = "Done" if camera_mode else "Camera"
 	hud_nodes.camera.disabled = not camera_mode and not _camera_available()
 	hud_nodes.camera_reset.disabled = not _camera_available() or not world.camera_is_rotated()
@@ -844,13 +856,13 @@ func _refresh() -> void:
 	if portrait_layout: _font(hud_nodes.camera_reset,20)
 	if camera_mode:
 		selected_label.text = "ROTATE THE BOARD"
-		candidate_label.text = "Right stick to rotate
-R3 reset · B done" if controller_used else "Drag left / right
+		candidate_label.text = _controller_hint("Right stick to rotate
+R3 reset · B done") if controller_used else "Drag left / right
 Done to return to planting"
 		if portrait_layout:
-			candidate_label.text = "RS rotate · R3 reset · B done" if controller_used else "Drag sideways · Done to plant"
+			candidate_label.text = _controller_hint("RS rotate · R3 reset · B done") if controller_used else "Drag sideways · Done to plant"
 			_font(candidate_label,22)
-		controls_label.text = "CAMERA   Right stick rotate   R3 reset view   B / L3 done" if controller_used else "CAMERA   Drag left / right   Q / E rotate   HOME reset   ESC done"
+		controls_label.text = _controller_hint("CAMERA   Right stick rotate   R3 reset view   B / L3 done") if controller_used else "CAMERA   Drag left / right   Q / E rotate   HOME reset   ESC done"
 	if portrait_layout:
 		for quick: Button in [bag_button,loot_button,hud_nodes.camp,hud_nodes.tools,hud_nodes.camera,hud_nodes.camera_reset]:
 			_fit_quick_label(quick)
@@ -1206,7 +1218,7 @@ func _toggle_notes() -> void:
 
 func _save_preferences() -> void:
 	if not preferences.write_settings({"muted": muted, "reduced_motion": reduced_motion, "board_notes": board_notes,
-		"master_volume": master_volume, "music_volume": music_volume, "effects_volume": effects_volume}):
+		"master_volume": master_volume, "music_volume": music_volume, "effects_volume": effects_volume, "controller_bindings": controller.bindings}):
 		_toast("Settings apply now, but could not be saved on this device.",false)
 
 func _set_audio_level(channel: String, value: float) -> void:
@@ -1219,6 +1231,104 @@ func _set_audio_level(channel: String, value: float) -> void:
 
 func _audio_level(channel: String) -> float:
 	return master_volume if channel == "master" else (music_volume if channel == "music" else effects_volume)
+
+func _show_controller_settings() -> void:
+	_bindings_draft = controller.bindings.duplicate()
+	_binding_target = ""
+	_binding_message = "Changes apply only after Save. Already assigned inputs swap actions."
+	_render_controller_settings()
+
+func _render_controller_settings(focus_action: String = "") -> void:
+	var box := _modal(690,690)
+	overlay.set_meta("controller_settings",true)
+	controller.set_settings_mode(true)
+	box.add_child(label("CONTROLLER MAPPING",25,MINT))
+	var note := label("In this panel: D-pad / left stick to navigate, A to choose, B / Start or Escape to leave. These controls stay fixed.\nRight stick and D-pad axes are fixed; mappings below apply to gameplay and other menus.",15,MUTED)
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(note)
+	var status := label(_binding_message,15,AMBER)
+	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(status)
+	var done := button("Save and return",_save_controller_settings,true)
+	done.set_meta("focus_id","mapping:save")
+	box.add_child(done)
+	var cancel := button("Cancel / discard changes",_close_overlay)
+	box.add_child(cancel)
+	box.add_child(button("Reset to defaults (then Save)",func():
+		_bindings_draft = ControllerBindings.DEFAULTS.duplicate()
+		_binding_message = "Defaults ready. Save to apply or Cancel to keep your previous mapping."
+		_render_controller_settings()
+	))
+	var focus_button: Button = done
+	for action: String in ControllerBindings.DEFAULTS:
+		var key := action
+		var choice := button(ControllerBindings.TITLES[key] + "  :  " + ControllerBindings.display(_bindings_draft,key),func(): _capture_controller_binding(key))
+		choice.set_meta("focus_id","mapping:"+key)
+		box.add_child(choice)
+		if key == focus_action: focus_button = choice
+	focus_button.grab_focus()
+
+func _capture_controller_binding(action: String) -> void:
+	if controller.capturing: return
+	_binding_target = action
+	var box := _modal(620,380)
+	# _modal cancels any prior input mode; this new panel owns all capture input.
+	_binding_target = action
+	overlay.set_meta("controller_settings",true)
+	controller.set_settings_mode(true)
+	box.add_child(label("PRESS AN INPUT",25,MINT))
+	var prompt := label("Assign " + ControllerBindings.TITLES[action] + ".\nPress a face button, shoulder, stick click, View, Start or trigger. B and Start can be assigned here.\nD-pad Left, Escape or the Cancel button below cancels. Stick movement and other D-pad directions are ignored.",16,WHITE)
+	prompt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(prompt)
+	var cancel := button("Cancel capture",func(): controller.cancel_capture())
+	box.add_child(cancel)
+	cancel.grab_focus()
+	controller.begin_capture()
+
+func _controller_binding_captured(token: String) -> void:
+	if _binding_target.is_empty(): return
+	var action := _binding_target
+	_binding_target = ""
+	_bindings_draft = ControllerBindings.swap_binding(_bindings_draft,action,token)
+	_binding_message = ControllerBindings.TITLES[action] + " assigned to " + ControllerBindings.display(_bindings_draft,action) + ". Conflicting action swapped. Save to apply."
+	_render_controller_settings(action)
+
+func _controller_capture_canceled() -> void:
+	if _binding_target.is_empty(): return
+	var action := _binding_target
+	_binding_target = ""
+	_binding_message = "Capture canceled. No binding changed."
+	_resume_controller_settings.call_deferred(action)
+
+func _resume_controller_settings(action: String) -> void:
+	if controller.settings_mode and is_instance_valid(overlay) and overlay.get_meta("controller_settings",false):
+		_render_controller_settings(action)
+
+func _save_controller_settings() -> void:
+	var data := {"muted":muted,"reduced_motion":reduced_motion,"board_notes":board_notes,
+		"master_volume":master_volume,"music_volume":music_volume,"effects_volume":effects_volume,
+		"controller_bindings":_bindings_draft}
+	if not preferences.write_settings(data):
+		_binding_message = "Could not save. Your previous mapping is still active. Retry Save or Cancel."
+		_render_controller_settings()
+		return
+	controller.set_bindings(_bindings_draft)
+	dock.refresh(false)
+	_close_overlay()
+	_toast("Controller mapping saved on this device.")
+
+func _controller_hint(text: String) -> String:
+	if controller == null: return text
+	var pattern := RegEx.new()
+	pattern.compile("\\b(A|B|X|Y|LB|RB|L3|R3|LT|RT|Start|View)\\b")
+	var result := ""
+	var offset := 0
+	var actions := {"A":"confirm","B":"cancel","X":"gear","Y":"advance","LB":"previous","RB":"next","L3":"camera","R3":"click","LT":"precision","RT":"drag","Start":"pause","View":"help"}
+	for match_result in pattern.search_all(text):
+		result += text.substr(offset,match_result.get_start()-offset)
+		result += ControllerBindings.display(controller.bindings,actions[match_result.get_string()])
+		offset = match_result.get_end()
+	return result + text.substr(offset)
 
 func _show_audio_settings() -> void:
 	var box := _modal(540,568)
@@ -1409,6 +1519,12 @@ func _start_run() -> void:
 	if _save(): _toast("Plant 6-8 correct answers, then prepare your defense.")
 
 func _close_overlay() -> void:
+	if controller != null and controller.settings_mode:
+		_binding_target = ""
+		controller.set_settings_mode(false)
+	if is_instance_valid(overlay) and overlay.get_meta("feedback_panel",false):
+		feedback_ui.back()
+		return
 	if is_instance_valid(overlay) and overlay.get_meta("platform_panel",false):
 		_platform_back()
 		return
@@ -1424,6 +1540,9 @@ func _close_overlay() -> void:
 	_refresh()
 
 func _modal(width: float = 650, height: float = 640) -> VBoxContainer:
+	if controller != null and controller.settings_mode:
+		_binding_target = ""
+		controller.set_settings_mode(false)
 	cleanup_fast = false
 	if dock != null and dock.controller_workshop_cell >= 0: dock.cancel_controller_context(true)
 	_close_controller_numbers()
@@ -1596,6 +1715,8 @@ func _show_menu(initial: bool = false) -> void:
 		var item := button(str(action[0]),action[1])
 		item.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		platform_row.add_child(item)
+	setup.add_child(button("Controller mapping",_show_controller_settings))
+	setup.add_child(button("Feedback / report a bug",feedback_ui.show_panel))
 	start.grab_focus()
 
 func _show_pause_menu() -> void:
@@ -1627,6 +1748,8 @@ func _show_pause_menu() -> void:
 	actions.add_child(button("Manage gear",func(): _close_overlay(); _toggle_dock("bag")))
 	actions.add_child(button("How to play",_help))
 	actions.add_child(button("Audio settings",_show_audio_settings))
+	actions.add_child(button("Controller mapping",_show_controller_settings))
+	actions.add_child(button("Feedback / report a bug",feedback_ui.show_panel))
 	actions.add_child(button("Achievements",platform_ui.show_achievements))
 	actions.add_child(button("Saves & Steam",platform_ui.show_saves))
 	actions.add_child(button("New run",func(): _show_menu(true)))
@@ -1648,9 +1771,9 @@ func _show_wave_intel() -> void:
 	box.add_child(label("Current corruption: %d  ·  Enemy health ×%.2f\nOne enemy arrives every %.2f seconds." % [int(run.corruption),float(forecast.corruption_multiplier),float(forecast.spawn_interval)],16,MUTED))
 	var back := button("Back to preparation" if run.phase == "prep" else "Back to puzzle",_close_overlay,true)
 	back.set_meta("focus_id","wave:close")
-	back.tooltip_text = "Close wave intel · B / Escape"
+	back.tooltip_text = _controller_hint("Close wave intel · B / Escape")
 	box.add_child(back)
-	box.add_child(label("D-pad / left stick: scroll · A / B: back",14,MINT))
+	box.add_child(label(_controller_hint("D-pad / left stick: scroll · A / B: back"),14,MINT))
 	var coverage := label(StrategyFeedback.defense_summary(run),17,MINT)
 	coverage.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	coverage.set_meta("defense_coverage",true)
@@ -1672,8 +1795,8 @@ func _show_wave_intel() -> void:
 		details.add_child(label("%d × %s" % [int(group.count),str(names.get(str(group.kind),str(group.kind).capitalize()))],20,AMBER if str(group.kind) == "boss" else WHITE))
 		details.add_child(label("%.1f HP  ·  %.2f speed  ·  %d core damage" % [float(group.health),float(group.speed),int(group.core_damage)],15,MINT))
 		details.add_child(label(str(roles.get(str(group.kind),"")),15,MUTED))
-	box.add_child(label("Stats reflect current corruption. Planting a wrong number increases enemy health. Set each tower's target in its workshop.\n\nB / Escape closes this panel. Launch the wave from the board when ready.",15,MUTED))
-	box.add_child(label("D-pad / left stick: scroll · A / B: back",14,MINT))
+	box.add_child(label(_controller_hint("Stats reflect current corruption. Planting a wrong number increases enemy health. Set each tower's target in its workshop.\n\nB / Escape closes this panel. Launch the wave from the board when ready."),15,MUTED))
+	box.add_child(label(_controller_hint("D-pad / left stick: scroll · A / B: back"),14,MINT))
 	var bottom_back := button(back.text,_close_overlay)
 	bottom_back.set_meta("focus_id","wave:close_bottom")
 	box.add_child(bottom_back)
@@ -1690,6 +1813,8 @@ func _help() -> void:
 	box.add_child(back)
 	box.add_child(button("Play guided first round",func(): tutorial.start(self),true))
 	box.add_child(button("Audio settings",_show_audio_settings))
+	box.add_child(button("Controller mapping",_show_controller_settings))
+	box.add_child(button("Feedback / report a bug",feedback_ui.show_panel))
 	for text in [
 		"01  SOLVE  ·  Fill each row, column and 3x3 box with 1-9. Tap a square, then a number, or drag a number onto the board. Correct answers grow towers. Wrong answers cost 5 seconds. At zero, preparation begins. You may move on early.",
 		"02  PREPARE  ·  Read Wave intel before launching. Select a tower to upgrade it and choose First (nearest exit), Strongest (highest current health), or Nearest (closest to tower). Open Gear to fit modules; each tower has five slots. Menus pause the game.",
@@ -1700,15 +1825,15 @@ func _help() -> void:
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		box.add_child(l)
 	box.add_child(label("CAMERA",12,MINT))
-	var camera_help := label("Right-drag the board or hold Q / E to rotate. Home resets the view.
+	var camera_help := label(_controller_hint("Right-drag the board or hold Q / E to rotate. Home resets the view.
 Touch: tap Camera, drag left / right, then Done.
-Controller: press L3, use the right stick, R3 to reset, B to finish.",15,MUTED)
+Controller: press L3, use the right stick, R3 to reset, B to finish."),15,MUTED)
 	camera_help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(camera_help)
 	box.add_child(label("CONTROLLER",12,MINT))
-	var input_label := label("Left stick / D-pad: grid, numbers or menu  ·  LB / RB: number / tab\nA on an empty square: choose a number below\nA on a number: plant and return to that square  ·  B: back\nRight stick: free cursor  ·  R3: click  ·  Hold RT: click / drag\nHold LT: precise cursor  ·  Hover at list edges to scroll\nX: gear  ·  Y: next phase  ·  Start: pause menu  ·  View: help",15,MUTED)
+	var input_label := label(ControllerBindings.help_text(controller.bindings),15,MUTED)
 	box.add_child(input_label)
-	box.add_child(label("Tower modules: A on a tower focuses its first empty + socket. A opens available modules; A fits one, then selects the nearest other available tower. B returns one step.\nLB / RB cycle available towers in the workshop or on a selected tower during Prepare. Elsewhere they retain number / tab controls. Full towers focus Close; navigate to a filled socket to remove a module.",15,MUTED))
+	box.add_child(label(_controller_hint("Tower modules: A on a tower focuses its first empty + socket. A opens available modules; A fits one, then selects the nearest other available tower. B returns one step.\nLB / RB cycle available towers in the workshop or on a selected tower during Prepare. Elsewhere they retain number / tab controls. Full towers focus Close; navigate to a filled socket to remove a module."),15,MUTED))
 	var reduce := button("Reduced motion: " + ("ON" if reduced_motion else "OFF"),_toggle_reduced_motion)
 	reduce.pressed.connect(func(): reduce.text = "Reduced motion: " + ("ON" if reduced_motion else "OFF"))
 	box.add_child(reduce)
@@ -1721,7 +1846,7 @@ Controller: press L3, use the right stick, R3 to reset, B to finish.",15,MUTED)
 	var speed := button("Battle speed: %dx" % int(game_speed),_cycle_speed)
 	speed.pressed.connect(func(): speed.text = "Battle speed: %dx" % int(game_speed))
 	box.add_child(speed)
-	box.add_child(label("Long waves: after 45 battle seconds and the final spawn, Fast-forward 8x becomes available. Tap it or press Y / Enter. It speeds up enemies too. Press again or B to stop. Core hits, menus and tower inspection return to your normal speed; it never carries into the next wave.",15,MUTED))
+	box.add_child(label(_controller_hint("Long waves: after 45 battle seconds and the final spawn, Fast-forward 8x becomes available. Tap it or press Y / Enter. It speeds up enemies too. Press again or B to stop. Core hits, menus and tower inspection return to your normal speed; it never carries into the next wave."),15,MUTED))
 	if has_active_run and selected_cell >= 0 and not run.givens[selected_cell] and not run.towers.has(selected_cell):
 		box.add_child(button("Reveal selected square · 6 credits",func(): _action(run.hint(selected_cell)); _close_overlay()))
 	box.add_child(label("Version " + str(ProjectSettings.get_setting("application/config/version")),11,MUTED))
@@ -2017,6 +2142,11 @@ func _controller_confirm_ui() -> void:
 		focused.pressed.emit()
 
 func _controller_action(action: String) -> void:
+	if controller.settings_mode:
+		if controller.capturing: return
+		if action == "confirm": _controller_confirm_ui()
+		elif action == "cancel": _close_overlay()
+		return
 	if dock.controller_workshop_cell >= 0 and not dock.validate_controller_context() and action in ["confirm","previous","next"]: return
 	# Validate before dispatch too: a solve timeout must not leave a stale picker.
 	if _controller_number_cell >= 0:
@@ -2114,7 +2244,7 @@ func _show_seed_pad() -> void:
 	_seed_editing = true
 	var box := _modal(490,570)
 	box.add_child(label("CHOOSE A RUN SEED",25,MINT))
-	box.add_child(label("D-pad / stick move · A select · B back",15,MUTED))
+	box.add_child(label(_controller_hint("D-pad / stick move · A select · B back"),15,MUTED))
 	var display := label(_seed_text if not _seed_text.is_empty() else "Random",30,WHITE)
 	display.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(display)
