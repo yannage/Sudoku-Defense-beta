@@ -1,5 +1,5 @@
 extends SceneTree
-## Controller socket -> module -> next tower, using native joypad events.
+## Controller socket -> module -> same tower, using native joypad events.
 ## Fixtures seed models only; interactions never emit action callbacks.
 ## --render-check requires real GPU pixels; --capture-dir changes PNG output.
 ## Render on an isolated display, or a QA copy starting minimized/no_focus.
@@ -178,9 +178,9 @@ func capture(stage: String) -> void:
 	check(image.save_png(output.path_join(variant+"-"+stage+".png")) == OK,stage+": capture saved")
 
 func repeated_equipping() -> void:
-	group = "repeat and nearest"
+	group = "repeat on selected tower"
 	await fixture([40,31,39,41,49])
-	fill(40,4)
+	fill(40,3)
 	fill(31,5)
 	fill(39,4)
 	scene.run.towers[39].level = 12
@@ -188,7 +188,7 @@ func repeated_equipping() -> void:
 	var all_before := all_module_ids()
 	var credits: int = scene.run.credits
 	var board: Array = scene.run.board.duplicate()
-	if not await enter_socket(4): return
+	if not await enter_socket(3): return
 	await capture("socket")
 	var chosen := await enter_picker()
 	await press(JOY_BUTTON_DPAD_RIGHT)
@@ -197,16 +197,22 @@ func repeated_equipping() -> void:
 	focused_visible("chooser navigation")
 	await capture("chooser")
 	await press(JOY_BUTTON_A)
-	check(scene.run.towers[40].attachments.size() == 5,"Confirm adds exactly one module")
+	check(scene.run.towers[40].attachments.size() == 4,"Confirm adds exactly one module")
 	check(str(scene.run.towers[40].attachments.back().id) == chosen,"Confirm installs the highlighted module")
 	check(not inventory_ids().has(chosen),"Only the confirmed module leaves inventory")
-	check(not scene.dock.is_open() and scene.selected_cell == 39,"Nearest squared-grid tie selects row-major39, skips full31 and ignores tower height")
+	check(scene.dock.is_open() and scene.dock.controller_workshop_cell == 40 and scene.dock.controller_picker_slot == -1 and scene.selected_cell == 40 and focused_id() == "slot:4","Install returns to the same tower's next empty socket")
+	check(scene.run.towers[39].attachments.size() == 4 and scene.run.towers[41].attachments.is_empty() and scene.run.towers[49].attachments.is_empty(),"Install does not move selection or distribute gear to nearby towers")
 	await capture("after-equip")
-	if not await enter_socket(4): return
 	chosen = await enter_picker()
 	await press(JOY_BUTTON_A)
-	check(scene.run.towers[39].attachments.size() == 5 and str(scene.run.towers[39].attachments.back().id) == chosen,"Repeated A flow equips the next tower once")
-	check(scene.selected_cell == 49 and not scene.dock.is_open(),"Next selection uses squared grid distance;49 is nearer than41 from39")
+	check(scene.run.towers[40].attachments.size() == 5 and str(scene.run.towers[40].attachments.back().id) == chosen,"Repeated chooser flow fills the same tower once")
+	check(scene.selected_cell == 40 and scene.dock.is_open() and focused_id() == "close","Filling the tower keeps its workshop open with safe Close focus")
+	await press(JOY_BUTTON_LEFT_SHOULDER)
+	check(scene.selected_cell == 39 and scene.dock.controller_workshop_cell == 39 and focused_id() == "slot:4","Only an explicit bumper moves from the full tower to another eligible workshop")
+	chosen = await enter_picker()
+	await press(JOY_BUTTON_A)
+	check(scene.run.towers[39].attachments.size() == 5 and str(scene.run.towers[39].attachments.back().id) == chosen,"Explicitly chosen second tower receives its confirmed module once")
+	check(scene.selected_cell == 39 and scene.dock.is_open() and focused_id() == "close","Second full tower also keeps selection and safe Close focus")
 	check(scene.run.credits == credits and scene.run.board == board,"Module loop never purchases or changes Sudoku numbers")
 	check(all_module_ids() == all_before,"Repeated equipment conserves every module ID")
 	check(not scene.save_failed,"Ordinary equipment actions save successfully to the isolated store")
@@ -216,9 +222,9 @@ func cycle_and_cancel() -> void:
 	await fixture([40,2,18,60,79])
 	fill(18,5)
 	var before := all_module_ids()
-	for step in [[JOY_BUTTON_RIGHT_SHOULDER,60],[JOY_BUTTON_LEFT_SHOULDER,40],[JOY_BUTTON_LEFT_SHOULDER,2],[JOY_BUTTON_LEFT_SHOULDER,79],[JOY_BUTTON_RIGHT_SHOULDER,2]]:
+	for step in [[JOY_BUTTON_RIGHT_SHOULDER,60],[JOY_BUTTON_LEFT_SHOULDER,40],[JOY_BUTTON_LEFT_SHOULDER,18],[JOY_BUTTON_LEFT_SHOULDER,2],[JOY_BUTTON_LEFT_SHOULDER,79],[JOY_BUTTON_RIGHT_SHOULDER,2]]:
 		await press(step[0])
-		check(scene.selected_cell == step[1] and not scene.dock.is_open(),"Board bumpers cycle eligible towers row-major with wrap, skipping full18")
+		check(scene.selected_cell == step[1] and not scene.dock.is_open(),"Board bumpers cycle all planted towers row-major with wrap, including full18")
 	if not await enter_socket(0): return
 	await enter_picker()
 	await press(JOY_BUTTON_RIGHT_SHOULDER)
@@ -237,7 +243,7 @@ func cycle_and_cancel() -> void:
 	await enter_socket(0)
 	await enter_picker()
 	await press(JOY_BUTTON_A)
-	check(scene.selected_cell == 40 and not scene.dock.is_open(),"No other eligible tower returns to the origin")
+	check(scene.selected_cell == 40 and scene.dock.is_open() and scene.dock.controller_workshop_cell == 40 and focused_id() == "slot:1","Single-tower installation keeps the workshop on its next empty socket")
 
 func sockets_and_removal() -> void:
 	group = "socket selection and removal"
@@ -291,10 +297,9 @@ func held_actions_and_context_wrap() -> void:
 	var chosen := focused_id().trim_prefix("item:")
 	await press(JOY_BUTTON_A,50)
 	check(scene.run.towers[40].attachments.size() == 1 and str(scene.run.towers[40].attachments[0].id) == chosen,"Held A confirms exactly the highlighted module once")
-	check(not scene.dock.is_open() and scene.selected_cell == 2 and scene.run.towers[2].attachments.is_empty(),"Held equip cannot open or act on the next eligible tower")
-	await enter_socket(0)
+	check(scene.dock.is_open() and scene.dock.controller_picker_slot == -1 and scene.selected_cell == 40 and focused_id() == "slot:1" and scene.run.towers[2].attachments.is_empty(),"Held equip stays on the next empty socket without opening its chooser or acting on another tower")
 	await press(JOY_BUTTON_B,50)
-	check(not scene.dock.is_open() and not scene.menu_open and scene.selected_cell == 2,"Held B closes the workshop without opening a second overlay")
+	check(not scene.dock.is_open() and not scene.menu_open and scene.selected_cell == 40,"Held B closes the same-tower workshop without opening a second overlay")
 	check(scene.run.credits == credits and all_module_ids() == before,"Held actions conserve credits and every module ID")
 
 func empty_and_full() -> void:
@@ -314,12 +319,12 @@ func empty_and_full() -> void:
 		check(scene.run.credits == credits and all_module_ids() == before and scene.run.towers[40].attachments.is_empty(),"A with no compatible gear never buys, consumes boosts or equips")
 		await press(JOY_BUTTON_B)
 		await press(JOY_BUTTON_RIGHT_SHOULDER)
-		check(scene.selected_cell == 40,"No eligible upgrade targets leaves board selection stable")
+		check(scene.selected_cell == 41,"Board bumpers still reach planted towers when no upgrade modules are available")
 	await fixture([40,41],1)
 	await enter_socket(0)
 	await enter_picker()
 	await press(JOY_BUTTON_A)
-	check(scene.run.items.is_empty() and scene.selected_cell == 40 and not scene.dock.is_open(),"Using final module returns to origin with no automatic next action")
+	check(scene.run.items.is_empty() and scene.selected_cell == 40 and scene.dock.is_open() and scene.dock.controller_picker_slot == -1 and focused_id() == "slot:1","Using final module keeps the originating workshop without an automatic chooser or tower change")
 	await fixture([40,41],2)
 	fill(40,5)
 	fill(41,5)
@@ -327,7 +332,7 @@ func empty_and_full() -> void:
 	var credits: int = scene.run.credits
 	await press(JOY_BUTTON_RIGHT_SHOULDER)
 	await press(JOY_BUTTON_LEFT_SHOULDER)
-	check(scene.selected_cell == 40,"All-full board has no eligible bumper destination")
+	check(scene.selected_cell == 40,"Board bumpers cycle full planted towers and return to the starting tower")
 	await press(JOY_BUTTON_A)
 	check(scene.dock.is_open() and focused_id() == "close","Full tower starts on safe Close instead of an occupied socket or purchase")
 	await capture("full-tower")
@@ -377,7 +382,7 @@ func save_failure_feedback() -> void:
 	var chosen := await enter_picker()
 	await press(JOY_BUTTON_A)
 	check(scene.run.towers[40].attachments.size() == 1 and str(scene.run.towers[40].attachments[0].id) == chosen,"Failed save still equips the confirmed module exactly once in memory")
-	check(scene.selected_cell == 41 and not scene.dock.is_open(),"Failed save leaves a valid next tower selection")
+	check(scene.selected_cell == 40 and scene.dock.is_open() and scene.dock.controller_workshop_cell == 40 and focused_id() == "slot:1","Failed save leaves the same tower workshop on its next empty socket")
 	check(scene.save_failed and scene.notice.visible and scene.notice.text.begins_with("PROGRESS NOT SAVED"),"Contextual success feedback cannot overwrite the immediate save failure notice")
 	check(scene.hud_nodes.menu.text == "Save!","Failed equipment save retains its persistent retry indicator")
 
@@ -468,7 +473,7 @@ func ordinary_flows() -> void:
 		var attach := by_id("attach:selected")
 		check(is_instance_valid(attach),"Pointer selection retains its explicit fit action")
 		if is_instance_valid(attach):
-			scene.dock._scroll.ensure_control_visible(attach)
+			check(not scene.dock._scroll.is_ancestor_of(attach),"Batch install stays fixed outside the scroll area")
 			await frames()
 			await pointer_click(attach)
 			check(scene.run.towers[40].attachments.size() == 1 and scene.selected_cell == 40,"Pointer equip fits once without controller automatic tower advance")

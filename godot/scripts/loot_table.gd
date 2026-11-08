@@ -40,7 +40,12 @@ var _equip: Button
 var _previous: Button
 var _next: Button
 var _buy: Button
+var _open_all: Button
 var _page_label: Label
+var _reward_page := 0
+var _reward_previous: Button
+var _reward_next: Button
+var _reward_page_label: Label
 var _opening_stage: Control
 var _opening_id := ""
 var _sequence: Tween
@@ -78,6 +83,7 @@ func reset_for_run() -> void:
 	_opening_id = ""
 	_opening_stage = null
 	_page = 0
+	_reward_page = 0
 	_message = ""
 	refresh()
 
@@ -141,6 +147,12 @@ func refresh() -> void:
 		_buy.disabled = int(run.credits) < price
 		_buy.tooltip_text = "Buy a common chest. Opening it costs another 5 fragments."
 		_view.add_child(_buy)
+	if count > 0:
+		var plan: Dictionary = run.chest_open_plan()
+		_open_all = _button("Open all %d · %d fragments" % [int(plan.count),int(plan.cost)],open_all_chests,"loot:open_all",MINT)
+		_open_all.disabled = int(plan.count) == 0
+		_open_all.tooltip_text = "Spend %d fragments to open %d chests in collected order. %d will remain unopened." % [int(plan.cost),int(plan.count),int(plan.remaining_count)]
+		_view.add_child(_open_all)
 	if not _message.is_empty(): _subtitle.text = _message
 	elif not str(run.phase) in ["solve","prep","loot","won"]:
 		_subtitle.text = "Open your chests before or after battle."
@@ -174,7 +186,11 @@ func _clear_view() -> void:
 	_previous = null
 	_next = null
 	_buy = null
+	_open_all = null
 	_page_label = null
+	_reward_previous = null
+	_reward_next = null
+	_reward_page_label = null
 	_footer = null
 
 func _make_stage(rarity: String) -> Control:
@@ -246,14 +262,47 @@ func open_chest(id: Variant) -> void:
 		refresh()
 		changed.emit(result)
 		return
+	_present_opening(result,str(id),stage,"UNLOCKING " + rarity.to_upper() + " CHEST…")
+	changed.emit(result)
+
+func open_all_chests() -> void:
+	if run == null or opening or not reward.is_empty(): return
+	opening = true
+	var result: Dictionary = run.open_all_chests()
+	if not bool(result.get("ok",false)):
+		opening = false
+		_message = str(result.get("message",""))
+		refresh()
+		changed.emit(result)
+		return
+	var stage: Control
+	for i in range(_cards.size()):
+		if int(_cards[i].get_meta("chest_id",-1)) in result.opened_ids:
+			stage = _stages[i]
+			break
+	_present_opening(result,"batch",stage,"OPENING %d CHESTS…" % int(result.opened_count))
+	changed.emit(result)
+
+func present_rewards(result: Dictionary) -> bool:
+	# The host can present an already-committed automatic opening at a safe
+	# moment. This does not spend fragments, grant rewards, or emit changed.
+	if opening or not reward.is_empty() or not bool(result.get("ok",false)) or result.get("rewards",[]).is_empty(): return false
 	reward = result.duplicate(true)
-	_opening_id = str(id)
+	_reward_page = 0
+	_build_reveal()
+	return true
+
+func _present_opening(result: Dictionary, id: String, stage: Control, caption: String) -> void:
+	reward = result.duplicate(true)
+	_reward_page = 0
+	_opening_id = id
 	_opening_stage = stage
 	for card in _cards: card.disabled = true
 	if is_instance_valid(_buy): _buy.disabled = true
+	if is_instance_valid(_open_all): _open_all.disabled = true
 	if is_instance_valid(_previous): _previous.disabled = true
 	if is_instance_valid(_next): _next.disabled = true
-	if is_instance_valid(_subtitle): _subtitle.text = "UNLOCKING " + rarity.to_upper() + " CHEST…"
+	if is_instance_valid(_subtitle): _subtitle.text = caption
 	if is_instance_valid(stage): stage.open_chest()
 	_generation += 1
 	var generation: int = _generation
@@ -264,7 +313,6 @@ func open_chest(id: Variant) -> void:
 		opening = false
 		_build_reveal()
 	)
-	changed.emit(result)
 
 func _build_reveal() -> void:
 	if reward.is_empty(): return
@@ -272,9 +320,10 @@ func _build_reveal() -> void:
 	var rarity: String = str(reward.get("rarity","common"))
 	var tint: Color = Loot.rarity_color(rarity)
 	var rewards: Array = reward.get("rewards",[])
-	_title = _label("CHEST OPENED",26,TEXT)
+	var opened_count: int = int(reward.get("opened_count",1))
+	_title = _label("%d CHESTS OPENED" % opened_count if opened_count > 1 else "CHEST OPENED",26,TEXT)
 	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_subtitle = _label("%s CHEST  ·  %d ITEM%s RECOVERED" % [rarity.to_upper(),rewards.size(),"S" if rewards.size()!=1 else ""],12,tint)
+	_subtitle = _label("%d ITEMS RECOVERED · %d FRAGMENTS SPENT" % [rewards.size(),int(reward.get("spent_fragments",0))] if opened_count > 1 else "%s CHEST  ·  %d ITEM%s RECOVERED" % [rarity.to_upper(),rewards.size(),"S" if rewards.size()!=1 else ""],12,tint)
 	_subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_view.add_child(_title)
 	_view.add_child(_subtitle)
@@ -282,9 +331,23 @@ func _build_reveal() -> void:
 	_view.add_child(_hero)
 	_hero.custom_minimum_size = Vector2.ZERO
 	_hero.show_opened()
-	for item in rewards:
+	var pages: int = maxi(1,ceili(float(rewards.size()) / 3.0))
+	_reward_page = clampi(_reward_page,0,pages-1)
+	for item in rewards.slice(_reward_page*3,mini(rewards.size(),(_reward_page+1)*3)):
 		if item is Dictionary: _add_reward_card(item)
+	if pages > 1:
+		_reward_previous = _button("‹ Rewards",func(): _change_reward_page(-1),"loot:reward_previous")
+		_reward_previous.disabled = _reward_page == 0
+		_reward_next = _button("Rewards ›",func(): _change_reward_page(1),"loot:reward_next")
+		_reward_next.disabled = _reward_page >= pages-1
+		_reward_page_label = _label("%d / %d" % [_reward_page+1,pages],12,MUTED)
+		_reward_page_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_view.add_child(_reward_previous)
+		_view.add_child(_reward_next)
+		_view.add_child(_reward_page_label)
 	_footer = _label("Added to Gear. Equip modules or use boosts.",13,MUTED)
+	if int(reward.get("remaining_count",0)) > 0:
+		_footer.text = "Added to Gear. %d chest%s waiting for fragments." % [int(reward.remaining_count),"s" if int(reward.remaining_count) != 1 else ""]
 	_footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_view.add_child(_footer)
 	_continue = _button("Back to the table",dismiss_reward,"loot:continue")
@@ -305,6 +368,18 @@ func _build_reveal() -> void:
 			tween.tween_property(card,"scale",Vector2.ONE,0.42).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 			tween.tween_property(card,"modulate:a",1.0,0.18)
 	if is_visible_in_tree(): _apply_preferred_focus.call_deferred()
+
+func _change_reward_page(direction: int) -> void:
+	if opening or reward.is_empty(): return
+	_reward_page += direction
+	_build_reveal()
+	_focus_reward_page.call_deferred(direction)
+
+func _focus_reward_page(direction: int) -> void:
+	var target: Button = _reward_next if direction > 0 else _reward_previous
+	if not is_instance_valid(target) or target.disabled:
+		target = _reward_previous if direction > 0 else _reward_next
+	if is_visible_in_tree() and is_instance_valid(target) and not target.disabled: target.grab_focus()
 
 func _add_reward_card(item: Dictionary) -> void:
 	var color: Color = Loot.rarity_color(str(item.get("rarity","common")))
@@ -335,6 +410,7 @@ func _add_reward_card(item: Dictionary) -> void:
 func dismiss_reward() -> void:
 	if opening: return
 	reward.clear()
+	_reward_page = 0
 	_opening_id = ""
 	_message = ""
 	refresh()
@@ -366,6 +442,7 @@ func _apply_preferred_focus() -> void:
 
 func preferred_focus() -> Control:
 	if is_instance_valid(_equip): return _equip
+	if is_instance_valid(_open_all) and not _open_all.disabled: return _open_all
 	for card in _cards:
 		if not card.disabled: return card
 	if is_instance_valid(_buy) and not _buy.disabled: return _buy
@@ -388,11 +465,12 @@ func _layout() -> void:
 	if not reward.is_empty() and not opening:
 		_place(_title,Rect2(8,8,w-16,36))
 		_place(_subtitle,Rect2(8,47,w-16,24))
-		var hero_h: float = 72.0 if compact else clampf(h*0.25,100,168)
+		var paged: bool = is_instance_valid(_reward_previous)
+		var hero_h: float = (50.0 if paged else 72.0) if compact else clampf(h*0.25,100,168)
 		_place(_hero,Rect2((w-240)*0.5,64,240,hero_h))
 		var card_top: float = 66+hero_h
-		var foot_h: float = 102 if portrait else 84
-		var available: float = maxf(130,h-card_top-foot_h)
+		var foot_h: float = 132 if paged else (102 if portrait else 84)
+		var available: float = maxf(90 if paged else 130,h-card_top-foot_h)
 		var count: int = _reward_cards.size()
 		for i in range(count):
 			var card: Control = _reward_cards[i]
@@ -405,6 +483,10 @@ func _layout() -> void:
 				_place(card,Rect2((w-total)*0.5+i*(card_w+14),card_top,card_w,minf(232,available)))
 			_layout_reward(card,portrait or compact)
 		_place(_footer,Rect2(12,h-foot_h+4,w-24,25))
+		if paged:
+			_place(_reward_previous,Rect2(12,h-98,125,38))
+			_place(_reward_next,Rect2(w-137,h-98,125,38))
+			_place(_reward_page_label,Rect2(141,h-98,w-282,38))
 		var button_y: float = h-50
 		if portrait:
 			_place(_continue,Rect2(12,button_y,w*0.44-18,44))
@@ -418,7 +500,9 @@ func _layout() -> void:
 		_refresh_capacity.call_deferred()
 	_place(_title,Rect2(16,6,w-32,34))
 	_place(_subtitle,Rect2(16,43,w-32,40))
-	var footer_space: float = 76 if is_instance_valid(_buy) else 34
+	var has_actions: bool = is_instance_valid(_buy) or is_instance_valid(_open_all)
+	var stacked_actions: bool = portrait and is_instance_valid(_buy) and is_instance_valid(_open_all)
+	var footer_space: float = 120 if stacked_actions else (76 if has_actions else 34)
 	var pager_space: float = 46 if is_instance_valid(_previous) else 0
 	var table_top: float = 90
 	var table_h: float = maxf(130 if compact else 220,h-table_top-footer_space-pager_space)
@@ -446,7 +530,15 @@ func _layout() -> void:
 		_place(_next,Rect2(w-141,y,125,38))
 		_place(_page_label,Rect2(145,y,w-290,38))
 	_place(_footer,Rect2(16,h-28,w-32,24))
-	if is_instance_valid(_buy): _place(_buy,Rect2(w*0.5-150,h-73,300,38))
+	if is_instance_valid(_buy) and is_instance_valid(_open_all):
+		if stacked_actions:
+			_place(_open_all,Rect2(12,h-117,w-24,38))
+			_place(_buy,Rect2(12,h-73,w-24,38))
+		else:
+			_place(_open_all,Rect2(w*0.5-314,h-73,308,38))
+			_place(_buy,Rect2(w*0.5+6,h-73,308,38))
+	elif is_instance_valid(_buy): _place(_buy,Rect2(w*0.5-150,h-73,300,38))
+	elif is_instance_valid(_open_all): _place(_open_all,Rect2(12,h-73,w-24,38))
 
 func _page_capacity() -> int:
 	return 3 if size.x >= 680 and size.y < 440 else PAGE_SIZE
@@ -461,12 +553,19 @@ func _layout_reward(card: Control, portrait: bool) -> void:
 	var w: float = card.size.x
 	var h: float = card.size.y
 	if portrait:
+		var compact_card: bool = h < 125
 		var art: float = minf(70 if w < 350 else 100,h-8)
 		_place(body.get_child(0),Rect2(5,4,art,art))
-		_place(body.get_child(1),Rect2(art+12,10,w-art-28,38))
-		_place(body.get_child(2),Rect2(art+12,48,w-art-28,38))
-		_place(body.get_child(3),Rect2(art+12,h-23,w-art-28,20))
+		body.get_child(1).add_theme_font_size_override("font_size",16 if compact_card else 17)
+		body.get_child(2).add_theme_font_size_override("font_size",12 if compact_card else 14)
+		body.get_child(3).add_theme_font_size_override("font_size",9 if compact_card else 10)
+		_place(body.get_child(1),Rect2(art+12,7 if compact_card else 10,w-art-28,30 if compact_card else 38))
+		_place(body.get_child(2),Rect2(art+12,40 if compact_card else 48,w-art-28,32 if compact_card else 38))
+		_place(body.get_child(3),Rect2(art+12,h-20 if compact_card else h-23,w-art-28,18 if compact_card else 20))
 	else:
+		body.get_child(1).add_theme_font_size_override("font_size",17)
+		body.get_child(2).add_theme_font_size_override("font_size",14)
+		body.get_child(3).add_theme_font_size_override("font_size",10)
 		var art_h: float = maxf(70,h-100)
 		_place(body.get_child(0),Rect2(w*0.5-60,2,120,art_h))
 		_place(body.get_child(1),Rect2(14,art_h+4,w-28,42))

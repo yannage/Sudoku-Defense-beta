@@ -484,6 +484,33 @@ func equip_item(cell: int, item_id: Variant) -> Dictionary:
 	_emit("equip", {"cell":cell,"pos":cell_position(cell),"kind":item.kind,"color":Color(str(item.color)),"text":item.name})
 	return _ok("%s equipped." % item.name,{"item":item})
 
+func equip_items(cell: int, item_ids: Array) -> Dictionary:
+	# Validate the whole selection before transferring ownership. A stale card,
+	# duplicate press, or full tower must never consume only part of the batch.
+	if not _gear_phase(): return _fail("Equip modules during an active run.")
+	if not towers.has(cell): return _fail("Choose a planted tower.",cell)
+	if item_ids.is_empty(): return _fail("Select at least one module.",cell)
+	var free_slots: int = 5 - towers[cell].attachments.size()
+	if item_ids.size() > free_slots:
+		return _fail("This tower has %d empty slot%s. Select fewer modules." % [free_slots,"s" if free_slots != 1 else ""],cell)
+	var selected: Array[Dictionary] = []
+	var seen: Dictionary = {}
+	for item_id in item_ids:
+		var index: int = _item_index(item_id)
+		if index < 0 or str(items[index].type) != "attachment":
+			return _fail("A selected module is no longer in Gear. Choose your modules again.",cell)
+		var id: int = int(items[index].id)
+		if seen.has(id): return _fail("Select each module only once.",cell)
+		seen[id] = true
+		selected.append(items[index])
+	for item in selected:
+		items.remove_at(_item_index(item.id))
+		towers[cell].attachments.append(item)
+		AchievementFacts.count(achievement_stats,"module_equips")
+		_emit("equip", {"cell":cell,"pos":cell_position(cell),"kind":item.kind,"color":Color(str(item.color)),"text":item.name})
+	_achievement_modules(cell)
+	return _ok("%d module%s equipped to this tower." % [selected.size(),"s" if selected.size() != 1 else ""],{"items":selected,"cell":cell})
+
 func unequip_item(cell: int, slot: int) -> Dictionary:
 	if not _gear_phase(): return _fail("Move equipment during an active run.")
 	if not towers.has(cell) or slot < 0 or slot >= towers[cell].attachments.size(): return _fail("Choose an occupied module slot.")
@@ -591,6 +618,37 @@ func open_chest(chest_id: Variant) -> Dictionary:
 	AchievementFacts.see(achievement_stats,"chest_rarities",str(chest.rarity))
 	AchievementFacts.earn(achievement_stats,"SD_FIRST_CHEST")
 	return _ok("%d item%s recovered." % [count,"s" if count > 1 else ""],{"rewards":rewards,"rarity":chest.rarity})
+
+func chest_open_plan() -> Dictionary:
+	# Match the collected order shown in the chest table. Skip unaffordable
+	# chests so an expensive chest cannot block a cheaper one behind it.
+	var plan: Dictionary = {"ids":[],"count":0,"cost":0,"remaining_count":chests.size()}
+	if not ["solve","prep","loot","won"].has(phase): return plan
+	var available: int = fragments
+	for chest in chests:
+		var cost: int = int(chest.cost)
+		if cost > available: continue
+		available -= cost
+		plan.ids.append(chest.id)
+		plan.count += 1
+		plan.cost += cost
+	plan.remaining_count = chests.size() - int(plan.count)
+	return plan
+
+func open_all_chests() -> Dictionary:
+	if not ["solve","prep","loot","won"].has(phase): return _fail("Open chests before or after battle.")
+	if chests.is_empty(): return _fail("No unopened chests.")
+	var plan: Dictionary = chest_open_plan()
+	if int(plan.count) == 0: return _fail("Collect more fragments to open your remaining chests.")
+	var rewards: Array[Dictionary] = []
+	var rarity := "common"
+	for id in plan.ids:
+		var result: Dictionary = open_chest(id)
+		rewards.append_array(result.rewards)
+		if Loot.rarity_index(str(result.rarity)) > Loot.rarity_index(rarity): rarity = str(result.rarity)
+	var message: String = "%d chest%s opened · %d item%s added to Gear." % [int(plan.count),"s" if int(plan.count) != 1 else "",rewards.size(),"s" if rewards.size() != 1 else ""]
+	if not chests.is_empty(): message += " %d waiting for fragments." % chests.size()
+	return _ok(message,{"rewards":rewards,"opened_ids":plan.ids,"opened_count":int(plan.count),"spent_fragments":int(plan.cost),"remaining_count":chests.size(),"rarity":rarity})
 
 func buy_chest(rarity: String = "common") -> Dictionary:
 	if phase != "loot": return _fail("Buy chests between rounds.")

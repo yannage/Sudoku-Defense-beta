@@ -4,6 +4,12 @@ A native Godot 4.7.2 version of the pre-Unity Sudoku Defense game. The same GDSc
 
 ## Play
 
+Local integration candidate **0.3.27-dev** brings Karen's controller navigation,
+manual batch module fitting, optional chest opening and combat readability changes
+onto 0.3.26. It preserves saved controller mapping, feedback, recovery, account
+separation and achievements. See [the integration record](../docs/ITERATION-0.3.27-dev.md).
+No Steam upload or activation has been performed.
+
 Local development candidate **0.3.26-dev** adds saved controller button/trigger
 mappings and a privacy-conscious, no-account feedback handoff. Its configured
 form is live with hourly private Trello routing; the client remains unreleased.

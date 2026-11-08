@@ -469,7 +469,9 @@ func _sync_board(force: bool) -> void:
 	var values: Array = run.get("board")
 	if values.size() < 81:
 		return
-	var signature: String = str(values) + str(run.get("round_no"))
+	# Prep and battle share the same camera pose, so phase must invalidate the
+	# labels even when no number or camera blend changes at wave launch.
+	var signature: String = str(values) + str(run.get("round_no")) + str(run.get("phase"))
 	if force or signature != _last_board:
 		_last_board = signature
 		for i: int in range(81):
@@ -488,6 +490,7 @@ func _update_palette(blend: float) -> void:
 	var givens: Array = run.get("givens")
 	var values: Array = run.get("board")
 	var towers: Dictionary = run.get("towers")
+	var battling: bool = str(run.get("phase")) == "battle"
 	for i: int in range(_tiles.size()):
 		var row: int = i / 9
 		var col: int = i % 9
@@ -503,6 +506,7 @@ func _update_palette(blend: float) -> void:
 		# The active square remains gold so scanning does not hide the cursor.
 		var matching: bool = selected_number > 0 and i < values.size() and int(values[i]) == selected_number
 		if _family_focus > 0: matching = towers.has(i) and int(towers[i].number) == _family_focus
+		if battling and not towers.has(i): matching = false
 		_match_frames[i].visible = matching
 		if matching:
 			flat = Color("8fb6bf")
@@ -518,6 +522,9 @@ func _update_palette(blend: float) -> void:
 			if bool(tower.get("illegal", false)):
 				number_color = Color("9d2440").lerp(Color("ff9c9c"), blend)
 		_labels[i].modulate = number_color
+		# The puzzle clues have no combat action. Keep only the small tower IDs,
+		# which still identify the families affected by an inspected upgrade.
+		_labels[i].visible = not battling or towers.has(i)
 		_labels[i].pixel_size = lerpf(0.0106, 0.0067 if towers.has(i) else 0.0081, blend)
 		_labels[i].position = _cell_pos(i) + Vector3(0, 0.014, lerpf(0.035, 0.35 if towers.has(i) else 0.02, blend))
 		# Battle tower numbers face the player and render above the voxel stack.

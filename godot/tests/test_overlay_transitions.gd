@@ -130,7 +130,7 @@ func overlay_cycle(size: Vector2i) -> void:
 	await press(JOY_BUTTON_B)
 	check(scene.menu_open and button("Resume run") != null,label+" B returns achievements to pause")
 	focus_visible(label+" achievement return")
-	await activate("How to play")
+	await activate("Settings / How to play")
 	check(button("Got it") != null,label+" Help opens")
 	await frames(20)
 	focus_visible(label+" help default")

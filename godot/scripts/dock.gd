@@ -39,6 +39,7 @@ var current_panel: String = "bag"
 var selected_cell: int = -1
 var _opened: bool = false
 var _armed_id: String = ""
+var _selected_module_ids: Array[String] = []
 var _message: String = ""
 var _reward: Dictionary = {}
 var _slot_result: Dictionary = {}
@@ -192,6 +193,7 @@ func _ensure_loot_table() -> void:
 
 func _show_new_gear(items: Array) -> void:
 	_armed_id = ""
+	_selected_module_ids.clear()
 	item_armed.emit("")
 	_recent_item_ids.clear()
 	# Present newly won attachments first, even when the bag already contains
@@ -292,7 +294,9 @@ func open_panel(kind: String, cell: int = -1, preserve_controller_context: bool 
 	if not preserve_controller_context: cancel_controller_context()
 	current_panel = kind
 	if is_instance_valid(_scroll): _scroll.scroll_vertical = 0
-	if cell >= 0: selected_cell = cell
+	if cell >= 0:
+		if cell != selected_cell: _selected_module_ids.clear()
+		selected_cell = cell
 	_opened = true
 	visible = true
 	_message = ""
@@ -316,7 +320,9 @@ func close_panel(preserve_armed: bool = false) -> void:
 	_clear_family_preview()
 	_opened = false
 	visible = false
-	if not preserve_armed: _armed_id = ""
+	if not preserve_armed:
+		_armed_id = ""
+		_selected_module_ids.clear()
 	closed.emit()
 
 func reset_for_run() -> void:
@@ -336,15 +342,18 @@ func is_open() -> bool:
 	return _opened
 
 func set_selected(cell: int) -> void:
+	if selected_cell != cell: _selected_module_ids.clear()
 	selected_cell = cell
 	if _opened: refresh()
 
 func clear_armed() -> void:
 	_armed_id = ""
+	_selected_module_ids.clear()
 	if _opened: refresh()
 
 func refresh(preserve_focus: bool = true) -> void:
 	if not _opened or run == null: return
+	_prune_selected_modules()
 	if controller_workshop_cell >= 0 and not controller_context_active(): cancel_controller_context()
 	_shell.set_meta("controller_module_picker",controller_picker_slot >= 0)
 	_clear_family_preview()
@@ -452,6 +461,8 @@ func refresh(preserve_focus: bool = true) -> void:
 			"camp": _camp_panel(content)
 		if _portrait: _apply_touch_sizes(_body)
 		_scroll.set_deferred("scroll_vertical", old_scroll)
+		if current_panel == "bag" and run.towers.has(selected_cell) and controller_picker_slot < 0:
+			_batch_footer()
 	_apply_layout()
 	# Containers recalculate their minimum after newly built content enters the
 	# tree. Reapply the viewport bounds after that pass so a transient minimum
@@ -469,12 +480,81 @@ func refresh(preserve_focus: bool = true) -> void:
 			var controls: Array[Control] = _focusable_buttons()
 			if not controls.is_empty(): _focus_target = controls[mini(old_focus_index, controls.size() - 1)]
 		_focus_current.call_deferred()
+	elif current_panel == "tower" and run.towers.has(selected_cell):
+		_focus_id("slot:" + str(mini(4, run.towers[selected_cell].attachments.size())))
+	elif current_panel == "bag":
+		for candidate in _focusable_buttons():
+			if str(candidate.get_meta("focus_id", "")).begins_with("item:"):
+				_focus_target = candidate
+				break
+	elif current_panel == "camp":
+		_focus_id("slot:spin")
 	if not _controller_focus_id.is_empty():
 		for candidate in _focusable_buttons():
 			if str(candidate.get_meta("focus_id","")) == _controller_focus_id:
 				_focus_target = candidate
 				_focus_current.call_deferred()
 				break
+
+func _focus_id(id: String) -> void:
+	for candidate in _focusable_buttons():
+		if str(candidate.get_meta("focus_id", "")) == id:
+			_focus_target = candidate
+			_focus_current.call_deferred()
+			return
+
+func navigate_focus(direction: Vector2i) -> bool:
+	if not _opened: return false
+	var controls := _focusable_buttons()
+	if controls.is_empty(): return true
+	var focused: Control = get_viewport().gui_get_focus_owner()
+	if not controls.has(focused):
+		_focus_current()
+		return true
+	# Godot's automatic spatial navigation skips clipped controls. Search all
+	# controls in the scroll's content, then reveal the adjacent row explicitly.
+	# Do not wrap at the ends: reversing direction must retrace the list.
+	var candidates: Array[Control] = controls
+	var inside: Array[Control] = []
+	var above: Array[Control] = []
+	var below: Array[Control] = []
+	var within_scroll := is_instance_valid(_scroll) and _scroll.is_ancestor_of(focused)
+	if is_instance_valid(_scroll):
+		for candidate in controls:
+			if _scroll.is_ancestor_of(candidate): inside.append(candidate)
+			elif candidate.get_global_rect().get_center().y < _scroll.global_position.y: above.append(candidate)
+			else: below.append(candidate)
+		candidates = inside if within_scroll else above if above.has(focused) else below
+	var next := _directional_neighbor(focused, candidates, direction)
+	if next == null and direction.y != 0:
+		if within_scroll:
+			if direction.y < 0 and not above.is_empty(): next = above.back()
+			elif direction.y > 0 and not below.is_empty(): next = below.front()
+		elif not inside.is_empty():
+			if direction.y > 0 and above.has(focused): next = inside.front()
+			elif direction.y < 0 and below.has(focused): next = inside.back()
+	if next == null: return true
+	_focus_target = next
+	_focus_current()
+	return true
+
+func _directional_neighbor(focused: Control, controls: Array[Control], direction: Vector2i) -> Control:
+	var origin := focused.get_global_rect().get_center()
+	var best: Control
+	var best_forward := INF
+	var best_cross := INF
+	for candidate in controls:
+		if candidate == focused: continue
+		var delta := candidate.get_global_rect().get_center() - origin
+		var forward := delta.x * direction.x if direction.x != 0 else delta.y * direction.y
+		var cross := absf(delta.y) if direction.x != 0 else absf(delta.x)
+		if forward < 2.0: continue
+		if direction.x != 0 and cross > minf(focused.size.y, candidate.size.y) * 0.5: continue
+		if forward < best_forward - 2.0 or (absf(forward - best_forward) <= 2.0 and cross < best_cross):
+			best = candidate
+			best_forward = forward
+			best_cross = cross
+	return best
 
 func _focusable_buttons() -> Array[Control]:
 	var controls: Array[Control] = []
@@ -617,6 +697,11 @@ func _visible_items() -> Array[Dictionary]:
 		if _bag_filter == "items" and not consumable: continue
 		if _bag_filter == "attack" and (consumable or support): continue
 		if _bag_filter == "support" and (consumable or not support): continue
+		var kind: String = str(item.get("kind", ""))
+		if _bag_filter == "slow" and kind not in ["frost", "gravity", "freeze"]: continue
+		if _bag_filter == "range" and kind != "range": continue
+		if _bag_filter == "damage" and kind not in ["power", "electric", "blast", "venom", "nova", "overcharge"]: continue
+		if _bag_filter == "speed" and kind not in ["rapid", "overclock"]: continue
 		result.append(item)
 	result.sort_custom(func(a,b):
 		var an: int = _recent_item_ids.find(str(a.get("id", "")))
@@ -643,43 +728,92 @@ func _selected_module() -> Dictionary:
 		if str(item.id) == _armed_id: return item
 	return {}
 
-func _bag_panel(content: VBoxContainer) -> void:
-	var chosen: Dictionary = _selected_module()
-	if not chosen.is_empty():
-		var info := _panel(Loot.rarity_color(str(chosen.rarity)))
-		content.add_child(info)
-		var box := VBoxContainer.new()
-		box.add_theme_constant_override("separation",6)
-		info.add_child(box)
-		var name := _label(Card.effect_name(chosen),19,TEXT)
-		box.add_child(name)
-		_note(box,Card._short_stat(chosen),MINT)
-		_note(box,str(chosen.get("name","")),Loot.rarity_color(str(chosen.rarity)))
-		if run.towers.has(selected_cell):
-			var tower: Dictionary = run.towers[selected_cell]
-			var used: int = tower.attachments.size()
-			_note(box,"Tower %d · %d empty slots" % [int(tower.number),5-used],GOLD)
-			_socket_strip(box,selected_cell)
-			var id: String = _armed_id
-			var cell: int = selected_cell
-			box.add_child(_button("Fit to tower %d" % int(tower.number),func(): _act("equip_item",[cell,id]),true,used >= 5,42,"attach:selected"))
-			if used >= 5: _note(box,"All five slots are full. Remove a module or choose another tower.",GOLD)
-			else: _note(box,_effect_preview(chosen,selected_cell),MINT)
-		else:
-			_note(box,"Select a tower to equip this module. Each tower has five slots.")
-		box.add_child(_button("Cancel selection",func(): _armed_id = ""; item_armed.emit(""); refresh(),false,false,32,"gear:cancel"))
+func _prune_selected_modules() -> void:
+	var available: Array[String] = []
+	for item: Dictionary in run.items:
+		if str(item.get("type", "")) == "attachment": available.append(str(item.id))
+	for id in _selected_module_ids.duplicate():
+		if not available.has(id): _selected_module_ids.erase(id)
+
+func has_selected_modules() -> bool:
+	return current_panel == "bag" and controller_picker_slot < 0 and not _selected_module_ids.is_empty()
+
+func install_selected_modules() -> void:
+	if not has_selected_modules(): return
+	var result: Dictionary = run.equip_items(selected_cell, _selected_module_ids.duplicate())
+	_message = str(result.get("message", ""))
+	if bool(result.get("ok", false)):
+		_selected_module_ids.clear()
+		_armed_id = ""
+		item_armed.emit("")
+	changed.emit(result)
+	# The changed handler refreshes the dock; keep building this same tower.
+	if bool(result.get("ok", false)):
+		refresh(false)
+		_focus_current.call_deferred()
+
+func _batch_footer() -> void:
+	var count: int = _selected_module_ids.size()
+	var free: int = 5 - run.towers[selected_cell].attachments.size()
+	var footer := VBoxContainer.new()
+	footer.add_theme_constant_override("separation", 4)
+	_body.add_child(footer)
+	var destination := _label("Tower %d · R%d C%d" % [int(run.towers[selected_cell].number), selected_cell / 9 + 1, selected_cell % 9 + 1], 16 if _portrait else 14, TEXT)
+	destination.name = "BatchTarget"
+	footer.add_child(destination)
+	footer.add_child(_label("%d selected · %d empty slots" % [count, free], 16 if _portrait else 14, MINT))
+	var install := _button((_hint("Y") + " · " if controller_mode else "") + "Install selected", install_selected_modules, true, count == 0 or count > free, 44, "attach:selected")
+	footer.add_child(install)
+
+func _toggle_module(id: String) -> void:
+	if _selected_module_ids.has(id):
+		_selected_module_ids.erase(id)
 	else:
-		_note(content,"Select a module, then a tower. You can also drag modules onto towers.")
-	var filters := HBoxContainer.new()
-	filters.add_theme_constant_override("separation",3)
-	content.add_child(filters)
-	for entry in [["all","All"],["attack","Attack"],["support","Support"],["items","Boosts"]]:
-		var key: String = entry[0]
-		var filter := _button(entry[1],func(): _set_bag_filter(key),_bag_filter == key,false,32,"filter:"+key)
-		filter.add_theme_font_size_override("font_size",11)
-		_selection_style(filter,_bag_filter == key)
-		filter.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		filters.add_child(filter)
+		var free: int = 5 - run.towers[selected_cell].attachments.size()
+		if _selected_module_ids.size() >= free:
+			_message = "This tower has %d empty slots. Deselect a module to change your choices." % free
+			refresh()
+			return
+		_selected_module_ids.append(id)
+	_armed_id = ""
+	_message = ""
+	item_armed.emit("")
+	refresh()
+
+func _bag_panel(content: VBoxContainer) -> void:
+	if run.towers.has(selected_cell):
+		var tower: Dictionary = run.towers[selected_cell]
+		var used: int = tower.attachments.size()
+		_section(content, "TOWER %d · R%d C%d" % [int(tower.number), selected_cell / 9 + 1, selected_cell % 9 + 1], "%d / 5 fitted" % used)
+		_socket_strip(content, selected_cell)
+		_note(content, "Select several modules, then install them together on this tower.")
+		var count: int = _selected_module_ids.size()
+		if used >= 5: _note(content, "All five slots are full. Select a fitted module above to remove it.", GOLD)
+		if count > 0:
+			_note(content, "%d selected across all filters" % count, MINT)
+			content.add_child(_button("Clear selection", func(): _selected_module_ids.clear(); refresh(), false, false, 32, "gear:cancel"))
+	else:
+		var chosen: Dictionary = _selected_module()
+		if not chosen.is_empty():
+			_note(content, Card.effect_name(chosen) + " · select a tower to attach it.", MINT)
+			content.add_child(_button("Cancel selection", func(): _armed_id = ""; item_armed.emit(""); refresh(), false, false, 32, "gear:cancel"))
+		else:
+			_note(content, "Select a tower first to fit several modules at once. You can also drag modules onto towers.")
+	_note(content, "Modules return to Gear on each new board. Choose a tower to equip them.")
+	for entries in [
+		[["all", "All"], ["attack", "Attack"], ["support", "Support"], ["items", "Boosts"]],
+		[["slow", "Slow"], ["range", "Range"], ["damage", "Damage"], ["speed", "Speed"]]
+	]:
+		var filters := HBoxContainer.new()
+		filters.add_theme_constant_override("separation", 3)
+		content.add_child(filters)
+		for entry in entries:
+			var key: String = entry[0]
+			var filter := _button(entry[1], func(): _set_bag_filter(key), _bag_filter == key, false, 32, "filter:" + key)
+			filter.add_theme_font_size_override("font_size", 11)
+			_selection_style(filter, _bag_filter == key)
+			filter.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			filters.add_child(filter)
 	var visible_items: Array[Dictionary] = _visible_items()
 	_section(content,"YOUR GEAR" if _bag_filter != "items" else "SINGLE-USE BOOSTS", "%d items" % visible_items.size())
 	if visible_items.is_empty(): _note(content,"No gear in this category. Try another filter or open a chest.")
@@ -692,12 +826,15 @@ func _bag_panel(content: VBoxContainer) -> void:
 	for item: Dictionary in visible_items:
 		var data: Dictionary = item
 		var card: Button = Card.new()
-		card.configure(data,str(data.id) == _armed_id,controller_mode,true,_recent_item_ids.has(str(data.id)))
+		card.configure(data, _selected_module_ids.has(str(data.id)) or str(data.id) == _armed_id, controller_mode, true, _recent_item_ids.has(str(data.id)))
 		for text in card.find_children("*","Label",true,false):
 			if text.text in ["A SELECT","A USE"]: text.text = _hint(text.text)
 		card.pressed.connect(func():
 			if str(data.get("type","")) == "consumable":
 				_act("use_item",[data.id])
+				return
+			if run.towers.has(selected_cell):
+				_toggle_module(str(data.id))
 				return
 			_armed_id = str(data.id)
 			_message = ""
@@ -738,6 +875,47 @@ func _effect_preview(item: Dictionary, cell: int) -> String:
 
 
 func _camp_panel(content: VBoxContainer) -> void:
+	_section(content, "SALVAGE SLOTS", "10 credits / spin")
+	var slot_box: PanelContainer = _panel(Color("574835"))
+	content.add_child(slot_box)
+	var slot_content: VBoxContainer = VBoxContainer.new()
+	slot_content.add_theme_constant_override("separation", 9)
+	slot_box.add_child(slot_content)
+	var reels: HBoxContainer = HBoxContainer.new()
+	reels.add_theme_constant_override("separation", 6)
+	slot_content.add_child(reels)
+	var symbols: Array = _slot_result.get("reels", ["gear", "credit", "chest-common"])
+	for i in range(3):
+		var reel: PanelContainer = _panel(Color("3a474b"))
+		reel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		reels.add_child(reel)
+		var symbol: String = str(symbols[i]) if i < symbols.size() else "gear"
+		var rarity: String = symbol.trim_prefix("chest-") if symbol.begins_with("chest-") else "common"
+		var color: Color = Loot.rarity_color(rarity) if symbol.begins_with("chest") else GOLD
+		var icon: Control = _icon(symbol, color, Vector2(40, 58))
+		reel.add_child(icon)
+		if not _slot_result.is_empty() and not _slot_animated:
+			icon.modulate.a = 0.15
+			var tween: Tween = create_tween()
+			tween.tween_interval(0.18 + float(i) * 0.15)
+			tween.tween_property(icon, "modulate:a", 1.0, 0.28)
+	if not _slot_result.is_empty():
+		_slot_animated = true
+		_note(slot_content, str(_slot_result.get("message", _slot_result.get("label", "Reward added to Gear."))), MINT)
+	var can_spin: bool = int(run.credits) >= Loot.SLOT_COST and str(run.phase) == "loot"
+	slot_content.add_child(_button("Spin · 10 credits", _spin, true, not can_spin, 44, "slot:spin"))
+	if str(run.phase) != "loot":
+		_note(slot_content, "Slots open after the wave. Finish this battle to spin.", GOLD)
+	elif int(run.credits) < Loot.SLOT_COST:
+		_note(slot_content, "Need %d more credits to spin." % (Loot.SLOT_COST - int(run.credits)), GOLD)
+	else:
+		_note(slot_content, "Ready to spin · %d credits available" % int(run.credits), MINT)
+	_note(content, "Every spin gives a reward. If you get fewer than 10 credits back, you also get a common module.", GOLD)
+	content.add_child(_button("Hide odds" if _show_odds else "View odds", func(): _show_odds = not _show_odds; refresh(), false, false, 32, "slot:odds"))
+	if _show_odds:
+		_note(content, "25%: common module\n20%: 5 credits + common module\n25%: 10 credits\n20%: 20 credits\n5%: 30 credits\n5%: sealed chest + 10 credits\n\nAverage return: 9.5 credits per 10-credit spin, plus gear or chests. Chest rewards still need fragments to open.")
+	if str(run.phase) != "loot": _note(content, "Camp purchases and slots open after each wave.", GOLD)
+
 	_note(content, "These upgrades last for the rest of this run.")
 	_section(content, "RUN UPGRADES", "Lasts for this run")
 	var definitions: Array[Dictionary] = [
@@ -767,39 +945,6 @@ func _camp_panel(content: VBoxContainer) -> void:
 		titles.add_child(title)
 		_note(box, str(entry.detail))
 		box.add_child(_button("Improve   ·   %d" % cost, func(): _act("buy_passive", [kind]), false, int(run.credits) < cost or str(run.phase) != "loot", 34, "passive:" + kind))
-	_section(content, "THE SALVAGE REELS", "10 credits / spin")
-	var slot_box: PanelContainer = _panel(Color("574835"))
-	content.add_child(slot_box)
-	var slot_content: VBoxContainer = VBoxContainer.new()
-	slot_content.add_theme_constant_override("separation", 9)
-	slot_box.add_child(slot_content)
-	var reels: HBoxContainer = HBoxContainer.new()
-	reels.add_theme_constant_override("separation", 6)
-	slot_content.add_child(reels)
-	var symbols: Array = _slot_result.get("reels", ["gear", "credit", "chest-common"])
-	for i in range(3):
-		var reel: PanelContainer = _panel(Color("3a474b"))
-		reel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		reels.add_child(reel)
-		var symbol: String = str(symbols[i]) if i < symbols.size() else "gear"
-		var rarity: String = symbol.trim_prefix("chest-") if symbol.begins_with("chest-") else "common"
-		var color: Color = Loot.rarity_color(rarity) if symbol.begins_with("chest") else GOLD
-		var icon: Control = _icon(symbol, color, Vector2(40, 58))
-		reel.add_child(icon)
-		if not _slot_result.is_empty() and not _slot_animated:
-			icon.modulate.a = 0.15
-			var tween: Tween = create_tween()
-			tween.tween_interval(0.18 + float(i) * 0.15)
-			tween.tween_property(icon, "modulate:a", 1.0, 0.28)
-	if not _slot_result.is_empty():
-		_slot_animated = true
-		_note(slot_content, str(_slot_result.get("message", _slot_result.get("label", "Reward added to Gear."))), MINT)
-	slot_content.add_child(_button("Spin for salvage   ·   10", _spin, true, int(run.credits) < 10 or str(run.phase) != "loot"))
-	_note(content, "Every spin gives a reward. If you get fewer than 10 credits back, you also get a common module.", GOLD)
-	content.add_child(_button("Hide odds" if _show_odds else "View odds", func(): _show_odds = not _show_odds; refresh(), false, false, 32, "slot:odds"))
-	if _show_odds:
-		_note(content, "25%: common module\n20%: 5 credits + common module\n25%: 10 credits\n20%: 20 credits\n5%: 30 credits\n5%: sealed chest + 10 credits\n\nAverage return: 9.5 credits per 10-credit spin, plus gear or chests. Chest rewards still need fragments to open.")
-	if str(run.phase) != "loot": _note(content, "Camp purchases and slots open after each wave.", GOLD)
 
 func _mini_grid(content: VBoxContainer, heading: bool = true) -> void:
 	var selected_family: int = int(run.towers[selected_cell].number) if run.towers.has(selected_cell) else 0
@@ -838,6 +983,7 @@ func _mini_grid(content: VBoxContainer, heading: bool = true) -> void:
 		button.add_theme_color_override("font_color", color)
 		button.add_theme_color_override("font_disabled_color", Color("4d6670"))
 		button.pressed.connect(func():
+			if selected_cell != cell: _selected_module_ids.clear()
 			selected_cell = cell
 			cell_requested.emit(cell)
 			if current_panel != "bag": current_panel = "tower"
@@ -861,7 +1007,9 @@ func _spin() -> void:
 func _act(method: String, args: Array = []) -> void:
 	var result: Dictionary = run.callv(method, args)
 	_message = str(result.get("message", ""))
-	if method in ["equip_item", "swap_attachment"] and bool(result.get("ok", false)): _armed_id = ""
+	if method in ["equip_item", "swap_attachment"] and bool(result.get("ok", false)):
+		_armed_id = ""
+		_prune_selected_modules()
 	changed.emit(result)
 
 func _section(parent: VBoxContainer, title: String, detail: String = "") -> void:

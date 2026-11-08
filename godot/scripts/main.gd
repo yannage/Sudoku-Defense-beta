@@ -52,6 +52,8 @@ var music_volume := 1.0
 var effects_volume := 1.0
 var reduced_motion := false
 var board_notes := true
+var auto_open_chests := false
+var reserve_mode := false
 var preferences = PreferencesScript.new()
 var tutorial = FirstRoundGuide.new()
 var run_save = RunSaveScript.new()
@@ -145,6 +147,7 @@ func _ready() -> void:
 	effects_volume = settings.effects_volume
 	reduced_motion = settings.reduced_motion
 	board_notes = settings.board_notes
+	auto_open_chests = settings.auto_open_chests
 	run.new_run(784217, {"mode":"campaign", "puzzle_difficulty":"easy", "combat_difficulty":"easy"})
 	get_viewport().disable_3d = RenderProfile.uses_canvas()
 	world = CanvasBoardScript.new() if RenderProfile.uses_canvas() else BoardScript.new()
@@ -311,7 +314,7 @@ func _build_ui() -> void:
 	positioned(bag_button,Rect2(1092,94,164,46))
 	_add_quick_icon(bag_button,"gear")
 	loot_button = button("Chests",func(): _toggle_dock("loot"))
-	loot_button.tooltip_text = "Open chests with fragments from defeated enemies."
+	loot_button.tooltip_text = _controller_hint("%d unopened - use fragments to open. Start / Menu: Chests." % run.chests.size())
 	positioned(loot_button,Rect2(1092,149,164,46))
 	_add_quick_icon(loot_button,"chest")
 	var camp: Button = hud("camp", button("Camp",func(): _toggle_dock("camp")))
@@ -333,6 +336,9 @@ func _build_ui() -> void:
 	bottom.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ui.move_child(bottom,1) # Background must stay behind the quick tabs moved here on phones.
 	positioned(hud("plant_caption",label("PLANT A NUMBER",11,MUTED)),Rect2(26,710,170,22))
+	var reserves := hud("reserve_mode",button("Reserve seeds",_toggle_reserve_mode))
+	reserves.tooltip_text = "Show emergency seeds during battle. Start / Menu also opens this action."
+	positioned(reserves,Rect2(215,709,210,53))
 	for n in range(1,10):
 		var b := button(str(n),func(): _choose_number(n))
 		b.add_theme_font_size_override("font_size",25)
@@ -590,6 +596,10 @@ func _layout_ui() -> void:
 			_place(notice,Rect2(18,270,188,158)); _font(notice,18)
 			board_rect = Rect2(218,80,w-(578 if open else 406),h-186)
 	if world.has_method("set_board_rect"): world.set_board_rect(board_rect)
+	var reserve_rect: Rect2 = number_buttons[0].get_rect()
+	reserve_rect.size.x = 210 if not portrait_layout else minf(330,layout_size.x-40)
+	_place(hud_nodes.reserve_mode,reserve_rect)
+	_font(hud_nodes.reserve_mode,23 if portrait_layout else 17)
 	if dock != null and dock.has_method("set_layout"):
 		dock.set_layout(layout_size,portrait_layout,board_rect.end.y)
 		dock.z_index = 10
@@ -700,6 +710,7 @@ func _process(dt: float) -> void:
 		_refresh()
 	if run.phase != last_phase:
 		last_phase = run.phase
+		reserve_mode = false
 		_close_controller_numbers()
 		_refresh()
 		_save()
@@ -708,6 +719,7 @@ func _process(dt: float) -> void:
 			dock.open_panel("loot",selected_cell)
 		elif run.phase in ["won","lost"] and not menu_open and not tutorial.active:
 			_show_result()
+	_maybe_auto_open_chests()
 	save_elapsed += dt
 	if save_elapsed > 15 and not menu_open:
 		save_elapsed = 0
@@ -719,7 +731,7 @@ func _cleanup_available() -> bool:
 	return not tutorial.active and run.phase == "battle" and run.spawn_total > 0 and run.spawned >= run.spawn_total and not run.enemies.is_empty() and run.battle_time >= 45.0
 
 func _cleanup_controls_available() -> bool:
-	return _cleanup_available() and not menu_open and not manual_pause and not dock.is_open() and armed_item.is_empty() and not camera_mode and _controller_number_cell < 0
+	return _cleanup_available() and not menu_open and not manual_pause and not dock.is_open() and armed_item.is_empty() and not camera_mode and not reserve_mode and _controller_number_cell < 0
 
 func _toggle_cleanup() -> void:
 	if cleanup_fast: cleanup_fast = false
@@ -755,8 +767,8 @@ func _refresh() -> void:
 	# Keep a compact warning reachable at every layout without occupying the
 	# selected-square/candidate area or suppressing ordinary action feedback.
 	var any_save_failed := save_failed or achievement_save_failed
-	hud_nodes.menu.text = "Save!" if any_save_failed else "Menu"
-	hud_nodes.menu.tooltip_text = "Latest progress is not saved. Open to retry saving." if any_save_failed else "Pause / run menu"
+	hud_nodes.menu.text = "Save!" if any_save_failed else _controller_hint("Start") if controller_used else "Menu"
+	hud_nodes.menu.tooltip_text = "Latest progress is not saved. Open to retry saving." if any_save_failed else _controller_hint("Start / Menu: Gear, Chests, Camp and settings")
 	hud_nodes.menu.add_theme_color_override("font_color",AMBER if any_save_failed else WHITE)
 	if _controller_number_cell >= 0 and (not _number_placement_allowed() or run.phase != _controller_number_phase or selected_cell != _controller_number_cell or run.board[_controller_number_cell] != 0):
 		_close_controller_numbers()
@@ -802,8 +814,10 @@ func _refresh() -> void:
 		hud_nodes.intel.add_theme_color_override("font_color",AMBER if bool(forecast.boss) else WHITE)
 	reserve_button.text = "Seed %d  +1  ·  6" % selected_number if selected_number>0 else "Buy seed 1  ·  6"
 	reserve_button.disabled = run.credits<6
-	bag_button.text = "Gear %d" % run.items.size()
-	loot_button.text = "Chests %d" % run.chests.size()
+	bag_button.text = _controller_hint("X Gear") if controller_used else "Gear"
+	loot_button.text = "Chests"
+	loot_button.tooltip_text = _controller_hint("%d unopened - use fragments to open. Start / Menu: Chests." % run.chests.size())
+	hud_nodes.camp.text = "Camp / Slots" if not portrait_layout and layout_size.y >= 700 else "Camp"
 	pause_label.visible = (manual_pause or dock.is_open() or not armed_item.is_empty()) and not menu_open
 	pause_label.text = "TACTICAL PAUSE  ·  Choose a tower · A attach · B cancel" if not armed_item.is_empty() else ("TACTICAL PAUSE  ·  Manage your loadout" if dock.is_open() else "PAUSED  ·  P / Start to resume")
 	if selected_cell >= 0:
@@ -823,6 +837,7 @@ func _refresh() -> void:
 	var correct_counts: PackedInt32Array = _number_correct_counts()
 	for i in range(9):
 		var b: Button = number_buttons[i]
+		b.visible = run.phase == "solve" or (run.phase == "battle" and (reserve_mode or _controller_number_cell >= 0))
 		var complete: bool = correct_counts[i+1] == 9
 		var tint: Color = Color("82939a") if complete else COLORS[i]
 		b.tooltip_text = "9 / 9 complete. Tap to highlight. %d emergency reserves for battle." % run.inventory[i+1] if complete else "%d / 9 placed. Tap a square, then %d — or drag %d onto the grid. %d emergency reserves." % [correct_counts[i+1],i+1,i+1,run.inventory[i+1]]
@@ -837,15 +852,23 @@ func _refresh() -> void:
 		b.add_theme_stylebox_override("normal",style(selected_bg if selected_number==i+1 else PANEL, tint if selected_number==i+1 else Color("35505a")))
 	if portrait_layout: _refresh_portrait_text()
 	_refresh_strategy_preview()
-	controls_label.text = "D-PAD grid   A choose number   RS cursor   L3 camera   X gear   Y advance" if controller_used else "TAP / DRAG to plant   RIGHT-DRAG / Q E rotate   HOME reset   ESC menu"
+	controls_label.text = "D-PAD grid   A choose   LB/RB number   X gear   Start menu" if controller_used else "TAP / DRAG to plant   RIGHT-DRAG / Q E rotate   HOME reset   ESC menu"
+	if controller_used and _tower_navigation_active(): controls_label.text = "D-PAD towers   A customize   LB/RB tower   X gear   Start menu"
 	if controller_used and not _controller_pointer_active():
-		if dock.controller_context_active(): controls_label.text = "A choose / equip module   B back   LB / RB next available tower"
-		elif run.phase == "prep" and run.towers.has(selected_cell) and not dock.is_open(): controls_label.text = "A open module slot   LB / RB next available tower   X gear   Y launch"
+		if dock.controller_context_active(): controls_label.text = "A choose / equip module   B back   LB / RB tower"
+		elif run.phase == "prep" and run.towers.has(selected_cell) and not dock.is_open(): controls_label.text = "A open module slot   LB / RB tower   X gear   Y launch"
 		elif _cleanup_controls_available(): controls_label.text = "Y stop fast-forward   B stop   A inspect   X gear" if cleanup_fast else "Y fast-forward 8x (enemies too)   A inspect   X gear"
 	if controller_used and not armed_item.is_empty(): controls_label.text = "D-PAD / STICK choose tower     A attach module     B cancel"
 	if _controller_pointer_active(): controls_label.text = "RS cursor   R3 click   RT drag   LT precision   L3 camera   D-PAD grid"
 	if controller_used: controls_label.text = _controller_hint(controls_label.text)
 	hud_nodes.plant_caption.text = "CHOOSE A NUMBER" if _controller_number_cell >= 0 else "PLANT A NUMBER"
+	hud_nodes.plant_caption.visible = not portrait_layout and layout_size.y >= 700 and run.phase == "solve"
+	hud_nodes.reserve_mode.visible = run.phase == "battle" and _controller_number_cell < 0
+	hud_nodes.reserve_mode.text = ("Done" if portrait_layout else "Done planting") if reserve_mode else "Reserve seeds"
+	var reserve_rect: Rect2 = number_buttons[0].get_rect()
+	reserve_rect.size.x = 210 if not portrait_layout else minf(330,layout_size.x-40)
+	if reserve_mode: reserve_rect = hud_nodes.tools.get_rect() if portrait_layout else hud_nodes.camera_reset.get_rect()
+	_place(hud_nodes.reserve_mode,reserve_rect)
 	if _controller_number_cell >= 0:
 		controls_label.text = _controller_hint("D-PAD / STICK number   LB / RB number   A place   B back to square")
 	hud_nodes.camera.text = "Done" if camera_mode else "Camera"
@@ -853,6 +876,12 @@ func _refresh() -> void:
 	hud_nodes.camera_reset.disabled = not _camera_available() or not world.camera_is_rotated()
 	hud_nodes.camera_reset.text = "Reset" if portrait_layout else "Reset view"
 	hud_nodes.tools.disabled = camera_mode
+	if reserve_mode:
+		if portrait_layout: hud_nodes.tools.hide()
+		else: hud_nodes.camera_reset.hide()
+	else:
+		hud_nodes.tools.visible = (portrait_layout or layout_size.y < 700) and not camera_mode
+		hud_nodes.camera_reset.visible = not portrait_layout or camera_mode
 	if portrait_layout: _font(hud_nodes.camera_reset,20)
 	if camera_mode:
 		selected_label.text = "ROTATE THE BOARD"
@@ -1049,29 +1078,18 @@ func _cycle_upgrade_tower(direction: int) -> void:
 	_refresh()
 
 func _controller_module_equipped(origin_cell: int) -> void:
-	# This signal belongs only to the explicit controller slot chooser. Pointer
-	# drags, swaps, removals and ordinary inventory targeting never auto-advance.
-	dock.close_panel()
-	var candidates := _eligible_upgrade_towers()
-	var target := origin_cell
-	var best_distance := INF
-	for cell: int in candidates:
-		if cell == origin_cell: continue
-		var delta := Vector2(cell%9-origin_cell%9,cell/9-origin_cell/9)
-		var distance := delta.length_squared()
-		if distance < best_distance:
-			best_distance = distance
-			target = cell
-	if run.towers.has(target):
-		selected_number = int(run.towers[target].number)
-		_select(target,false,false)
-	# Keep the save-failure warning from _action visible even though the module
-	# was equipped in memory and controller selection can safely move on.
+	# A deliberate fit stays on the selected tower; only the player changes it.
+	if not run.towers.has(origin_cell):
+		dock.close_panel()
+		return
+	selected_number = int(run.towers[origin_cell].number)
+	_select(origin_cell,false,false)
+	dock.open_controller_workshop(origin_cell)
+	# Preserve any warning from the save attempted by _action.
 	if not save_failed:
-		if target != origin_cell: _toast("Module fitted. Next tower selected; A opens its empty slot.")
+		if run.towers[origin_cell].attachments.size() >= 5: _toast("Module fitted. This tower's five slots are full.")
 		elif not run.items.any(func(item): return str(item.get("type","")) == "attachment"): _toast("Module fitted. No modules remaining in Gear.")
-		elif candidates.is_empty(): _toast("Module fitted. Every tower's module slots are full.")
-		else: _toast("Module fitted. A opens this tower's next empty slot.")
+		else: _toast("Module fitted. This tower's next empty slot is selected.")
 	_refresh()
 
 func _attachment_item(item_id: String) -> Dictionary:
@@ -1115,7 +1133,7 @@ func _update_family_focus(number: int = 0) -> void:
 
 func _select(cell: int, place_now: bool = true, equip_armed: bool = true) -> void:
 	if cell < 0 or cell >= 81: return
-	if place_now and run.towers.has(cell): selected_number = int(run.towers[cell].number)
+	if (place_now or _tower_navigation_active()) and run.towers.has(cell): selected_number = int(run.towers[cell].number)
 	selected_cell = cell
 	world.set_selected(cell,selected_number)
 	dock.set_selected(cell)
@@ -1126,6 +1144,7 @@ func _select(cell: int, place_now: bool = true, equip_armed: bool = true) -> voi
 			if result.get("ok",false):
 				armed_item = ""
 				dock.clear_armed()
+				if controller_used and not _controller_pointer_active(): dock.open_panel("tower",cell)
 		else: _toast("Choose a planted tower for this module.",false)
 	elif place_now and run.towers.has(cell):
 		dock.open_panel("tower",cell)
@@ -1153,6 +1172,9 @@ func _screen_grid_direction(direction: Vector2i) -> Vector2i:
 	return down*direction.y
 
 func _move_selection(direction: Vector2i) -> void:
+	if _tower_navigation_active():
+		_move_tower_selection(direction)
+		return
 	direction = _screen_grid_direction(direction)
 	if selected_cell < 0: selected_cell = 40
 	else:
@@ -1160,6 +1182,65 @@ func _move_selection(direction: Vector2i) -> void:
 		var y: int = clampi(selected_cell/9+direction.y,0,8)
 		selected_cell = y*9+x
 	_select(selected_cell,false,false)
+
+func _tower_navigation_active() -> bool:
+	return (not armed_item.is_empty() or run.phase in ["prep","battle","loot"]) and not reserve_mode
+
+func _tower_cells() -> Array[int]:
+	var cells: Array[int] = []
+	for cell in run.towers: cells.append(int(cell))
+	cells.sort()
+	return cells
+
+func _move_tower_selection(direction: Vector2i) -> void:
+	var cells := _tower_cells()
+	if cells.is_empty():
+		_toast("No towers yet. Use reserve seeds during battle." if run.phase == "battle" else "No planted towers on this board.",false)
+		return
+	if not cells.has(selected_cell):
+		_select(cells[0],false,false)
+		return
+	# Use projected positions, so navigation still follows the screen after orbiting.
+	var origin: Vector2 = world.cell_screen_position(selected_cell)
+	var target := selected_cell
+	var best := INF
+	for cell in cells:
+		if cell == selected_cell: continue
+		var offset: Vector2 = world.cell_screen_position(cell)-origin
+		var forward: float = offset.dot(Vector2(direction))
+		if forward <= 0.5: continue
+		var lateral: float = absf(offset.cross(Vector2(direction)))
+		var score: float = offset.length()+lateral*2.0
+		if score < best:
+			best = score
+			target = cell
+	_select(target,false,false)
+
+func _cycle_tower(step: int) -> void:
+	var cells := _tower_cells()
+	if cells.is_empty(): return
+	var index: int = cells.find(selected_cell)
+	var target: int = cells[posmod(index+step,cells.size())] if index >= 0 else cells[0]
+	_select(target,false,false)
+	if dock.is_open(): dock.open_panel("tower",target)
+
+func _toggle_reserve_mode() -> void:
+	if run.phase != "battle": return
+	if dock.is_open(): dock.close_panel()
+	_cancel_camera_controls()
+	reserve_mode = not reserve_mode
+	_close_controller_numbers()
+	if reserve_mode:
+		# Entering planting cancels targeting, without equipping or losing gear.
+		cleanup_fast = false
+		armed_item = ""
+		dock.clear_armed()
+		for cell in range(81):
+			if run.board[cell] == 0:
+				_select(cell,false,false)
+				break
+		_toast("Reserve seeds · choose an empty square, then a number. B finishes planting.")
+	_refresh()
 
 func _action(result: Dictionary) -> void:
 	if result.has("message"): _toast(str(result.message),bool(result.get("ok",false)))
@@ -1199,6 +1280,14 @@ func _toggle_dock(kind: String) -> void:
 	else: dock.open_panel(kind,selected_cell)
 	_refresh()
 
+func _open_management(kind: String) -> void:
+	cleanup_fast = false
+	_close_overlay()
+	_close_controller_numbers()
+	_cancel_camera_controls()
+	dock.open_panel(kind,selected_cell)
+	_refresh()
+
 func _toggle_sound() -> void:
 	muted = not muted
 	sound.set_muted(muted)
@@ -1216,8 +1305,31 @@ func _toggle_notes() -> void:
 	_refresh()
 	_save_preferences()
 
+func _toggle_auto_open_chests() -> void:
+	auto_open_chests = not auto_open_chests
+	_save_preferences()
+
+func _maybe_auto_open_chests() -> void:
+	# Wait for a safe management moment; never interrupt combat, a dialog,
+	# gear selection, an existing reward reveal, or a held pointer gesture.
+	if not auto_open_chests or not has_active_run or menu_open or manual_pause or tutorial.active: return
+	if run.phase not in ["solve","prep","loot","won"] or not armed_item.is_empty(): return
+	if camera_mode or _controller_number_cell >= 0 or get_viewport().gui_is_dragging(): return
+	if controller_cursor != null and controller_cursor.button_down: return
+	if seed_pointer != null and seed_pointer.is_active(): return
+	if board_input != null and (board_input.mouse_down or board_input.active_touch >= 0 or board_input.camera_pointer_active()): return
+	if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) or Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT): return
+	if dock.is_open() and dock.current_panel != "loot": return
+	if is_instance_valid(dock._loot_table) and (dock._loot_table.opening or not dock._loot_table.reward.is_empty()): return
+	if int(run.chest_open_plan().count) == 0: return
+	var result: Dictionary = run.open_all_chests()
+	if not bool(result.get("ok",false)): return
+	_action(result)
+	dock.open_panel("loot",selected_cell)
+	dock._loot_table.present_rewards(result)
+
 func _save_preferences() -> void:
-	if not preferences.write_settings({"muted": muted, "reduced_motion": reduced_motion, "board_notes": board_notes,
+	if not preferences.write_settings({"muted": muted, "reduced_motion": reduced_motion, "board_notes": board_notes, "auto_open_chests": auto_open_chests,
 		"master_volume": master_volume, "music_volume": music_volume, "effects_volume": effects_volume, "controller_bindings": controller.bindings}):
 		_toast("Settings apply now, but could not be saved on this device.",false)
 
@@ -1305,7 +1417,7 @@ func _resume_controller_settings(action: String) -> void:
 		_render_controller_settings(action)
 
 func _save_controller_settings() -> void:
-	var data := {"muted":muted,"reduced_motion":reduced_motion,"board_notes":board_notes,
+	var data := {"muted":muted,"reduced_motion":reduced_motion,"board_notes":board_notes,"auto_open_chests":auto_open_chests,
 		"master_volume":master_volume,"music_volume":music_volume,"effects_volume":effects_volume,
 		"controller_bindings":_bindings_draft}
 	if not preferences.write_settings(data):
@@ -1510,6 +1622,7 @@ func _start_run() -> void:
 	selected_cell = -1
 	selected_number = 0
 	armed_item = ""
+	reserve_mode = false
 	manual_pause = false
 	dock.reset_for_run()
 	world.setup(run)
@@ -1720,7 +1833,7 @@ func _show_menu(initial: bool = false) -> void:
 	start.grab_focus()
 
 func _show_pause_menu() -> void:
-	var box := _modal(780,500)
+	var box := _modal(780,620)
 	for panel in overlay.get_children():
 		if panel is PanelContainer: panel.set_meta("portrait_height",620.0)
 	var columns := HBoxContainer.new()
@@ -1745,8 +1858,12 @@ func _show_pause_menu() -> void:
 		var intel := button("Wave intel",_show_wave_intel)
 		intel.set_meta("focus_id","wave:intel")
 		actions.add_child(intel)
-	actions.add_child(button("Manage gear",func(): _close_overlay(); _toggle_dock("bag")))
-	actions.add_child(button("How to play",_help))
+	actions.add_child(button("Manage gear",func(): _open_management("bag")))
+	actions.add_child(button("Chests / Open all",func(): _open_management("loot")))
+	actions.add_child(button("Camp / Salvage slots",func(): _open_management("camp")))
+	if run.phase == "battle":
+		actions.add_child(button("Finish reserve planting" if reserve_mode else "Plant reserve seeds",func(): _close_overlay(); _toggle_reserve_mode()))
+	actions.add_child(button("Settings / How to play",_help))
 	actions.add_child(button("Audio settings",_show_audio_settings))
 	actions.add_child(button("Controller mapping",_show_controller_settings))
 	actions.add_child(button("Feedback / report a bug",feedback_ui.show_panel))
@@ -1817,9 +1934,9 @@ func _help() -> void:
 	box.add_child(button("Feedback / report a bug",feedback_ui.show_panel))
 	for text in [
 		"01  SOLVE  ·  Fill each row, column and 3x3 box with 1-9. Tap a square, then a number, or drag a number onto the board. Correct answers grow towers. Wrong answers cost 5 seconds. At zero, preparation begins. You may move on early.",
-		"02  PREPARE  ·  Read Wave intel before launching. Select a tower to upgrade it and choose First (nearest exit), Strongest (highest current health), or Nearest (closest to tower). Open Gear to fit modules; each tower has five slots. Menus pause the game.",
+		"02  PREPARE  ·  Read Wave intel before launching. Select a tower, open Gear, select modules and Install selected. Each tower has five slots. Slow and Range filters help plan your build. Modules return to Gear on each new board; equip your new towers before launching. Menus pause the game.",
 		"03  DEFEND  ·  Your recent answers shape the route before battle. During the wave, use reserve seeds to add towers. Wrong numbers are allowed, but add corruption: later enemies have more health, and those towers disappear after the wave.",
-		"04  LOOT  ·  Defeated enemies drop fragments to open chests. Collect gear, buy upgrades in Camp, then start the next round. Credits, gear and number upgrades carry over. Equipped modules return to Gear when the board resets."
+		"04  LOOT  ·  Open all affordable chests together, or enable automatic opening below. Both use the same fragment costs. Camp offers salvage slots and upgrades between rounds. Credits, gear and number upgrades carry over."
 	]:
 		var l := label(text,17,WHITE)
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1833,7 +1950,7 @@ Controller: press L3, use the right stick, R3 to reset, B to finish."),15,MUTED)
 	box.add_child(label("CONTROLLER",12,MINT))
 	var input_label := label(ControllerBindings.help_text(controller.bindings),15,MUTED)
 	box.add_child(input_label)
-	box.add_child(label(_controller_hint("Tower modules: A on a tower focuses its first empty + socket. A opens available modules; A fits one, then selects the nearest other available tower. B returns one step.\nLB / RB cycle available towers in the workshop or on a selected tower during Prepare. Elsewhere they retain number / tab controls. Full towers focus Close; navigate to a filled socket to remove a module."),15,MUTED))
+	box.add_child(label(_controller_hint("Tower modules: A on a tower focuses its first empty + socket. A opens available modules; A fits one and returns to this tower. B returns one step.\nD-pad / left stick: planted towers during setup and combat. LB / RB cycle towers; solving keeps number selection. Gear: A selects modules; Y installs the selection on this tower. Start opens Gear, Chests and Camp."),15,MUTED))
 	var reduce := button("Reduced motion: " + ("ON" if reduced_motion else "OFF"),_toggle_reduced_motion)
 	reduce.pressed.connect(func(): reduce.text = "Reduced motion: " + ("ON" if reduced_motion else "OFF"))
 	box.add_child(reduce)
@@ -1843,6 +1960,12 @@ Controller: press L3, use the right stick, R3 to reset, B to finish."),15,MUTED)
 	var notes := button("Notes: " + ("ON" if board_notes else "OFF"),_toggle_notes)
 	notes.pressed.connect(func(): notes.text = "Notes: " + ("ON" if board_notes else "OFF"))
 	box.add_child(notes)
+	var auto_open := button("Auto-open affordable chests: " + ("ON" if auto_open_chests else "OFF"),_toggle_auto_open_chests)
+	auto_open.pressed.connect(func(): auto_open.text = "Auto-open affordable chests: " + ("ON" if auto_open_chests else "OFF"))
+	box.add_child(auto_open)
+	var auto_note := label("Uses fragments at the normal cost. Opens together after combat or when you finish your current menu action.",14,MUTED)
+	auto_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(auto_note)
 	var speed := button("Battle speed: %dx" % int(game_speed),_cycle_speed)
 	speed.pressed.connect(func(): speed.text = "Battle speed: %dx" % int(game_speed))
 	box.add_child(speed)
@@ -1863,7 +1986,7 @@ func _show_next_round() -> void:
 		_choice_row(box,"SUDOKU DIFFICULTY",[["easy","Easy"],["medium","Medium"],["hard","Hard"]],run.puzzle_difficulty,func(v): puzzle_choice=v)
 		_choice_row(box,"SIEGE DIFFICULTY",[["easy","Easy"],["medium","Medium"],["hard","Hard"]],run.combat_difficulty,func(v): combat_choice=v)
 	else: box.add_child(label("Locked in keeps your starting difficulties for all 50 rounds.",17,MUTED))
-	var note := label("Your credits, gear and number upgrades carry over. Towers reset; equipped modules return to Gear.",16,MUTED)
+	var note := label("Your credits, gear and number upgrades carry over. Towers reset; modules return to Gear. Fit modules to your new towers before launching.",16,MUTED)
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(note)
 	var go := button("Start next round",func():
@@ -1873,6 +1996,9 @@ func _show_next_round() -> void:
 			return
 		selected_cell = -1
 		selected_number = 0
+		reserve_mode = false
+		armed_item = ""
+		dock.set_selected(-1)
 		_clear_wrong_guess_feedback()
 		world.setup(run)
 		_close_overlay()
@@ -1923,6 +2049,7 @@ func _retry_same_seed() -> void:
 	selected_cell = -1
 	selected_number = 0
 	armed_item = ""
+	reserve_mode = false
 	manual_pause = false
 	dock.reset_for_run()
 	world.setup(run)
@@ -2115,6 +2242,9 @@ func _controller_navigate(direction: Vector2i) -> void:
 	if scope == null:
 		if has_active_run and not manual_pause: _move_selection(direction)
 		return
+	if dock.is_open() and not menu_open:
+		dock.navigate_focus(direction)
+		return
 	var buttons: Array[Control] = _controller_buttons(scope)
 	if buttons.is_empty(): return
 	var focused: Control = get_viewport().gui_get_focus_owner()
@@ -2122,11 +2252,15 @@ func _controller_navigate(direction: Vector2i) -> void:
 		buttons[0].grab_focus()
 		return
 	var side: int = SIDE_LEFT if direction.x < 0 else (SIDE_RIGHT if direction.x > 0 else (SIDE_TOP if direction.y < 0 else SIDE_BOTTOM))
-	var neighbor: Control = focused.find_valid_focus_neighbor(side)
+	# Audio has paired -/+ controls: vertical navigation must retain its column.
+	var spatial_navigation: bool = direction.x != 0 or _seed_editing or bool(scope.get_meta("audio_settings",false))
+	var neighbor: Control = focused.find_valid_focus_neighbor(side) if spatial_navigation else null
 	if not buttons.has(neighbor) or neighbor == focused:
 		var increment: int = 1 if direction.x > 0 or direction.y > 0 else -1
-		neighbor = buttons[posmod(buttons.find(focused)+increment,buttons.size())]
+		neighbor = buttons[clampi(buttons.find(focused)+increment,0,buttons.size()-1)]
 	neighbor.grab_focus()
+	for scroll in scope.find_children("*","ScrollContainer",true,false):
+		if scroll.is_ancestor_of(neighbor): scroll.ensure_control_visible.call_deferred(neighbor)
 
 func _controller_confirm_ui() -> void:
 	var scope: Control = _controller_scope()
@@ -2192,6 +2326,7 @@ func _controller_action(action: String) -> void:
 		elif dock.is_open(): dock.close_panel()
 		elif cleanup_fast: _toggle_cleanup()
 		else:
+			reserve_mode = false
 			armed_item = ""
 			dock.clear_armed()
 			selected_number = 0
@@ -2209,21 +2344,24 @@ func _controller_action(action: String) -> void:
 		return
 	if dock.is_open():
 		if action == "confirm": _controller_confirm_ui()
+		elif action == "advance" and dock.current_panel == "bag" and dock.has_selected_modules(): dock.install_selected_modules()
 		elif action in ["previous","next"] and dock.controller_context_active(): _cycle_upgrade_tower(-1 if action == "previous" else 1)
+		elif action in ["previous","next"] and dock.current_panel == "tower": _cycle_tower(-1 if action == "previous" else 1)
 		elif action in ["previous","next"]: dock.cycle_panel(-1 if action == "previous" else 1)
 		return
 	if manual_pause: return
 	match action:
 		"previous", "next":
-			if run.phase == "prep" and run.towers.has(selected_cell) and armed_item.is_empty():
-				_cycle_upgrade_tower(-1 if action == "previous" else 1)
+			if _tower_navigation_active():
+				_cycle_tower(-1 if action == "previous" else 1)
 				return
 			if selected_number <= 0: selected_number = 9 if action == "previous" else 1
 			else: selected_number = posmod(selected_number-1+(-1 if action == "previous" else 1),9)+1
 			world.set_selected(selected_cell,selected_number)
 			_refresh()
 		"confirm":
-			if selected_cell < 0: _select(40,false,false)
+			if _tower_navigation_active() and not run.towers.has(selected_cell): _move_tower_selection(Vector2i.RIGHT)
+			elif selected_cell < 0: _select(40,false,false)
 			elif run.board[selected_cell] == 0 and _number_placement_allowed(): _open_controller_numbers(selected_cell)
 			elif run.towers.has(selected_cell) and armed_item.is_empty() and run._gear_phase():
 				selected_number = int(run.towers[selected_cell].number)

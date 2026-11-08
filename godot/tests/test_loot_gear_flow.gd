@@ -290,12 +290,14 @@ func gear_checks() -> void:
 	await capture("gear")
 	var item: Dictionary = scene.run.items[0]
 	await tap_id("item:" + str(item.id))
-	check(scene.armed_item == str(item.id),"Tapping a module arms that exact item")
-	await capture("gear-armed")
+	check(scene.dock._selected_module_ids.has(str(item.id)) and scene.armed_item.is_empty(),"Tapping a module selects that exact item for the chosen tower")
+	check(scene.dock.is_open(),"Module selection keeps Gear open for additional choices")
+	await capture("gear-selected")
 	var inventory_before: int = scene.run.items.size()
-	await tap(scene.world.cell_screen_position(tower_cells[0]))
-	check(scene.run.towers[tower_cells[0]].attachments.size() == 1,"Touching the tower snaps one selected module into its stack")
-	check(scene.run.items.size() == inventory_before-1 and scene.armed_item.is_empty(),"Successful attachment removes only the selected module and clears targeting")
+	await tap_id("attach:selected")
+	check(scene.run.towers[tower_cells[0]].attachments.size() == 1,"Touching Install selected fits the chosen module")
+	check(scene.run.items.size() == inventory_before-1 and not scene.dock.has_selected_modules(),"Successful attachment removes only the selected module and clears the completed batch")
+	check(scene.dock.selected_cell == tower_cells[0] and scene.dock.is_open(),"Touch install stays on the same tower with Gear open")
 	# Drag through real pointer dispatch; no force_drag or direct _drop_data calls.
 	for use_mouse in [false,true]:
 		scene.dock.open_panel("bag",tower_cells[0])
@@ -315,9 +317,9 @@ func gear_checks() -> void:
 	scene.dock.open_panel("bag",tower_cells[0])
 	await frames()
 	item = scene.run.items[0]
-	await tap_id("item:" + str(item.id))
 	inventory_before = scene.run.items.size()
-	await tap(scene.world.cell_screen_position(tower_cells[0]))
+	await tap_id("item:" + str(item.id))
+	check(not scene.dock.has_selected_modules() and by_id("attach:selected").disabled,"A full tower prevents another module selection")
 	check(scene.run.towers[tower_cells[0]].attachments.size() == 5 and scene.run.items.size() == inventory_before,"A full target never consumes a sixth module")
 	await pad(JOY_BUTTON_B)
 	await pad(JOY_BUTTON_B)

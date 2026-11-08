@@ -296,6 +296,8 @@ func exercise_layout(window_size: Vector2i) -> void:
 	scene.run.advance_phase()
 	scene.run.advance_phase()
 	scene.last_phase = "battle"
+	scene._toggle_reserve_mode()
+	check(scene.reserve_mode,"Battle reserve tray is explicitly opened before choosing a square")
 	for i in range(1,10): scene.run.inventory[i] = 0
 	scene._select(cell,false,false)
 	await press(JOY_BUTTON_A)

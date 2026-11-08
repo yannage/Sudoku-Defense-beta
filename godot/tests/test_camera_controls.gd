@@ -122,6 +122,7 @@ func check_camera_layout() -> void:
 			var quick: Array[Control] = [scene.bag_button,scene.loot_button,scene.hud_nodes.camp,scene.hud_nodes.camera,scene.hud_nodes.camera_reset]
 			if scene.hud_nodes.tools.is_visible_in_tree(): quick.append(scene.hud_nodes.tools)
 			var on_screen := true
+			var outside: Array[String] = []
 			var separated := true
 			var text_fits := true
 			var hint_clear: bool = scene.selected_label.is_visible_in_tree() and scene.candidate_label.is_visible_in_tree()
@@ -131,9 +132,10 @@ func check_camera_layout() -> void:
 				var box: StyleBox = quick[i].get_theme_stylebox("normal")
 				if scene.portrait_layout: text_fits = text_fits and text_size.x <= rect.size.x-box.get_content_margin(SIDE_LEFT)-box.get_content_margin(SIDE_RIGHT)+0.1
 				on_screen = on_screen and quick[i].is_visible_in_tree() and viewport.encloses(rect) and rect.size.y >= 44.0
+				if not viewport.encloses(rect): outside.append("%s %s" % [quick[i].text,rect])
 				hint_clear = hint_clear and not rect.intersects(scene.selected_label.get_global_rect()) and not rect.intersects(scene.candidate_label.get_global_rect())
 				for j: int in range(i+1,quick.size()): separated = separated and not rect.intersects(quick[j].get_global_rect())
-			check(on_screen,"Camera quick controls stay on screen with usable touch targets: "+context)
+			check(on_screen,"Camera quick controls stay on screen with usable touch targets: "+context+" "+str(outside))
 			check(separated,"Camera quick controls do not overlap: "+context)
 			if scene.portrait_layout: check(text_fits,"Portrait quick labels and chest counts fit without clipping: "+context)
 			check(hint_clear and viewport.encloses(scene.candidate_label.get_global_rect()),"Camera instructions stay visible and clear of quick controls: "+context)
@@ -339,6 +341,13 @@ func navigation_and_capture() -> void:
 		if int(scene.run.board[cell]) == 0 and cell % 3 == 0 and remaining > 0:
 			scene.run.place(cell,int(scene.run.solution[cell]))
 			remaining -= 1
+	# Plant a central tower with towers on each board axis. During Prepare,
+	# navigation now visits towers rather than each intervening Sudoku square.
+	for cell: int in [40,22,38,42,58]:
+		if not scene.run.towers.has(cell):
+			scene.run.board[cell] = 0
+			scene.run.givens[cell] = false
+			check(scene.run.place(cell,int(scene.run.solution[cell])).get("ok",false),"Camera navigation fixture plants its tower")
 	scene.run.drain_events()
 	for phase: String in ["solve","prep"]:
 		scene.run.phase = phase
@@ -353,9 +362,23 @@ func navigation_and_capture() -> void:
 				var origin: Vector2 = scene.world.cell_screen_position(40)
 				scene._move_selection(direction)
 				var moved: Vector2 = scene.world.cell_screen_position(scene.selected_cell)-origin
-				check(moved.dot(Vector2(direction))>1.0,"Grid navigation follows screen direction at %d degrees in %s" % [degrees,phase])
+				if phase == "solve":
+					check(moved.dot(Vector2(direction))>1.0,"Grid navigation follows screen direction at %d degrees in %s" % [degrees,phase])
+				else:
+					check(scene.run.towers.has(scene.selected_cell),"Prepare navigation only selects towers at %d degrees" % degrees)
+					check(moved.dot(Vector2(direction))>0.5,"Prepare tower navigation follows screen direction at %d degrees" % degrees)
 				reached[scene.selected_cell] = true
-			check(reached.size()==4,"The four directions reach all four neighbors at %d degrees in %s" % [degrees,phase])
+			if phase == "solve":
+				check(reached.size()==4,"The four directions reach all four neighbors at %d degrees in %s" % [degrees,phase])
+			else:
+				for direction: Vector2i in [Vector2i.RIGHT,Vector2i.DOWN,Vector2i.LEFT,Vector2i.UP]:
+					var edge_cell := 40
+					for cell: Variant in scene.run.towers:
+						if scene.world.cell_screen_position(int(cell)).dot(Vector2(direction)) > scene.world.cell_screen_position(edge_cell).dot(Vector2(direction)):
+							edge_cell = int(cell)
+					scene.selected_cell = edge_cell
+					scene._move_selection(direction)
+					check(scene.selected_cell == edge_cell,"Prepare navigation stays at boundary without a tower ahead at %d degrees" % degrees)
 			if phase == "prep":
 				var picked := true
 				for cell: Variant in scene.run.towers:

@@ -284,6 +284,9 @@ def main() -> None:
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_loot_table.gd", "--", "--canvas-graphics"], logs / "canvas-loot-table-tests.log", expected="LOOT_TABLE_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_loot_gear_flow.gd"], logs / "loot-gear-flow-tests.log", expected="LOOT_GEAR_FLOW_PASS")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_loot_gear_flow.gd", "--", "--canvas-graphics"], logs / "canvas-loot-gear-flow-tests.log", expected="LOOT_GEAR_FLOW_PASS")
+    for script, marker in [("test_loot_batch.gd", "LOOT_BATCH_PASS"), ("test_karen_dock.gd", "FAILURES=0"), ("test_combat_clutter.gd", "0 failures"), ("test_karen_controller.gd", "0 failures")]:
+        for renderer, flags in [("native", []), ("canvas", ["--", "--canvas-graphics"])]:
+            run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/" + script] + flags, logs / f"{renderer}-{script.removesuffix('.gd')}.log", expected=marker)
     if args.render_check:
         render_failures: list[str] = []
         for script, flag, logfile, marker in [

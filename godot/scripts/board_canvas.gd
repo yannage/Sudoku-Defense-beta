@@ -283,6 +283,7 @@ func _draw_tiles() -> void:
 			tactical = tactical.lightened(0.025)
 		var matching: bool = selected_number > 0 and int(run.board[cell]) == selected_number
 		if _family_focus > 0: matching = run.towers.has(cell) and int(run.towers[cell].number) == _family_focus
+		if str(run.phase) == "battle" and not run.towers.has(cell): matching = false
 		if matching:
 			paper = Color("8fb6bf")
 			tactical = Color("244451")
@@ -320,6 +321,8 @@ func _draw_digits() -> void:
 		var number: int = int(run.board[cell])
 		if number <= 0: continue
 		var planted: bool = run.towers.has(cell)
+		# Combat keeps tower-family badges, but drops the unrelated puzzle clues.
+		if str(run.phase) == "battle" and not planted: continue
 		if planted and _blend > 0.60: continue
 		var color: Color = Color("17343f").lerp(Color("c2d8d1"),_blend)
 		if planted:

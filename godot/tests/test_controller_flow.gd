@@ -77,6 +77,13 @@ func choose_number(number: int) -> void:
 	check(scene.selected_number == number, "Shoulders select number %d" % number)
 
 func arm_first_module() -> String:
+	# Single-target gear selection remains available when no tower is selected.
+	# A selected tower now enables batch installation, covered separately.
+	if scene.dock.is_open(): await press(JOY_BUTTON_B)
+	for cell in range(81):
+		if scene.run.board[cell] == 0:
+			await move_to(cell)
+			break
 	await press(JOY_BUTTON_X)
 	check(scene.dock.is_open() and scene.dock.current_panel == "bag", "X opens gear")
 	var item_id: String = ""
@@ -227,15 +234,20 @@ func exercise() -> void:
 	var selected_before: int = scene.selected_cell
 	var number_before: int = scene.selected_number
 	await press(JOY_BUTTON_RIGHT_SHOULDER)
-	check(scene.dock.current_panel == "bag", "RB cycles workshop to bag")
+	check(scene.dock.current_panel == "tower" and scene.selected_cell == cells[0], "RB cycles to the next tower within the workshop")
+	await press(JOY_BUTTON_LEFT_SHOULDER)
+	check(scene.dock.current_panel == "tower" and scene.selected_cell == selected_before, "LB returns to the previously inspected tower")
+	await press(JOY_BUTTON_X)
+	check(scene.dock.current_panel == "bag", "X opens Gear from the workshop")
 	await press(JOY_BUTTON_RIGHT_SHOULDER)
 	check(scene.dock.current_panel == "loot", "RB cycles bag to loot")
 	await press(JOY_BUTTON_RIGHT_SHOULDER)
 	check(scene.dock.current_panel == "camp", "RB cycles loot to camp")
+	await press(JOY_BUTTON_LEFT_SHOULDER)
+	check(scene.dock.current_panel == "loot", "LB cycles management tabs backwards")
+	await press(JOY_BUTTON_RIGHT_SHOULDER)
 	await press(JOY_BUTTON_RIGHT_SHOULDER)
 	check(scene.dock.current_panel == "tower", "RB wraps back to workshop")
-	await press(JOY_BUTTON_LEFT_SHOULDER)
-	check(scene.dock.current_panel == "camp", "LB cycles management tabs backwards")
 	check(scene.selected_cell == selected_before and scene.selected_number == number_before, "Management shoulder navigation never changes board selection")
 	await press(JOY_BUTTON_B)
 	check(not scene.dock.is_open(), "B closes the management panel")

@@ -171,13 +171,17 @@ func exercise() -> void:
 	check(not scene.controller.settings_mode,"Deferred capture cancellation cannot reopen over newer navigation")
 	scene._show_controller_settings()
 	scene._bindings_draft = Bindings.swap_binding(changed,"confirm","b2")
+	scene._toggle_auto_open_chests()
+	check(scene.auto_open_chests and store.read_settings().auto_open_chests,"Auto-open preference is enabled before remapping Save")
 	scene.preferences.file_path = "user://missing-directory/mapping.json"
 	scene._save_controller_settings()
 	check(scene.controller.settings_mode and scene.controller.bindings == changed,"Save failure leaves old live mapping and draft open")
 	check(scene._binding_message.contains("Could not save"),"Save failure explains retry")
+	check(store.read_settings().auto_open_chests,"Failed remapping Save preserves the previously saved auto-open preference")
 	scene.preferences.file_path = settings_path
 	scene._save_controller_settings()
 	check(scene.controller.bindings.confirm == "b2" and store.read_settings().controller_bindings.confirm == "b2","Retry saves and applies mapping")
+	check(scene.auto_open_chests and store.read_settings().auto_open_chests,"Remapping Save preserves the enabled auto-open preference")
 	check(scene._controller_hint("A plant / X gear") == "X plant / RT gear","Hints use mapped bindings without cascading replacement")
 	scene._show_controller_settings()
 	for item in scene.overlay.find_children("*","Button",true,false):
@@ -187,6 +191,7 @@ func exercise() -> void:
 	check(scene._bindings_draft == defaults and scene.controller.bindings.confirm == "b2","Reset is staged until Save")
 	scene._save_controller_settings()
 	check(scene.controller.bindings == defaults and store.read_settings().controller_bindings == defaults,"Reset saves defaults")
+	check(store.read_settings().auto_open_chests,"Resetting controller defaults does not reset the auto-open preference")
 	scene._show_controller_settings()
 	scene._capture_controller_binding("camera")
 	scene.controller._notification(Node.NOTIFICATION_WM_WINDOW_FOCUS_OUT)

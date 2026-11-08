@@ -316,6 +316,9 @@ func exercise() -> void:
 	scene.game_speed = 1.0
 	scene.set_process(true)
 	for i in range(40): scene.world.tick(0.05)
+	scene._refresh()
+	await tap(scene.hud_nodes.reserve_mode.get_global_rect().get_center())
+	check(scene.reserve_mode and scene.number_buttons[0].is_visible_in_tree(), "Touch explicitly opens emergency reserve numbers during battle")
 	cell = blank_cell()
 	wrong = int(scene.run.solution[cell]) % 9 + 1
 	scene.run.inventory[wrong] = 2
@@ -333,6 +336,7 @@ func exercise() -> void:
 	scene.manual_pause = false
 	scene.selected_cell = -1
 	scene.selected_number = 0
+	scene.reserve_mode = false
 	scene.world.setup(scene.run)
 	scene.world.set_selected(-1,0)
 	var planted_nine: int = -1
@@ -381,6 +385,8 @@ func exercise() -> void:
 	cell = blank_cell()
 	reserves = scene.run.inventory[9]
 	for i in range(40): scene.world.tick(0.05)
+	await tap(scene.hud_nodes.reserve_mode.get_global_rect().get_center())
+	check(scene.reserve_mode and nine.is_visible_in_tree(), "Touch opens reserves before dragging a completed family in battle")
 	await drag_number(9,scene.world.cell_screen_position(cell))
 	check(scene._number_complete(9) and scene.run.board[cell] == 9 and scene.run.inventory[9] == reserves-1,"Completed families can still spend a reserve on an emergency battle tower")
 

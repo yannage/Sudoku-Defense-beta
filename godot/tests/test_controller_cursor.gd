@@ -194,6 +194,13 @@ func empty_cells(count: int) -> Array[int]:
 		if scene.run.board[cell] == 0 and result.size() < count: result.append(cell)
 	return result
 
+func grid_step_follows_screen(before: int, after: int, direction: Vector2) -> bool:
+	# Orbit-aware navigation may use either board axis. Assert a single real
+	# neighbor in the requested screen direction, rather than a fixed row ID.
+	var delta := Vector2i(after % 9 - before % 9, after / 9 - before / 9)
+	var offset: Vector2 = scene.world.cell_screen_position(after) - scene.world.cell_screen_position(before)
+	return absi(delta.x) + absi(delta.y) == 1 and offset.dot(direction) > 0.5
+
 func board_and_seed() -> void:
 	var cells := empty_cells(3)
 	check(cells.size() == 3,"Sudoku fixture offers three empty cells")
@@ -272,8 +279,18 @@ func gear_and_loot() -> void:
 		check(not root.gui_is_dragging() and not cursor().button_down,"Module drop releases native GUI drag ownership")
 	# Hovering at the inventory's edge scrolls the real scroller; the stick is
 	# still a pointer and shoulder buttons remain available for normal tabs.
+	if scene.dock.current_panel != "bag": await click_control(by_id("tab:bag"))
 	var scroll: ScrollContainer = scene.dock._scroll
 	var rect: Rect2 = scroll.get_global_rect()
+	check(scroll.get_v_scroll_bar().max_value > scroll.get_v_scroll_bar().page,"Module inventory fixture has scrollable content")
+	# Focus restoration may already leave the refreshed list at its lower end.
+	# Establish the upper edge through the real cursor before testing downward
+	# dwell, rather than depending on a prior drag's incidental scroll offset.
+	await position_at(Vector2(rect.get_center().x,rect.position.y+7))
+	for i in range(600):
+		if scroll.scroll_vertical == 0: break
+		await frames(1)
+	check(scroll.scroll_vertical == 0,"Pointer upper-edge dwell reaches the start of the inventory")
 	await position_at(Vector2(rect.get_center().x,rect.end.y-7))
 	var before_scroll: int = scroll.scroll_vertical
 	await create_timer(0.85).timeout
@@ -359,18 +376,31 @@ func ownership_and_cancel() -> void:
 	Input.joy_connection_changed.emit(DEVICE,true)
 	await press(JOY_BUTTON_B)
 	check(not scene.menu_open,"Reconnected controller can leave the pause menu")
+	# This section tests pointer/grid ownership and missing release events.
+	# Cell-by-cell navigation belongs to Solve; Prepare now skips to towers.
+	var prior_phase: String = scene.run.phase
+	var prior_timer: float = scene.run.timer
+	scene.run.phase = "solve"
+	scene.run.timer = scene.run.solve_duration
+	scene.last_phase = "solve"
+	scene._refresh()
+	await create_timer(1.2).timeout
 	await focus_resets_navigation()
 	var selected: int = scene.selected_cell
 	if selected < 0: scene._select(40,false,false); selected = 40
 	await position_at(scene.bag_button.get_global_rect().get_center())
 	await press(JOY_BUTTON_DPAD_DOWN)
-	check(not cursor().is_active() and scene.selected_cell == mini(selected+9,72+selected%9),"D-pad resumes discrete grid navigation without moving the mouse target")
+	check(not cursor().is_active() and grid_step_follows_screen(selected,scene.selected_cell,Vector2.DOWN),"D-pad resumes discrete grid navigation without moving the mouse target")
 	var stopped: int = scene.selected_cell
 	stick(Vector2(-0.75,0.0))
 	await create_timer(0.12).timeout
 	stick(Vector2.ZERO)
 	await create_timer(0.35).timeout
 	check(cursor().is_active() and scene.selected_cell == stopped,"Returning to the pointer stops all latent grid repeats")
+	scene.run.phase = prior_phase
+	scene.run.timer = prior_timer
+	scene.last_phase = prior_phase
+	scene._refresh()
 	var point: Vector2 = scene.loot_button.get_global_rect().get_center()
 	var physical_clicks := [0]
 	scene.loot_button.pressed.connect(func(): physical_clicks[0] += 1)
@@ -444,16 +474,17 @@ func focus_resets_navigation() -> void:
 	axis(JOY_AXIS_LEFT_Y,0.9)
 	await frames(2)
 	var stopped: int = scene.selected_cell
-	check(stopped == 49,"Left-stick fixture starts real grid navigation before focus loss")
+	check(grid_step_follows_screen(40,stopped,Vector2.DOWN),"Left-stick fixture starts real grid navigation before focus loss")
 	scene.propagate_notification(Node.NOTIFICATION_WM_WINDOW_FOCUS_OUT)
 	await create_timer(0.50).timeout
 	check(scene.selected_cell == stopped and not cursor().is_active(),"Focus loss stops a held left stick without needing its release")
 	scene.propagate_notification(Node.NOTIFICATION_WM_WINDOW_FOCUS_IN)
 	axis(JOY_AXIS_LEFT_Y,0.0)
+	var previous: int = stopped
 	button(JOY_BUTTON_DPAD_LEFT,true)
 	await frames(2)
 	stopped = scene.selected_cell
-	check(stopped == 48,"Fresh D-pad input resumes after focus returns")
+	check(grid_step_follows_screen(previous,stopped,Vector2.LEFT),"Fresh D-pad input resumes after focus returns")
 	scene.propagate_notification(Node.NOTIFICATION_WM_WINDOW_FOCUS_OUT)
 	await create_timer(0.50).timeout
 	check(scene.selected_cell == stopped,"Focus loss also clears held D-pad repeat")

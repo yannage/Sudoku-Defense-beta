@@ -2,7 +2,7 @@ extends RefCounted
 ## Device-local accessibility and presentation choices, independent of run saves.
 
 const Bindings = preload("res://scripts/controller_bindings.gd")
-const DEFAULTS := {"muted": false, "reduced_motion": false, "board_notes": true,
+const DEFAULTS := {"muted": false, "reduced_motion": false, "board_notes": true, "auto_open_chests": false,
 	"master_volume": 0.85, "music_volume": 1.0, "effects_volume": 1.0, "controller_bindings": Bindings.DEFAULTS}
 var file_path := "user://sudoku-defense-settings.json"
 

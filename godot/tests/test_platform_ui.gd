@@ -213,7 +213,7 @@ func gameplay_and_practice() -> void:
 	await press(JOY_BUTTON_A)
 	check(focused_id().begins_with("item:"), "Socket confirmation still focuses available module")
 	await press(JOY_BUTTON_A)
-	check(scene.run.towers[cell].attachments.size() == 1 and scene.selected_cell != cell, "Module equips once and selects next eligible tower")
+	check(scene.run.towers[cell].attachments.size() == 1 and scene.selected_cell == cell and scene.dock.is_open() and focused_id() == "slot:1", "Module equips once and stays on the same tower at its next empty socket")
 	check(scene.achievements.unlocked.has("SD_FIRST_MODULE"), "Successful controller equip reaches achievement observer")
 	await press(JOY_BUTTON_RIGHT_SHOULDER)
 	check(scene.run.towers.has(scene.selected_cell), "Bumper still selects an eligible tower")
