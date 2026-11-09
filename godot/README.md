@@ -1,5 +1,11 @@
 # Sudoku Defense — Godot edition
 
+Current status (2026-11-09): **0.3.27-dev** is active on Steam `default` as
+build **26532795**, verified against the complete Windows/Linux package.
+Continue from `integration/karen-on-0.3.26`; see the
+[cloud handoff](../docs/CLOUD-HANDOFF-0.3.27.md). This supersedes historical
+local-only statements below; runtime acceptance gaps remain open.
+
 A native Godot 4.7.2 version of the pre-Unity Sudoku Defense game. The same GDScript game exports to Web, Windows x86-64, and Linux x86-64. No Electron, browser runtime wrapper, or Unity dependency is used by the desktop packages.
 
 ## Play

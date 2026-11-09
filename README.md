@@ -1,5 +1,15 @@
 # Sudoku Defense
 
+## Current development and Steam status — 2026-11-09
+
+Continue development from `integration/karen-on-0.3.26`. The latest game source
+is **0.3.27-dev**, commit `822fdcd61dc59f89c6f342096243e23bad94032e`.
+Steam app **3721150** has build **26532795** (description `Karen feedback`)
+active on `default`. All 12 depot file hashes and sizes match the prepared
+Windows/Linux package. See [the cloud development handoff](docs/CLOUD-HANDOFF-0.3.27.md)
+for setup, verification evidence, and remaining testing gaps. This status
+supersedes the older local-only delivery statements below.
+
 ## Local feature candidate - 0.3.26-dev
 
 The maintained game on this branch is **`godot/`**, built with Godot 4.7.2 for
