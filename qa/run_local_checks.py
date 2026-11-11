@@ -55,7 +55,7 @@ def no_steam(command: list[str]) -> list[str]:
     return result
 
 
-def collect_jobs(module, godot: str) -> list[dict]:
+def collect_jobs(module, godot: str, *, include_render: bool = True) -> list[dict]:
     """Execute main's job declarations only; no engine/export subprocess runs."""
     jobs: list[dict] = []
 
@@ -75,7 +75,11 @@ def collect_jobs(module, godot: str) -> list[dict]:
         # job below validates the real executable before any test is launched.
         return module.EXPECTED_VERSION + ".collector-only"
 
-    argv = [str(PROJECT / "scripts/build_exports.py"), "--godot", godot, "--targets", "windows", "--skip-smoke", "--render-check"]
+    argv = [str(PROJECT / "scripts/build_exports.py"), "--godot", godot, "--targets", "windows", "--skip-smoke"]
+    # The canonical builder checks display availability while declaring its
+    # render jobs. Headless-only QA must not require that unused dependency.
+    if include_render:
+        argv.append("--render-check")
     display = {"DISPLAY": "windows-native-display"} if os.name == "nt" else {}
     with patch.object(sys, "argv", argv), patch.dict(os.environ, display), \
             patch.object(module, "run", collect), \
@@ -183,7 +187,7 @@ def main() -> int:
     if args.timeout <= 0:
         parser.error("--timeout must be positive")
     module = load_build_module()
-    collected = collect_jobs(module, args.godot)
+    collected = collect_jobs(module, args.godot, include_render=args.mode != "headless")
     jobs = [job for job in collected
             if (job["mode"] == "import" and not args.skip_import)
             or (job["mode"] != "import" and args.mode in {"all", job["mode"]})]
