@@ -1178,8 +1178,8 @@ func _move_selection(direction: Vector2i) -> void:
 	direction = _screen_grid_direction(direction)
 	if selected_cell < 0: selected_cell = 40
 	else:
-		var x: int = clampi(selected_cell%9+direction.x,0,8)
-		var y: int = clampi(selected_cell/9+direction.y,0,8)
+		var x: int = posmod(selected_cell%9+direction.x,9)
+		var y: int = posmod(selected_cell/9+direction.y,9)
 		selected_cell = y*9+x
 	_select(selected_cell,false,false)
 
