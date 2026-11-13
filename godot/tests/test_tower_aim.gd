@@ -144,6 +144,39 @@ func picker_contract() -> void:
 	check(Aim.pick_target(Vector2.ZERO,Vector2(1,1).rotated(PI/2.0),rotated,0) == 1,"Picker is invariant under screen-space rotation")
 	check(Aim.pick_target(Vector2.ZERO,Vector2.RIGHT,{},0) == 0,"Empty candidate layout is harmless")
 
+func first_device_direction() -> void:
+	label = "first device analog routing"
+	await fixture()
+	for direction: Vector2 in [Vector2(0.4,0.916),Vector2(0.5,0.5)]:
+		scene.controller.reset_navigation()
+		scene.controller.active_device = -1
+		scene.controller._left_axes.clear()
+		stick(Vector2.ZERO)
+		await frames()
+		stick(direction)
+		await frames()
+		check(scene.controller.active_device == DEVICE,"Radial deflection claims a previously unclaimed controller")
+		check(scene.controller._axis.is_equal_approx(direction),"First diagonal preserves a subthreshold X component")
+		check(scene.tower_aim._stick_active,"Radial diagonal starts tower aim even when individual axes are under the press threshold")
+		stick(Vector2.ZERO)
+		await frames()
+
+func release_in_menu() -> void:
+	label = "release while Gear owns input"
+	await fixture()
+	await begin_aim(diagonal())
+	await press(JOY_BUTTON_X)
+	check(scene.dock.is_open(),"Gear opens while aim is pending")
+	stick(Vector2.ZERO)
+	await frames()
+	check(scene.selected_cell == origin,"Releasing while Gear is open does not move the tower")
+	await press(JOY_BUTTON_B)
+	check(not scene.dock.is_open(),"Back returns from Gear")
+	var expected := await begin_aim(diagonal())
+	stick(Vector2.ZERO)
+	await frames()
+	check(scene.selected_cell == expected,"Neutral observed in Gear rearms the next board gesture")
+
 func analog_gesture() -> void:
 	label = "analog gesture"
 	await fixture()
@@ -324,9 +357,11 @@ func rotated_scene() -> void:
 
 func exercise() -> void:
 	picker_contract()
+	await first_device_direction()
 	await analog_gesture()
 	for kind in ["dock","camera","solve","reserve","pause","focus","reset"]: await cancel_context(kind)
 	await cancel_button()
+	await release_in_menu()
 	await confirm_preview()
 	await partial_release()
 	await dpad_and_grid()
