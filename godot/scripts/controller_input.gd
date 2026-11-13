@@ -186,6 +186,7 @@ func _set_pointer_button(source: String, pressed: bool) -> void:
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventJoypadMotion and event.axis in [JOY_AXIS_LEFT_X,JOY_AXIS_LEFT_Y]:
+		_sync_navigation_mode()
 		var left: Vector2 = _left_axes.get(event.device,Vector2.ZERO)
 		if event.axis == JOY_AXIS_LEFT_X: left.x = event.axis_value
 		else: left.y = event.axis_value
@@ -293,14 +294,15 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 func _sync_navigation_mode() -> void:
+	var physical_axis: Vector2 = _left_axes.get(active_device,Vector2.ZERO)
 	var enabled: bool = tower_navigation_allowed.is_valid() and tower_navigation_allowed.call()
 	if enabled != _tower_mode:
 		_tower_mode = enabled
-		_navigation_wait_neutral = _navigation_wait_neutral or _axis.length() > RELEASE_ZONE
+		_navigation_wait_neutral = _navigation_wait_neutral or physical_axis.length() > RELEASE_ZONE
 		_direction = Vector2i.ZERO
 		_repeat = 0.0
 		tower_aim_canceled.emit()
-	if _axis.length() <= RELEASE_ZONE: _navigation_wait_neutral = false
+	if physical_axis.length() <= RELEASE_ZONE: _navigation_wait_neutral = false
 
 func _update_direction() -> void:
 	_sync_navigation_mode()

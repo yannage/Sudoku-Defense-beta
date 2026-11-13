@@ -931,6 +931,8 @@ Done to return to planting"
 			candidate_label.text = _controller_hint("RS rotate · R3 reset · B done") if controller_used else "Drag sideways · Done to plant"
 			_font(candidate_label,22)
 		controls_label.text = _controller_hint("CAMERA   Right stick rotate   R3 reset view   B / L3 done") if controller_used else "CAMERA   Drag left / right   Q / E rotate   HOME reset   ESC done"
+	if controller_used and tower_aim != null and tower_aim._stick_active and _tower_aim_available():
+		controls_label.text = _controller_hint("Release stick / A select highlighted tower   B cancel aim")
 	if portrait_layout:
 		for quick: Button in [bag_button,loot_button,hud_nodes.camp,hud_nodes.tools,hud_nodes.camera,hud_nodes.camera_reset]:
 			_fit_quick_label(quick)
@@ -978,7 +980,7 @@ func _number_complete(number: int) -> bool:
 	return number >= 1 and number <= 9 and _number_correct_counts()[number] == 9
 
 func _number_input_allowed() -> bool:
-	return has_active_run and not menu_open and not manual_pause and not camera_mode and armed_item.is_empty() and run.phase in ["solve","prep","battle","loot"]
+	return not _background_active() and has_active_run and not menu_open and not manual_pause and not camera_mode and armed_item.is_empty() and run.phase in ["solve","prep","battle","loot"]
 
 func _number_placement_allowed() -> bool:
 	return _number_input_allowed() and not dock.is_open() and run.phase in ["solve","battle"]
@@ -1366,7 +1368,7 @@ func _toggle_auto_open_chests() -> void:
 func _maybe_auto_open_chests() -> void:
 	# Wait for a safe management moment; never interrupt combat, a dialog,
 	# gear selection, an existing reward reveal, or a held pointer gesture.
-	if not auto_open_chests or not has_active_run or menu_open or manual_pause or tutorial.active: return
+	if _background_active() or not auto_open_chests or not has_active_run or menu_open or manual_pause or tutorial.active: return
 	if run.phase not in ["solve","prep","loot","won"] or not armed_item.is_empty(): return
 	if camera_mode or _controller_number_cell >= 0 or get_viewport().gui_is_dragging(): return
 	if controller_cursor != null and controller_cursor.button_down: return
