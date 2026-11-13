@@ -232,6 +232,11 @@ def main() -> None:
     bootstrap_extension_cache()
     if not args.skip_import:
         run([args.godot, "--headless", "--path", str(PROJECT), "--editor", "--import", "--quit"], logs / "import.log")
+    # Exercise the changed input paths first so a regression fails quickly.
+    for renderer, flags in [("native", []), ("canvas", ["--", "--canvas-graphics"])]:
+        for script, marker in [("test_deck_focus.gd", "DECK_FOCUS_PASS"), ("test_tower_aim.gd", "TOWER_AIM_PASS")]:
+            run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/" + script] + flags,
+                logs / f"{renderer}-{script.removesuffix('.gd')}.log", expected=marker)
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_run.gd"], logs / "simulation-tests.log", expected="PASS:")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_sudoku.gd"], logs / "sudoku-tests.log", expected="SUDOKU_PASS")
     for script, marker in [
@@ -254,7 +259,7 @@ def main() -> None:
         run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_hud_polish.gd"] + flags, logs / f"{renderer}-hud-polish-tests.log", expected="HUD_POLISH_PASS")
         run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_platform_ui.gd"] + flags, logs / f"{renderer}-platform-ui-tests.log", expected="PLATFORM_UI_PASS")
         run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_steam_identity_fallback.gd"] + flags, logs / f"{renderer}-steam-identity-fallback-tests.log", expected="STEAM_IDENTITY_FALLBACK:")
-        for script, marker in [("test_recovery_controller.gd", "RECOVERY_CONTROLLER_PASS"), ("test_controller_edges.gd", "CONTROLLER_EDGES_PASS"), ("test_overlay_transitions.gd", "OVERLAY_TRANSITIONS_PASS"), ("test_deck_focus.gd", "DECK_FOCUS_PASS"), ("test_tower_aim.gd", "TOWER_AIM_PASS")]:
+        for script, marker in [("test_recovery_controller.gd", "RECOVERY_CONTROLLER_PASS"), ("test_controller_edges.gd", "CONTROLLER_EDGES_PASS"), ("test_overlay_transitions.gd", "OVERLAY_TRANSITIONS_PASS")]:
             run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/" + script] + flags, logs / f"{renderer}-{script.removesuffix('.gd')}.log", expected=marker)
         run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_controller_upgrades.gd"] + flags, logs / f"{renderer}-controller-upgrades-tests.log", expected="CONTROLLER_UPGRADES_PASS")
         run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_cleanup_pacing.gd"] + flags, logs / f"{renderer}-cleanup-pacing-tests.log", expected="CLEANUP_PACING_PASS")
