@@ -92,6 +92,8 @@ func _gui_input(event: InputEvent) -> void:
 				accept_event()
 				return
 	if host.camera_mode: return
+	if event is InputEventMouseMotion and not mouse_down and active_touch < 0 and event.relative.length_squared() > 0.0:
+		host.tower_aim.point_at(_screen_point(event.position))
 	if host.menu_open or host.manual_pause or (host.seed_pointer != null and host.seed_pointer.is_active()):
 		cancel_pointer()
 		return
@@ -108,8 +110,7 @@ func _gui_input(event: InputEvent) -> void:
 		elif mouse_down and event.device == mouse_device:
 			mouse_down = false
 			if not event.canceled and not mouse_moved and pressed_at.distance_to(event.position)<12:
-				var cell: int = host.world.cell_at_screen(_screen_point(event.position))
-				host._tap_board(cell)
+				host._tap_board_at(_screen_point(event.position))
 	if event is InputEventMouseMotion and mouse_down and event.device == mouse_device:
 		mouse_moved = mouse_moved or pressed_at.distance_to(event.position) >= 12
 	if event is InputEventScreenTouch:
@@ -123,8 +124,7 @@ func _gui_input(event: InputEvent) -> void:
 		elif not event.pressed and event.index == active_touch:
 			active_touch = -1
 			if not event.canceled and not touch_moved and touch_pressed_at.distance_to(event.position) < 12:
-				var cell: int = host.world.cell_at_screen(_screen_point(event.position))
-				host._tap_board(cell)
+				host._tap_board_at(_screen_point(event.position))
 	if event is InputEventScreenDrag and event.index == active_touch:
 		touch_moved = touch_moved or touch_pressed_at.distance_to(event.position) >= 12
 

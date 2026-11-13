@@ -5,6 +5,10 @@ extends Node
 ## physical press cannot activate a menu and plant a number underneath it.
 signal action_pressed(action: String)
 signal navigated(direction: Vector2i)
+signal tower_aim_changed(axis: Vector2)
+signal tower_aim_canceled()
+signal left_axis_changed(axis: Vector2)
+var tower_navigation_allowed: Callable
 signal activity()
 signal controller_lost()
 signal pointer_activity()
@@ -84,11 +88,17 @@ const DEADZONE := 0.55
 const RELEASE_ZONE := 0.30
 const INITIAL_REPEAT := 0.30
 const REPEAT_INTERVAL := 0.12
+const STICK_INITIAL_REPEAT := 0.40
+const STICK_REPEAT_INTERVAL := 0.18
+const AXIS_HYSTERESIS := 0.18
 const POINTER_DEADZONE := 0.20
 const TRIGGER_PRESS := 0.55
 const TRIGGER_RELEASE := 0.35
 var active_device: int = -1
 var _axis := Vector2.ZERO
+var _left_axes: Dictionary = {}
+var _tower_mode := false
+var _navigation_wait_neutral := false
 var _pad := Vector2i.ZERO
 var _direction := Vector2i.ZERO
 var _repeat: float = 0.0
@@ -96,6 +106,17 @@ var _right_axis := Vector2.ZERO
 var _pointer_buttons: Dictionary = {"stick":false,"trigger":false}
 var _precision := false
 var _window_focused := true
+var _overlay_active := false
+
+func _input_available() -> bool:
+	return _window_focused and not _overlay_active
+
+func set_overlay_active(active: bool) -> void:
+	_overlay_active = active
+	if active:
+		cancel_capture()
+		reset_navigation()
+		reset_pointer()
 
 func _ready() -> void:
 	Input.joy_connection_changed.connect(_connection_changed)
@@ -113,6 +134,7 @@ func _notification(what: int) -> void:
 
 func _connection_changed(device: int, connected: bool) -> void:
 	if not connected:
+		_left_axes.erase(device)
 		for states: Dictionary in [_held,_blocked]:
 			for key: String in states.keys():
 				if key.begins_with(str(device)+"b") or key.begins_with(str(device)+"t"): states.erase(key)
@@ -133,6 +155,8 @@ func reset_navigation() -> void:
 	_pad = Vector2i.ZERO
 	_direction = Vector2i.ZERO
 	_repeat = 0.0
+	# Cancel a pending gesture; a reset must never commit an aim.
+	if tower_navigation_allowed.is_valid(): tower_aim_canceled.emit()
 
 func _claim(device: int) -> void:
 	if active_device != device:
@@ -161,6 +185,13 @@ func _set_pointer_button(source: String, pressed: bool) -> void:
 	pointer_button_changed.emit(source,pressed)
 
 func _input(event: InputEvent) -> void:
+	if event is InputEventJoypadMotion and event.axis in [JOY_AXIS_LEFT_X,JOY_AXIS_LEFT_Y]:
+		var left: Vector2 = _left_axes.get(event.device,Vector2.ZERO)
+		if event.axis == JOY_AXIS_LEFT_X: left.x = event.axis_value
+		else: left.y = event.axis_value
+		_left_axes[event.device] = left
+		# Neutral must be observed even while a menu, capture, or focus block owns input.
+		if event.device == active_device or active_device < 0: left_axis_changed.emit(left)
 	if capturing and (event is InputEventJoypadButton or event is InputEventJoypadMotion) and _capture_device >= 0 and event.device != _capture_device:
 		get_viewport().set_input_as_handled()
 		cancel_capture()
@@ -169,6 +200,8 @@ func _input(event: InputEvent) -> void:
 		var axis_key := str(event.device)+":"+str(event.axis)
 		if absf(event.axis_value) > POINTER_DEADZONE: _axes_held[axis_key] = true
 		else: _axes_held.erase(axis_key)
+		if not _input_available() and absf(event.axis_value) > POINTER_DEADZONE:
+			_axes_blocked[axis_key] = true
 		if _axes_blocked.has(axis_key):
 			if absf(event.axis_value) <= POINTER_DEADZONE: _axes_blocked.erase(axis_key)
 			get_viewport().set_input_as_handled()
@@ -194,7 +227,7 @@ func _input(event: InputEvent) -> void:
 		var was_pressed: bool = _held.has(key)
 		if pressed: _held[key] = true
 		else: _held.erase(key)
-		if not _window_focused:
+		if not _input_available():
 			if not pressed: _blocked.erase(key)
 			else: _blocked[key] = true
 			get_viewport().set_input_as_handled()
@@ -222,7 +255,7 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			if pressed != was_pressed: _dispatch_binding(token,pressed,event.device)
 			return
-	if (capturing or not _window_focused) and (event is InputEventJoypadButton or event is InputEventJoypadMotion):
+	if (capturing or not _input_available()) and (event is InputEventJoypadButton or event is InputEventJoypadMotion):
 		get_viewport().set_input_as_handled()
 		return
 	if settings_mode and event is InputEventJoypadMotion and event.axis in [JOY_AXIS_RIGHT_X, JOY_AXIS_RIGHT_Y]:
@@ -249,28 +282,58 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 	elif event is InputEventJoypadMotion and event.axis in [JOY_AXIS_LEFT_X, JOY_AXIS_LEFT_Y]:
 		get_viewport().set_input_as_handled()
-		if absf(event.axis_value) >= DEADZONE: _claim(event.device)
+		_sync_navigation_mode()
+		var axis: Vector2 = _left_axes.get(event.device,Vector2.ZERO)
+		if _axes_blocked.has(str(event.device)+":"+str(JOY_AXIS_LEFT_X)): axis.x = 0.0
+		if _axes_blocked.has(str(event.device)+":"+str(JOY_AXIS_LEFT_Y)): axis.y = 0.0
+		if axis.length() >= DEADZONE: _claim(event.device)
 		elif active_device != event.device: return
-		if event.axis == JOY_AXIS_LEFT_X: _axis.x = event.axis_value
-		else: _axis.y = event.axis_value
+		_axis = axis
 		_update_direction()
 		get_viewport().set_input_as_handled()
 
+func _sync_navigation_mode() -> void:
+	var enabled: bool = tower_navigation_allowed.is_valid() and tower_navigation_allowed.call()
+	if enabled != _tower_mode:
+		_tower_mode = enabled
+		_navigation_wait_neutral = _navigation_wait_neutral or _axis.length() > RELEASE_ZONE
+		_direction = Vector2i.ZERO
+		_repeat = 0.0
+		tower_aim_canceled.emit()
+	if _axis.length() <= RELEASE_ZONE: _navigation_wait_neutral = false
+
 func _update_direction() -> void:
+	_sync_navigation_mode()
+	if _pad == Vector2i.ZERO and _navigation_wait_neutral: return
+	if _pad == Vector2i.ZERO and _tower_mode:
+		_direction = Vector2i.ZERO
+		_repeat = 0.0
+		tower_aim_changed.emit(_axis)
+		return
+	tower_aim_canceled.emit()
 	var next: Vector2i = _pad
 	if next == Vector2i.ZERO:
 		if maxf(absf(_axis.x),absf(_axis.y)) >= DEADZONE:
 			next = Vector2i(signi(int(_axis.x*100)),0) if absf(_axis.x)>absf(_axis.y) else Vector2i(0,signi(int(_axis.y*100)))
+			# Keep a cardinal axis through diagonal noise; intentional turns still work.
+			if _direction.x != 0 and signf(_axis.x) == float(_direction.x) and absf(_axis.x) >= DEADZONE and absf(_axis.y) < absf(_axis.x)+AXIS_HYSTERESIS:
+				next = _direction
+			elif _direction.y != 0 and signf(_axis.y) == float(_direction.y) and absf(_axis.y) >= DEADZONE and absf(_axis.x) < absf(_axis.y)+AXIS_HYSTERESIS:
+				next = _direction
 		elif maxf(absf(_axis.x),absf(_axis.y)) > RELEASE_ZONE and _direction != Vector2i.ZERO:
 			next = _direction
 	if next != _direction:
 		_direction = next
-		_repeat = INITIAL_REPEAT
+		_repeat = INITIAL_REPEAT if _pad != Vector2i.ZERO else STICK_INITIAL_REPEAT
 		if next != Vector2i.ZERO: navigated.emit(next)
 
 func _process(delta: float) -> void:
-	if capturing or not _window_focused or _direction == Vector2i.ZERO: return
+	_sync_navigation_mode()
+	if capturing or not _input_available() or _direction == Vector2i.ZERO: return
+	if _pad == Vector2i.ZERO and tower_navigation_allowed.is_valid() and tower_navigation_allowed.call():
+		_update_direction()
+		return
 	_repeat -= delta
 	if _repeat <= 0:
-		_repeat = REPEAT_INTERVAL
+		_repeat = REPEAT_INTERVAL if _pad != Vector2i.ZERO else STICK_REPEAT_INTERVAL
 		navigated.emit(_direction)
