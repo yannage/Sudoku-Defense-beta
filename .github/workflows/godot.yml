@@ -131,6 +131,37 @@ jobs:
             windows-build/windows-smoke.log
           retention-days: 30
 
+  steam-package:
+    needs: [exports, windows-smoke]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: Sudoku-Defense-Godot-Desktop-and-Source
+          path: packages
+      - uses: actions/download-artifact@v4
+        with:
+          name: Sudoku-Defense-Windows-Startup-Validation
+          path: validation
+      - name: Prepare verified Windows and Linux Steam depot
+        run: >-
+          python3 steam/prepare_godot_desktop.py
+          --linux-archive packages/Sudoku-Defense-Godot-Linux.zip
+          --windows-archive packages/Sudoku-Defense-Godot-Windows.zip
+          --windows-validation validation/windows-startup-validation.json
+          --source-commit '${{ github.sha }}'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Sudoku-Defense-Steam-Desktop
+          path: |
+            release/Sudoku-Defense-Godot-Steam-Desktop-*.zip
+            release/steam-godot-desktop-manifest.json
+            release/steam-godot-desktop-linux-boot.log
+          if-no-files-found: error
+          retention-days: 30
+
   release:
     if: startsWith(github.ref, 'refs/tags/godot-v')
     needs: [exports, windows-smoke]
