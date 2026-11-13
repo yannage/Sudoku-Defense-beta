@@ -69,11 +69,28 @@ func fixture(phase := "solve") -> void:
 	await frames(6)
 	check(scene._save(),"Fixture saves to isolated profile")
 
+func equivalent(a: Variant, b: Variant) -> bool:
+	if a is Dictionary and b is Dictionary:
+		if a.size() != b.size(): return false
+		for key in a:
+			if not b.has(key) or not equivalent(a[key], b[key]): return false
+		return true
+	if a is Array and b is Array:
+		if a.size() != b.size(): return false
+		for index in range(a.size()):
+			if not equivalent(a[index], b[index]): return false
+		return true
+	if (a is float or a is int) and (b is float or b is int):
+		return is_equal_approx(float(a), float(b))
+	return a == b
+
 func interrupted_board(phase: String, overlay: bool) -> void:
 	label = "%s-%s" % [phase,"overlay" if overlay else "focus"]
 	await fixture(phase)
 	scene._advance_gameplay(0.05)
 	var before := state()
+	var original_data: Dictionary = scene.run.save_data()
+	var original_rng: int = scene.run.rng.state
 	var timer: float = scene.run.timer
 	if overlay: scene.steam_platform.overlay_changed.emit(true)
 	else: scene.propagate_notification(Node.NOTIFICATION_WM_WINDOW_FOCUS_OUT)
@@ -83,7 +100,8 @@ func interrupted_board(phase: String, overlay: bool) -> void:
 	var restored = load("res://scripts/run.gd").new()
 	var snapshot: Dictionary = scene.run_save.read_run()
 	check(not snapshot.is_empty() and restored.load_data(snapshot.get("data",{})),"Background snapshot loads through normal validation")
-	check(JSON.stringify(restored.save_data(),"",true,true) == before,"Latest active progress is saved before waiting")
+	check(equivalent(restored.save_data(),original_data),"Latest active progress is saved before waiting")
+	check(restored.rng.state == original_rng,"Background save preserves the exact 64-bit RNG state")
 	for index in range(10): scene._advance_gameplay(0.5)
 	check(state() == before,"Solve timer/combat state cannot advance while interrupted")
 	# Deflection that starts while backgrounded must also be released, not only
