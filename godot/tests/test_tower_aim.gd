@@ -230,7 +230,7 @@ func confirm_preview() -> void:
 func partial_release() -> void:
 	label = "partial diagonal release"
 	await fixture()
-	var direction := diagonal()
+	var direction := Vector2(1,1).normalized()
 	var expected := await begin_aim(direction)
 	# First lower both axes enough to mark release, then let them return separately.
 	stick(direction*0.7)
