@@ -32,6 +32,16 @@ func cancel() -> void:
 	origin_cell = -1
 	queue_redraw()
 
+func cancel_pointer() -> void:
+	if not _pointer_active: return
+	_pointer_active = false
+	target = -1
+	origin_cell = -1
+	queue_redraw()
+
+func observe_axis(axis: Vector2) -> void:
+	if axis.length() <= RELEASE_ZONE: _needs_neutral = false
+
 func set_stick(axis: Vector2) -> void:
 	if _needs_neutral:
 		if axis.length() <= RELEASE_ZONE: _needs_neutral = false

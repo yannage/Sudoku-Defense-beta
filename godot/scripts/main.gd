@@ -173,6 +173,7 @@ func _ready() -> void:
 	controller.tower_navigation_allowed = _tower_aim_available
 	controller.tower_aim_changed.connect(tower_aim.set_stick)
 	controller.tower_aim_canceled.connect(tower_aim.cancel)
+	controller.left_axis_changed.connect(tower_aim.observe_axis)
 	controller.controller_lost.connect(_controller_disconnected)
 	controller.pointer_activity.connect(_controller_pointer_activity)
 	controller.pointer_axis_changed.connect(_controller_pointer_axis)
@@ -413,6 +414,7 @@ func _build_ui() -> void:
 	tower_aim = TowerAimScript.new()
 	ui.add_child(tower_aim)
 	tower_aim.setup(self)
+	board_input.mouse_exited.connect(tower_aim.cancel_pointer)
 
 func _add_quick_icon(quick: Button, kind: String) -> void:
 	var icon := QuickIconScript.new()

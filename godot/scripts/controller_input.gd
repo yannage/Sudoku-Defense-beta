@@ -7,6 +7,7 @@ signal action_pressed(action: String)
 signal navigated(direction: Vector2i)
 signal tower_aim_changed(axis: Vector2)
 signal tower_aim_canceled()
+signal left_axis_changed(axis: Vector2)
 var tower_navigation_allowed: Callable
 signal activity()
 signal controller_lost()
@@ -95,6 +96,9 @@ const TRIGGER_PRESS := 0.55
 const TRIGGER_RELEASE := 0.35
 var active_device: int = -1
 var _axis := Vector2.ZERO
+var _left_axes: Dictionary = {}
+var _tower_mode := false
+var _navigation_wait_neutral := false
 var _pad := Vector2i.ZERO
 var _direction := Vector2i.ZERO
 var _repeat: float = 0.0
@@ -119,6 +123,7 @@ func _notification(what: int) -> void:
 
 func _connection_changed(device: int, connected: bool) -> void:
 	if not connected:
+		_left_axes.erase(device)
 		for states: Dictionary in [_held,_blocked]:
 			for key: String in states.keys():
 				if key.begins_with(str(device)+"b") or key.begins_with(str(device)+"t"): states.erase(key)
@@ -169,6 +174,13 @@ func _set_pointer_button(source: String, pressed: bool) -> void:
 	pointer_button_changed.emit(source,pressed)
 
 func _input(event: InputEvent) -> void:
+	if event is InputEventJoypadMotion and event.axis in [JOY_AXIS_LEFT_X,JOY_AXIS_LEFT_Y]:
+		var left: Vector2 = _left_axes.get(event.device,Vector2.ZERO)
+		if event.axis == JOY_AXIS_LEFT_X: left.x = event.axis_value
+		else: left.y = event.axis_value
+		_left_axes[event.device] = left
+		# Neutral must be observed even while a menu, capture, or focus block owns input.
+		if event.device == active_device or active_device < 0: left_axis_changed.emit(left)
 	if capturing and (event is InputEventJoypadButton or event is InputEventJoypadMotion) and _capture_device >= 0 and event.device != _capture_device:
 		get_viewport().set_input_as_handled()
 		cancel_capture()
@@ -257,15 +269,28 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 	elif event is InputEventJoypadMotion and event.axis in [JOY_AXIS_LEFT_X, JOY_AXIS_LEFT_Y]:
 		get_viewport().set_input_as_handled()
-		if absf(event.axis_value) >= DEADZONE: _claim(event.device)
+		_sync_navigation_mode()
+		var axis: Vector2 = _left_axes.get(event.device,Vector2.ZERO)
+		if axis.length() >= DEADZONE: _claim(event.device)
 		elif active_device != event.device: return
-		if event.axis == JOY_AXIS_LEFT_X: _axis.x = event.axis_value
-		else: _axis.y = event.axis_value
+		_axis = axis
 		_update_direction()
 		get_viewport().set_input_as_handled()
 
+func _sync_navigation_mode() -> void:
+	var enabled: bool = tower_navigation_allowed.is_valid() and tower_navigation_allowed.call()
+	if enabled != _tower_mode:
+		_tower_mode = enabled
+		_navigation_wait_neutral = _navigation_wait_neutral or _axis.length() > RELEASE_ZONE
+		_direction = Vector2i.ZERO
+		_repeat = 0.0
+		tower_aim_canceled.emit()
+	if _axis.length() <= RELEASE_ZONE: _navigation_wait_neutral = false
+
 func _update_direction() -> void:
-	if _pad == Vector2i.ZERO and tower_navigation_allowed.is_valid() and tower_navigation_allowed.call():
+	_sync_navigation_mode()
+	if _pad == Vector2i.ZERO and _navigation_wait_neutral: return
+	if _pad == Vector2i.ZERO and _tower_mode:
 		_direction = Vector2i.ZERO
 		_repeat = 0.0
 		tower_aim_changed.emit(_axis)
@@ -288,6 +313,7 @@ func _update_direction() -> void:
 		if next != Vector2i.ZERO: navigated.emit(next)
 
 func _process(delta: float) -> void:
+	_sync_navigation_mode()
 	if capturing or not _window_focused or _direction == Vector2i.ZERO: return
 	if _pad == Vector2i.ZERO and tower_navigation_allowed.is_valid() and tower_navigation_allowed.call():
 		_update_direction()
