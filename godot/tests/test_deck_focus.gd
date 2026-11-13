@@ -137,11 +137,121 @@ func preserved_context() -> void:
 	check(scene.overlay == original_overlay and root.gui_get_focus_owner() == focused,"Existing modal and focus survive overlay open/close")
 	check(scene.menu_open,"Existing modal remains paused until explicitly closed")
 
+func pointer_button(point: Vector2, down: bool, use_touch: bool) -> void:
+	if use_touch:
+		var event := InputEventScreenTouch.new()
+		event.index = 0
+		event.position = point
+		event.pressed = down
+		root.push_input(event,true)
+	else:
+		var event := InputEventMouseButton.new()
+		event.button_index = MOUSE_BUTTON_LEFT
+		event.button_mask = MOUSE_BUTTON_MASK_LEFT if down else 0
+		event.position = point
+		event.global_position = point
+		event.pressed = down
+		root.push_input(event,true)
+
+func background_number_and_loot() -> void:
+	label = "overlay-preserved-number-tray"
+	await fixture("prep")
+	scene.dock.open_panel("bag",scene.selected_cell)
+	scene._refresh()
+	await frames()
+	var point := Vector2.ZERO
+	var number := 0
+	for index in range(scene.number_buttons.size()):
+		var candidate: Vector2 = scene.number_buttons[index].get_global_rect().get_center()
+		if scene.seed_pointer._number_at(candidate) == index+1:
+			point = candidate
+			number = index+1
+			break
+	check(number > 0,"Fixture exposes a number-tray input beside the preserved Gear panel")
+	var original_number: int = scene.selected_number
+	var before := state()
+	scene.steam_platform.overlay_changed.emit(true)
+	check(not scene.menu_open and scene.dock.is_open(),"Steam overlay preserves Gear rather than replacing it")
+	check(not scene._number_input_allowed(),"Background guard rejects number input even with a preserved dock")
+	for use_touch in [false,true]:
+		pointer_button(point,true,use_touch)
+		check(not scene.seed_pointer.is_active(),"Background number press cannot acquire a mouse/touch gesture")
+		pointer_button(point,false,use_touch)
+		await frames()
+	check(scene.selected_number == original_number and state() == before,"Background number gestures cannot change selection, run state or inventory")
+	scene.steam_platform.overlay_changed.emit(false)
+
+	label = "overlay-pending-auto-open"
+	await fixture("prep")
+	scene.run.fragments = 100
+	scene.run._add_chest("common")
+	scene.auto_open_chests = true
+	scene.dock.open_panel("loot",scene.selected_cell)
+	await frames()
+	check(int(scene.run.chest_open_plan().count) > 0,"Fixture has an affordable pending automatic opening")
+	before = state()
+	scene.steam_platform.overlay_changed.emit(true)
+	check(not scene.menu_open and scene.dock.current_panel == "loot","Overlay preserves the open Loot panel")
+	for index in range(3): scene._maybe_auto_open_chests()
+	check(state() == before,"Pending automatic opening cannot spend fragments, grant items, consume chests or advance RNG behind overlay")
+	scene.steam_platform.overlay_changed.emit(false)
+	scene._maybe_auto_open_chests()
+	check(scene.run.chests.is_empty() and scene.run.fragments < 100,"Opt-in automatic opening remains usable after returning")
+
+func tower_overlay_release() -> void:
+	label = "tower-aim-overlay-release"
+	await fixture()
+	var towers: Array[int] = []
+	for cell in range(81):
+		if scene.run.board[cell] != 0: continue
+		check(scene.run.place(cell,scene.run.solution[cell]).ok,"Fixture plants a legal directional target")
+		towers.append(cell)
+		if towers.size() == 6: break
+	check(towers.size() >= 2,"Fixture has multiple towers")
+	if towers.size() < 2: return
+	check(scene.run.advance_phase().ok,"Fixture enters tower preparation")
+	scene.last_phase = scene.run.phase
+	scene.world.setup(scene.run)
+	for index in range(120): scene.world.tick(1.0/60.0)
+	var origin: int = towers[0]
+	scene._select(origin,false,false)
+	scene.controller.active_device = DEVICE
+	axis(JOY_AXIS_LEFT_X,0.0)
+	axis(JOY_AXIS_LEFT_Y,0.0)
+	await frames()
+	var start: Vector2 = scene.world.cell_screen_position(origin)
+	var direction: Vector2 = (scene.world.cell_screen_position(towers[1])-start).normalized()
+	axis(JOY_AXIS_LEFT_X,direction.x)
+	axis(JOY_AXIS_LEFT_Y,direction.y)
+	await frames()
+	check(scene.tower_aim._stick_active and scene.tower_aim.target != origin,"Initial stick gesture previews another tower")
+	scene.steam_platform.overlay_changed.emit(true)
+	await frames()
+	check(not scene.tower_aim._stick_active and scene.tower_aim.target == -1,"Steam overlay cancels the pending tower preview")
+	axis(JOY_AXIS_LEFT_X,0.0)
+	axis(JOY_AXIS_LEFT_Y,0.0)
+	await frames()
+	check(scene.selected_cell == origin,"Neutral release behind overlay cannot commit the old target")
+	scene.steam_platform.overlay_changed.emit(false)
+	await frames()
+	check(scene.menu_open and scene.selected_cell == origin,"Closing the overlay leaves explicit resume pending")
+	await press(JOY_BUTTON_A)
+	check(not scene.menu_open,"Fresh confirm resumes the tower board")
+	axis(JOY_AXIS_LEFT_X,direction.x)
+	axis(JOY_AXIS_LEFT_Y,direction.y)
+	await frames()
+	var expected: int = scene.tower_aim.target
+	check(scene.tower_aim._stick_active and expected >= 0 and expected != origin,"Neutral observed during overlay rearms a fresh tower gesture")
+	axis(JOY_AXIS_LEFT_X,0.0)
+	axis(JOY_AXIS_LEFT_Y,0.0)
+	await frames()
+	check(scene.selected_cell == expected,"Fresh post-overlay release selects exactly the new preview")
+
 func quit_controls() -> void:
 	label = "native-quit-controls"
 	await fixture()
 	scene._show_menu(true)
-	var initial := scene._controller_buttons(scene.overlay)
+	var initial: Array[Control] = scene._controller_buttons(scene.overlay)
 	var quit_button: BaseButton
 	for control in initial:
 		if control.text == "Quit game": quit_button = control
@@ -167,6 +277,8 @@ func exercise() -> void:
 	for phase in ["solve","battle"]:
 		for overlay in [false,true]: await interrupted_board(phase,overlay)
 	await preserved_context()
+	await background_number_and_loot()
+	await tower_overlay_release()
 	await quit_controls()
 	if is_instance_valid(scene): scene.queue_free()
 	await frames()
