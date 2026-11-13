@@ -100,7 +100,7 @@ func fixture() -> void:
 	scene.world.setup(scene.run)
 	for index in range(120): scene.world.tick(1.0/60.0)
 	origin = cells[0]
-	var center := scene.board_rect.get_center()
+	var center: Vector2 = scene.board_rect.get_center()
 	var nearest := INF
 	for cell in cells:
 		var distance: float = scene.world.cell_screen_position(cell).distance_to(center)
@@ -109,6 +109,7 @@ func fixture() -> void:
 			origin = cell
 	scene._select(origin,false,false)
 	scene._refresh()
+	scene.controller.active_device = DEVICE
 	stick(Vector2.ZERO)
 	await frames(8)
 	check(scene._tower_aim_available(),"Tower aiming is available at 1280x800")
@@ -205,6 +206,41 @@ func cancel_button() -> void:
 	await frames()
 	check(scene.selected_cell == origin,"B cancels the aim so release does not move afterwards")
 	check(scene.tower_aim.target == -1,"B clears the highlighted target")
+	var second := await begin_aim(diagonal())
+	stick(Vector2.ZERO)
+	await frames()
+	check(scene.selected_cell == second,"After B and neutral, a fresh gesture works")
+
+func confirm_preview() -> void:
+	label = "confirm preview"
+	await fixture()
+	var direction := diagonal()
+	var expected := await begin_aim(direction)
+	await press(JOY_BUTTON_A)
+	check(scene.selected_cell == expected,"A commits the highlighted tower")
+	check(not scene.dock.is_open(),"Confirming a preview only selects; it does not open the wrong workshop")
+	for index in range(6):
+		stick(direction)
+		await frames(1)
+	check(scene.selected_cell == expected,"Holding after A cannot create another target hop")
+	stick(Vector2.ZERO)
+	await frames()
+	check(scene.selected_cell == expected,"Release after A cannot commit a second selection")
+
+func partial_release() -> void:
+	label = "partial diagonal release"
+	await fixture()
+	var direction := diagonal()
+	var expected := await begin_aim(direction)
+	# First lower both axes enough to mark release, then let them return separately.
+	stick(direction*0.7)
+	await frames()
+	axis(JOY_AXIS_LEFT_X,0.0)
+	await frames()
+	check(scene.tower_aim.target == expected,"Asymmetric diagonal release keeps the deliberate preview")
+	axis(JOY_AXIS_LEFT_Y,0.0)
+	await frames()
+	check(scene.selected_cell == expected,"Asymmetric release selects the intended tower")
 
 func dpad_and_grid() -> void:
 	label = "D-pad and solve grid"
@@ -228,6 +264,7 @@ func dpad_and_grid() -> void:
 	stick(Vector2.ZERO)
 	await frames()
 	scene._show_menu(false)
+	await frames()
 	var focused: Control = root.gui_get_focus_owner()
 	await press(JOY_BUTTON_DPAD_DOWN)
 	check(root.gui_get_focus_owner() != focused,"Menu D-pad still moves focus")
@@ -290,6 +327,8 @@ func exercise() -> void:
 	await analog_gesture()
 	for kind in ["dock","camera","solve","reserve","pause","focus","reset"]: await cancel_context(kind)
 	await cancel_button()
+	await confirm_preview()
+	await partial_release()
 	await dpad_and_grid()
 	await pointer_navigation()
 	await rotated_scene()
