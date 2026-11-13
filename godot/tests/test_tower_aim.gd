@@ -177,6 +177,29 @@ func release_in_menu() -> void:
 	await frames()
 	check(scene.selected_cell == expected,"Neutral observed in Gear rearms the next board gesture")
 
+func held_stick_into_pause_menu() -> void:
+	label = "held stick through Start"
+	await fixture()
+	await begin_aim(Vector2.DOWN)
+	await press(JOY_BUTTON_START)
+	check(scene.menu_open,"Start opens the pause menu during a tower aim")
+	var focused: Control = root.gui_get_focus_owner()
+	check(is_instance_valid(focused),"Pause menu has a focused control")
+	for index in range(8):
+		stick(Vector2(0.0,0.90 if index%2 == 0 else 0.96))
+		scene.controller._process(0.5)
+		await frames(1)
+	check(root.gui_get_focus_owner() == focused,"Held stick chatter cannot move pause-menu focus before neutral")
+	check(scene.selected_cell == origin,"Start and held input do not commit the canceled tower aim")
+	stick(Vector2.ZERO)
+	await frames()
+	stick(Vector2.DOWN)
+	await frames(1)
+	check(root.gui_get_focus_owner() != focused,"After neutral, a fresh stick gesture moves pause-menu focus")
+	check(scene.menu_open and scene.selected_cell == origin,"Fresh menu navigation remains scoped to the pause menu")
+	stick(Vector2.ZERO)
+	await frames()
+
 func analog_gesture() -> void:
 	label = "analog gesture"
 	await fixture()
@@ -362,6 +385,7 @@ func exercise() -> void:
 	for kind in ["dock","camera","solve","reserve","pause","focus","reset"]: await cancel_context(kind)
 	await cancel_button()
 	await release_in_menu()
+	await held_stick_into_pause_menu()
 	await confirm_preview()
 	await partial_release()
 	await dpad_and_grid()
