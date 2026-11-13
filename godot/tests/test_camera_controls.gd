@@ -335,6 +335,9 @@ func controller_controls() -> void:
 	scene.propagate_notification(Node.NOTIFICATION_WM_WINDOW_FOCUS_OUT)
 	check(not scene.camera_mode and not scene.board_input.camera_pointer_active(),"Focus loss cancels camera mode and gestures")
 	scene.propagate_notification(Node.NOTIFICATION_WM_WINDOW_FOCUS_IN)
+	check(scene.menu_open,"Camera focus interruption retains the pause menu")
+	await press_pad(JOY_BUTTON_A)
+	check(not scene.menu_open,"Resume restores board navigation after camera interruption")
 
 func navigation_and_capture() -> void:
 	# Include spatial content in the rendered review, and pick its visible heads
