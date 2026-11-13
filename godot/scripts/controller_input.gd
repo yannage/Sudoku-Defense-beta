@@ -96,6 +96,17 @@ var _right_axis := Vector2.ZERO
 var _pointer_buttons: Dictionary = {"stick":false,"trigger":false}
 var _precision := false
 var _window_focused := true
+var _overlay_active := false
+
+func _input_available() -> bool:
+	return _window_focused and not _overlay_active
+
+func set_overlay_active(active: bool) -> void:
+	_overlay_active = active
+	if active:
+		cancel_capture()
+		reset_navigation()
+		reset_pointer()
 
 func _ready() -> void:
 	Input.joy_connection_changed.connect(_connection_changed)
@@ -169,6 +180,8 @@ func _input(event: InputEvent) -> void:
 		var axis_key := str(event.device)+":"+str(event.axis)
 		if absf(event.axis_value) > POINTER_DEADZONE: _axes_held[axis_key] = true
 		else: _axes_held.erase(axis_key)
+		if not _input_available() and absf(event.axis_value) > POINTER_DEADZONE:
+			_axes_blocked[axis_key] = true
 		if _axes_blocked.has(axis_key):
 			if absf(event.axis_value) <= POINTER_DEADZONE: _axes_blocked.erase(axis_key)
 			get_viewport().set_input_as_handled()
@@ -194,7 +207,7 @@ func _input(event: InputEvent) -> void:
 		var was_pressed: bool = _held.has(key)
 		if pressed: _held[key] = true
 		else: _held.erase(key)
-		if not _window_focused:
+		if not _input_available():
 			if not pressed: _blocked.erase(key)
 			else: _blocked[key] = true
 			get_viewport().set_input_as_handled()
@@ -222,7 +235,7 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			if pressed != was_pressed: _dispatch_binding(token,pressed,event.device)
 			return
-	if (capturing or not _window_focused) and (event is InputEventJoypadButton or event is InputEventJoypadMotion):
+	if (capturing or not _input_available()) and (event is InputEventJoypadButton or event is InputEventJoypadMotion):
 		get_viewport().set_input_as_handled()
 		return
 	if settings_mode and event is InputEventJoypadMotion and event.axis in [JOY_AXIS_RIGHT_X, JOY_AXIS_RIGHT_Y]:
@@ -269,7 +282,7 @@ func _update_direction() -> void:
 		if next != Vector2i.ZERO: navigated.emit(next)
 
 func _process(delta: float) -> void:
-	if capturing or not _window_focused or _direction == Vector2i.ZERO: return
+	if capturing or not _input_available() or _direction == Vector2i.ZERO: return
 	_repeat -= delta
 	if _repeat <= 0:
 		_repeat = REPEAT_INTERVAL

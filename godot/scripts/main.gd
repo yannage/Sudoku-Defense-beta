@@ -124,6 +124,7 @@ var camera_mode := false
 var _camera_axis := Vector2.ZERO
 var _camera_keys: Dictionary = {}
 var _camera_window_focused := true
+var _steam_overlay_active := false
 const CAMERA_SPEED := 1.65
 
 func _ready() -> void:
@@ -136,6 +137,7 @@ func _ready() -> void:
 		DirAccess.make_dir_recursive_absolute(_profile_base)
 	steam_platform = SteamPlatform.new()
 	add_child(steam_platform)
+	steam_platform.overlay_changed.connect(_steam_overlay_changed)
 	var platform_status: Dictionary = steam_platform.initialize()
 	_configure_profiles(platform_status)
 	platform_ui.host = self
@@ -191,6 +193,7 @@ func _notification(what: int) -> void:
 		_camera_window_focused = false
 		_close_controller_numbers()
 		_cancel_camera_controls()
+		_pause_for_background()
 	elif what == NOTIFICATION_WM_WINDOW_FOCUS_IN:
 		_camera_window_focused = true
 	if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT and seed_pointer != null:
@@ -198,9 +201,34 @@ func _notification(what: int) -> void:
 		seed_pointer.cancel()
 		_finish_pointer_activity.call_deferred()
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
-		if tutorial.active: tutorial.restore()
-		if _save(): get_tree().quit()
-		else: _show_unsaved_quit()
+		_request_quit()
+
+func _background_active() -> bool:
+	return not _camera_window_focused or _steam_overlay_active
+
+func _steam_overlay_changed(active: bool) -> void:
+	_steam_overlay_active = active
+	if controller != null: controller.set_overlay_active(active)
+	if active: _pause_for_background()
+
+func _pause_for_background() -> void:
+	cleanup_fast = false
+	_close_controller_numbers()
+	_cancel_camera_controls()
+	if controller_cursor != null: controller_cursor.deactivate()
+	if seed_pointer != null: seed_pointer.cancel()
+	if board_input != null: board_input.cancel_pointer()
+	if not has_active_run: return
+	_save()
+	# Preserve open menus/workshops and their focused controls. An active board
+	# gets a pause menu that remains open when focus or the Steam overlay returns.
+	if not menu_open and not manual_pause and not dock.is_open() and armed_item.is_empty():
+		_show_pause_menu()
+
+func _request_quit() -> void:
+	if tutorial.active: tutorial.restore()
+	if _save(): get_tree().quit()
+	else: _show_unsaved_quit()
 
 func style(bg: Color, border: Color = Color.TRANSPARENT, radius: int = 8) -> StyleBoxFlat:
 	return UISkin.panel(bg,border,mini(radius,8),14,border.a > 0)
@@ -683,7 +711,7 @@ func _process(dt: float) -> void:
 	if dock.is_open() != _dock_was_open:
 		_dock_was_open = dock.is_open()
 		_layout_ui()
-	var blocked: bool = menu_open or manual_pause or dock.is_open() or not armed_item.is_empty()
+	var blocked: bool = _background_active() or menu_open or manual_pause or dock.is_open() or not armed_item.is_empty()
 	if cleanup_fast and not _cleanup_controls_available(): cleanup_fast = false
 	if not blocked and not (tutorial.active and run.phase == "solve"):
 		_advance_gameplay(dt)
@@ -739,7 +767,7 @@ func _toggle_cleanup() -> void:
 	_refresh()
 
 func _advance_gameplay(dt: float) -> void:
-	if menu_open or manual_pause or dock.is_open() or not armed_item.is_empty() or (tutorial.active and run.phase == "solve"): return
+	if _background_active() or menu_open or manual_pause or dock.is_open() or not armed_item.is_empty() or (tutorial.active and run.phase == "solve"): return
 	if cleanup_fast and not _cleanup_controls_available(): cleanup_fast = false
 	var frame_step: float = minf(dt,0.05)
 	if not cleanup_fast:
@@ -1830,6 +1858,7 @@ func _show_menu(initial: bool = false) -> void:
 		platform_row.add_child(item)
 	setup.add_child(button("Controller mapping",_show_controller_settings))
 	setup.add_child(button("Feedback / report a bug",feedback_ui.show_panel))
+	if not OS.has_feature("web"): setup.add_child(button("Quit game",_request_quit))
 	start.grab_focus()
 
 func _show_pause_menu() -> void:
@@ -1870,6 +1899,7 @@ func _show_pause_menu() -> void:
 	actions.add_child(button("Achievements",platform_ui.show_achievements))
 	actions.add_child(button("Saves & Steam",platform_ui.show_saves))
 	actions.add_child(button("New run",func(): _show_menu(true)))
+	if not OS.has_feature("web"): actions.add_child(button("Save and quit",_request_quit))
 	resume.grab_focus()
 
 func _show_wave_intel() -> void:
@@ -2111,7 +2141,7 @@ func _input(event: InputEvent) -> void:
 		elif _pointer_hint_owner == event.index: _finish_pointer_activity.call_deferred()
 
 func _camera_available() -> bool:
-	return _camera_window_focused and has_active_run and not menu_open and not manual_pause and not dock.is_open() and armed_item.is_empty() and run.phase in ["solve","prep","battle","loot"] and (seed_pointer == null or not seed_pointer.is_active()) and not get_viewport().gui_is_dragging()
+	return _camera_window_focused and not _steam_overlay_active and has_active_run and not menu_open and not manual_pause and not dock.is_open() and armed_item.is_empty() and run.phase in ["solve","prep","battle","loot"] and (seed_pointer == null or not seed_pointer.is_active()) and not get_viewport().gui_is_dragging()
 
 func _toggle_camera_mode() -> void:
 	if camera_mode: _set_camera_mode(false)
