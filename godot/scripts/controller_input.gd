@@ -87,6 +87,9 @@ const DEADZONE := 0.55
 const RELEASE_ZONE := 0.30
 const INITIAL_REPEAT := 0.30
 const REPEAT_INTERVAL := 0.12
+const STICK_INITIAL_REPEAT := 0.40
+const STICK_REPEAT_INTERVAL := 0.18
+const AXIS_HYSTERESIS := 0.18
 const POINTER_DEADZONE := 0.20
 const TRIGGER_PRESS := 0.55
 const TRIGGER_RELEASE := 0.35
@@ -272,16 +275,24 @@ func _update_direction() -> void:
 	if next == Vector2i.ZERO:
 		if maxf(absf(_axis.x),absf(_axis.y)) >= DEADZONE:
 			next = Vector2i(signi(int(_axis.x*100)),0) if absf(_axis.x)>absf(_axis.y) else Vector2i(0,signi(int(_axis.y*100)))
+			# Keep a cardinal axis through diagonal noise; intentional turns still work.
+			if _direction.x != 0 and signf(_axis.x) == float(_direction.x) and absf(_axis.x) >= DEADZONE and absf(_axis.y) < absf(_axis.x)+AXIS_HYSTERESIS:
+				next = _direction
+			elif _direction.y != 0 and signf(_axis.y) == float(_direction.y) and absf(_axis.y) >= DEADZONE and absf(_axis.x) < absf(_axis.y)+AXIS_HYSTERESIS:
+				next = _direction
 		elif maxf(absf(_axis.x),absf(_axis.y)) > RELEASE_ZONE and _direction != Vector2i.ZERO:
 			next = _direction
 	if next != _direction:
 		_direction = next
-		_repeat = INITIAL_REPEAT
+		_repeat = INITIAL_REPEAT if _pad != Vector2i.ZERO else STICK_INITIAL_REPEAT
 		if next != Vector2i.ZERO: navigated.emit(next)
 
 func _process(delta: float) -> void:
 	if capturing or not _window_focused or _direction == Vector2i.ZERO: return
+	if _pad == Vector2i.ZERO and tower_navigation_allowed.is_valid() and tower_navigation_allowed.call():
+		_update_direction()
+		return
 	_repeat -= delta
 	if _repeat <= 0:
-		_repeat = REPEAT_INTERVAL
+		_repeat = REPEAT_INTERVAL if _pad != Vector2i.ZERO else STICK_REPEAT_INTERVAL
 		navigated.emit(_direction)

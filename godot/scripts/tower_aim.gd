@@ -10,6 +10,9 @@ var _axis := Vector2.ZERO
 var _stick_active := false
 var _pointer_active := false
 var _pointer := Vector2.ZERO
+var _needs_neutral := false
+var _peak_strength := 0.0
+var _releasing := false
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -21,6 +24,7 @@ func setup(game_host) -> void:
 	host = game_host
 
 func cancel() -> void:
+	_needs_neutral = _needs_neutral or _stick_active or _axis.length() > RELEASE_ZONE
 	_axis = Vector2.ZERO
 	_stick_active = false
 	_pointer_active = false
@@ -29,10 +33,14 @@ func cancel() -> void:
 	queue_redraw()
 
 func set_stick(axis: Vector2) -> void:
+	if _needs_neutral:
+		if axis.length() <= RELEASE_ZONE: _needs_neutral = false
+		return
 	_axis = axis
 	_pointer_active = false
 
 func point_at(point: Vector2) -> void:
+	if _stick_active: cancel()
 	if not host._tower_aim_available():
 		cancel()
 		return
@@ -83,6 +91,16 @@ func target_at(point: Vector2) -> int:
 func _update_pointer_target() -> void:
 	target = target_at(_pointer)
 
+func commit() -> bool:
+	if not _stick_active: return false
+	var chosen := target
+	var valid: bool = host._tower_aim_available() and origin_cell == host.selected_cell and host.run.towers.has(chosen)
+	var released := _axis.length() <= RELEASE_ZONE
+	cancel()
+	if released: _needs_neutral = false
+	if valid and chosen != host.selected_cell: host._select(chosen,false,false)
+	return true
+
 func _process(_delta: float) -> void:
 	if host == null: return
 	if not host._tower_aim_available():
@@ -93,15 +111,18 @@ func _process(_delta: float) -> void:
 		if not _stick_active:
 			_stick_active = true
 			origin_cell = host.selected_cell
+			_peak_strength = _axis.length()
+			_releasing = false
 		if host.selected_cell != origin_cell:
 			cancel()
 			return
-		target = target_in_direction(_axis)
+		_peak_strength = maxf(_peak_strength,_axis.length())
+		if _axis.length() < _peak_strength-0.15: _releasing = true
+		elif _axis.length() >= _peak_strength-0.08: _releasing = false
+		# Preserve the last deliberate direction as X/Y return at different rates.
+		if not _releasing: target = target_in_direction(_axis)
 	elif _stick_active and _axis.length() <= RELEASE_ZONE:
-		var chosen := target
-		var valid: bool = origin_cell == host.selected_cell and host.run.towers.has(chosen)
-		cancel()
-		if valid and chosen != host.selected_cell: host._select(chosen,false,false)
+		commit()
 	elif _pointer_active:
 		# A pointer is never allowed to chain selection while it is stationary.
 		if origin_cell != host.selected_cell:

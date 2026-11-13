@@ -955,6 +955,7 @@ func _number_placement_allowed() -> bool:
 
 func _pointer_activity(pointer_owner: int = -2) -> void:
 	if controller_cursor != null and controller_cursor.is_dispatching(): return
+	if tower_aim != null and tower_aim._stick_active: tower_aim.cancel()
 	# Clear targeting immediately, but retain the pressed Control until release.
 	# The normal pointer handoff below rebuilds the sheet after the gesture.
 	if dock != null and dock.controller_workshop_cell >= 0: dock.cancel_controller_context()
@@ -2299,6 +2300,12 @@ func _controller_confirm_ui() -> void:
 		focused.pressed.emit()
 
 func _controller_action(action: String) -> void:
+	if tower_aim._stick_active:
+		if action == "confirm":
+			tower_aim.commit()
+			return
+		tower_aim.cancel()
+		if action == "cancel": return
 	if controller.settings_mode:
 		if controller.capturing: return
 		if action == "confirm": _controller_confirm_ui()
