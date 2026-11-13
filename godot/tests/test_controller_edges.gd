@@ -147,6 +147,9 @@ func focus_loss_and_handoff(size: Vector2i) -> void:
 	var old_focus := focus()
 	scene.propagate_notification(Node.NOTIFICATION_WM_WINDOW_FOCUS_OUT)
 	await frames()
+	# Backgrounding now saves before waiting. Subsequent ignored input must not
+	# mutate that committed snapshot.
+	original_disk = disk()
 	for index in [JOY_BUTTON_A,JOY_BUTTON_B,JOY_BUTTON_START,JOY_BUTTON_X,JOY_BUTTON_Y,JOY_BUTTON_RIGHT_SHOULDER]:
 		await press(index)
 	axis(JOY_AXIS_LEFT_Y,0.9)

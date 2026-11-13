@@ -8,6 +8,7 @@ const DockScript = preload("res://scripts/dock.gd")
 const SoundScript = preload("res://scripts/sound.gd")
 const DropScript = preload("res://scripts/board_drop.gd")
 const ControllerScript = preload("res://scripts/controller_input.gd")
+const TowerAimScript = preload("res://scripts/tower_aim.gd")
 const ControllerCursorScript = preload("res://scripts/controller_cursor.gd")
 const SeedPointerScript = preload("res://scripts/seed_pointer.gd")
 const QuickIconScript = preload("res://scripts/quick_icon.gd")
@@ -81,6 +82,7 @@ var _bindings_draft: Dictionary = {}
 var _binding_target := ""
 var _binding_message := ""
 var controller_cursor
+var tower_aim
 var _cursor_gesture_canceled := false
 var _controller_number_cell := -1
 var _controller_number_phase := ""
@@ -124,6 +126,7 @@ var camera_mode := false
 var _camera_axis := Vector2.ZERO
 var _camera_keys: Dictionary = {}
 var _camera_window_focused := true
+var _steam_overlay_active := false
 const CAMERA_SPEED := 1.65
 
 func _ready() -> void:
@@ -136,6 +139,7 @@ func _ready() -> void:
 		DirAccess.make_dir_recursive_absolute(_profile_base)
 	steam_platform = SteamPlatform.new()
 	add_child(steam_platform)
+	steam_platform.overlay_changed.connect(_steam_overlay_changed)
 	var platform_status: Dictionary = steam_platform.initialize()
 	_configure_profiles(platform_status)
 	platform_ui.host = self
@@ -168,6 +172,10 @@ func _ready() -> void:
 	controller.activity.connect(_controller_activity)
 	controller.action_pressed.connect(_controller_action)
 	controller.navigated.connect(_controller_navigate)
+	controller.tower_navigation_allowed = _tower_aim_available
+	controller.tower_aim_changed.connect(tower_aim.set_stick)
+	controller.tower_aim_canceled.connect(tower_aim.cancel)
+	controller.left_axis_changed.connect(tower_aim.observe_axis)
 	controller.controller_lost.connect(_controller_disconnected)
 	controller.pointer_activity.connect(_controller_pointer_activity)
 	controller.pointer_axis_changed.connect(_controller_pointer_axis)
@@ -191,6 +199,7 @@ func _notification(what: int) -> void:
 		_camera_window_focused = false
 		_close_controller_numbers()
 		_cancel_camera_controls()
+		_pause_for_background()
 	elif what == NOTIFICATION_WM_WINDOW_FOCUS_IN:
 		_camera_window_focused = true
 	if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT and seed_pointer != null:
@@ -198,9 +207,34 @@ func _notification(what: int) -> void:
 		seed_pointer.cancel()
 		_finish_pointer_activity.call_deferred()
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
-		if tutorial.active: tutorial.restore()
-		if _save(): get_tree().quit()
-		else: _show_unsaved_quit()
+		_request_quit()
+
+func _background_active() -> bool:
+	return not _camera_window_focused or _steam_overlay_active
+
+func _steam_overlay_changed(active: bool) -> void:
+	_steam_overlay_active = active
+	if controller != null: controller.set_overlay_active(active)
+	if active: _pause_for_background()
+
+func _pause_for_background() -> void:
+	cleanup_fast = false
+	_close_controller_numbers()
+	_cancel_camera_controls()
+	if controller_cursor != null: controller_cursor.deactivate()
+	if seed_pointer != null: seed_pointer.cancel()
+	if board_input != null: board_input.cancel_pointer()
+	if not has_active_run: return
+	_save()
+	# Preserve open menus/workshops and their focused controls. An active board
+	# gets a pause menu that remains open when focus or the Steam overlay returns.
+	if not menu_open and not manual_pause and not dock.is_open() and armed_item.is_empty():
+		_show_pause_menu()
+
+func _request_quit() -> void:
+	if tutorial.active: tutorial.restore()
+	if _save(): get_tree().quit()
+	else: _show_unsaved_quit()
 
 func style(bg: Color, border: Color = Color.TRANSPARENT, radius: int = 8) -> StyleBoxFlat:
 	return UISkin.panel(bg,border,mini(radius,8),14,border.a > 0)
@@ -405,6 +439,10 @@ func _build_ui() -> void:
 	controller_cursor = ControllerCursorScript.new()
 	ui.add_child(controller_cursor)
 	controller_cursor.setup(self)
+	tower_aim = TowerAimScript.new()
+	ui.add_child(tower_aim)
+	tower_aim.setup(self)
+	board_input.mouse_exited.connect(tower_aim.cancel_pointer)
 
 func _add_quick_icon(quick: Button, kind: String) -> void:
 	var icon := QuickIconScript.new()
@@ -683,7 +721,7 @@ func _process(dt: float) -> void:
 	if dock.is_open() != _dock_was_open:
 		_dock_was_open = dock.is_open()
 		_layout_ui()
-	var blocked: bool = menu_open or manual_pause or dock.is_open() or not armed_item.is_empty()
+	var blocked: bool = _background_active() or menu_open or manual_pause or dock.is_open() or not armed_item.is_empty()
 	if cleanup_fast and not _cleanup_controls_available(): cleanup_fast = false
 	if not blocked and not (tutorial.active and run.phase == "solve"):
 		_advance_gameplay(dt)
@@ -739,7 +777,7 @@ func _toggle_cleanup() -> void:
 	_refresh()
 
 func _advance_gameplay(dt: float) -> void:
-	if menu_open or manual_pause or dock.is_open() or not armed_item.is_empty() or (tutorial.active and run.phase == "solve"): return
+	if _background_active() or menu_open or manual_pause or dock.is_open() or not armed_item.is_empty() or (tutorial.active and run.phase == "solve"): return
 	if cleanup_fast and not _cleanup_controls_available(): cleanup_fast = false
 	var frame_step: float = minf(dt,0.05)
 	if not cleanup_fast:
@@ -853,12 +891,13 @@ func _refresh() -> void:
 	if portrait_layout: _refresh_portrait_text()
 	_refresh_strategy_preview()
 	controls_label.text = "D-PAD grid   A choose   LB/RB number   X gear   Start menu" if controller_used else "TAP / DRAG to plant   RIGHT-DRAG / Q E rotate   HOME reset   ESC menu"
-	if controller_used and _tower_navigation_active(): controls_label.text = "D-PAD towers   A customize   LB/RB tower   X gear   Start menu"
+	if controller_used and _tower_navigation_active(): controls_label.text = "LS aim / release to select   A customize   LB/RB tower   X gear"
 	if controller_used and not _controller_pointer_active():
 		if dock.controller_context_active(): controls_label.text = "A choose / equip module   B back   LB / RB tower"
-		elif run.phase == "prep" and run.towers.has(selected_cell) and not dock.is_open(): controls_label.text = "A open module slot   LB / RB tower   X gear   Y launch"
+		elif run.phase == "prep" and run.towers.has(selected_cell) and not dock.is_open(): controls_label.text = "LS aim / release   A module slot   LB/RB tower   Y launch"
 		elif _cleanup_controls_available(): controls_label.text = "Y stop fast-forward   B stop   A inspect   X gear" if cleanup_fast else "Y fast-forward 8x (enemies too)   A inspect   X gear"
-	if controller_used and not armed_item.is_empty(): controls_label.text = "D-PAD / STICK choose tower     A attach module     B cancel"
+	if controller_used and not armed_item.is_empty(): controls_label.text = "LS aim / release   D-PAD tower   A attach module   B cancel"
+	if not controller_used and _tower_navigation_active(): controls_label.text = "POINT to aim   CLICK to select / customize   RIGHT-DRAG rotate   ESC menu"
 	if _controller_pointer_active(): controls_label.text = "RS cursor   R3 click   RT drag   LT precision   L3 camera   D-PAD grid"
 	if controller_used: controls_label.text = _controller_hint(controls_label.text)
 	hud_nodes.plant_caption.text = "CHOOSE A NUMBER" if _controller_number_cell >= 0 else "PLANT A NUMBER"
@@ -892,6 +931,8 @@ Done to return to planting"
 			candidate_label.text = _controller_hint("RS rotate · R3 reset · B done") if controller_used else "Drag sideways · Done to plant"
 			_font(candidate_label,22)
 		controls_label.text = _controller_hint("CAMERA   Right stick rotate   R3 reset view   B / L3 done") if controller_used else "CAMERA   Drag left / right   Q / E rotate   HOME reset   ESC done"
+	if controller_used and tower_aim != null and tower_aim._stick_active and _tower_aim_available():
+		controls_label.text = _controller_hint("Release stick / A select highlighted tower   B cancel aim")
 	if portrait_layout:
 		for quick: Button in [bag_button,loot_button,hud_nodes.camp,hud_nodes.tools,hud_nodes.camera,hud_nodes.camera_reset]:
 			_fit_quick_label(quick)
@@ -939,13 +980,14 @@ func _number_complete(number: int) -> bool:
 	return number >= 1 and number <= 9 and _number_correct_counts()[number] == 9
 
 func _number_input_allowed() -> bool:
-	return has_active_run and not menu_open and not manual_pause and not camera_mode and armed_item.is_empty() and run.phase in ["solve","prep","battle","loot"]
+	return not _background_active() and has_active_run and not menu_open and not manual_pause and not camera_mode and armed_item.is_empty() and run.phase in ["solve","prep","battle","loot"]
 
 func _number_placement_allowed() -> bool:
 	return _number_input_allowed() and not dock.is_open() and run.phase in ["solve","battle"]
 
 func _pointer_activity(pointer_owner: int = -2) -> void:
 	if controller_cursor != null and controller_cursor.is_dispatching(): return
+	if tower_aim != null and tower_aim._stick_active: tower_aim.cancel()
 	# Clear targeting immediately, but retain the pressed Control until release.
 	# The normal pointer handoff below rebuilds the sheet after the gesture.
 	if dock != null and dock.controller_workshop_cell >= 0: dock.cancel_controller_context()
@@ -1178,13 +1220,27 @@ func _move_selection(direction: Vector2i) -> void:
 	direction = _screen_grid_direction(direction)
 	if selected_cell < 0: selected_cell = 40
 	else:
-		var x: int = clampi(selected_cell%9+direction.x,0,8)
-		var y: int = clampi(selected_cell/9+direction.y,0,8)
+		var x: int = posmod(selected_cell%9+direction.x,9)
+		var y: int = posmod(selected_cell/9+direction.y,9)
 		selected_cell = y*9+x
 	_select(selected_cell,false,false)
 
 func _tower_navigation_active() -> bool:
 	return (not armed_item.is_empty() or run.phase in ["prep","battle","loot"]) and not reserve_mode
+
+func _tower_aim_available() -> bool:
+	return _camera_window_focused and not _steam_overlay_active and has_active_run and not menu_open and not manual_pause and not camera_mode and not dock.is_open() and _tower_navigation_active() and _controller_number_cell < 0 and (seed_pointer == null or not seed_pointer.is_active()) and not get_viewport().gui_is_dragging()
+
+func _tap_board_at(point: Vector2) -> void:
+	var cell: int = world.cell_at_screen(point)
+	# Direct tower clicks retain customization. Clicking toward another tower
+	# through a gap only selects it, without equipping or buying anything.
+	if _tower_aim_available() and not run.towers.has(cell):
+		var target: int = tower_aim.target_at(point)
+		if target >= 0 and target != selected_cell:
+			_select(target,false,false)
+		return
+	_tap_board(cell)
 
 func _tower_cells() -> Array[int]:
 	var cells: Array[int] = []
@@ -1312,7 +1368,7 @@ func _toggle_auto_open_chests() -> void:
 func _maybe_auto_open_chests() -> void:
 	# Wait for a safe management moment; never interrupt combat, a dialog,
 	# gear selection, an existing reward reveal, or a held pointer gesture.
-	if not auto_open_chests or not has_active_run or menu_open or manual_pause or tutorial.active: return
+	if _background_active() or not auto_open_chests or not has_active_run or menu_open or manual_pause or tutorial.active: return
 	if run.phase not in ["solve","prep","loot","won"] or not armed_item.is_empty(): return
 	if camera_mode or _controller_number_cell >= 0 or get_viewport().gui_is_dragging(): return
 	if controller_cursor != null and controller_cursor.button_down: return
@@ -1830,6 +1886,7 @@ func _show_menu(initial: bool = false) -> void:
 		platform_row.add_child(item)
 	setup.add_child(button("Controller mapping",_show_controller_settings))
 	setup.add_child(button("Feedback / report a bug",feedback_ui.show_panel))
+	if not OS.has_feature("web"): setup.add_child(button("Quit game",_request_quit))
 	start.grab_focus()
 
 func _show_pause_menu() -> void:
@@ -1870,6 +1927,7 @@ func _show_pause_menu() -> void:
 	actions.add_child(button("Achievements",platform_ui.show_achievements))
 	actions.add_child(button("Saves & Steam",platform_ui.show_saves))
 	actions.add_child(button("New run",func(): _show_menu(true)))
+	if not OS.has_feature("web"): actions.add_child(button("Save and quit",_request_quit))
 	resume.grab_focus()
 
 func _show_wave_intel() -> void:
@@ -1950,7 +2008,7 @@ Controller: press L3, use the right stick, R3 to reset, B to finish."),15,MUTED)
 	box.add_child(label("CONTROLLER",12,MINT))
 	var input_label := label(ControllerBindings.help_text(controller.bindings),15,MUTED)
 	box.add_child(input_label)
-	box.add_child(label(_controller_hint("Tower modules: A on a tower focuses its first empty + socket. A opens available modules; A fits one and returns to this tower. B returns one step.\nD-pad / left stick: planted towers during setup and combat. LB / RB cycle towers; solving keeps number selection. Gear: A selects modules; Y installs the selection on this tower. Start opens Gear, Chests and Camp."),15,MUTED))
+	box.add_child(label(_controller_hint("Tower modules: A on a tower focuses its first empty + socket. A opens available modules; A fits one and returns to this tower. B returns one step.\nLeft stick: aim at a highlighted tower, then release to select once. D-pad steps between towers. Mouse / trackpad: point to preview, click toward a tower to select, or click it directly to customize. LB / RB cycle towers; solving keeps number selection. Gear: A selects modules; Y installs the selection on this tower. Start opens Gear, Chests and Camp."),15,MUTED))
 	var reduce := button("Reduced motion: " + ("ON" if reduced_motion else "OFF"),_toggle_reduced_motion)
 	reduce.pressed.connect(func(): reduce.text = "Reduced motion: " + ("ON" if reduced_motion else "OFF"))
 	box.add_child(reduce)
@@ -2099,6 +2157,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif event.keycode == KEY_DOWN: _move_selection(Vector2i.DOWN)
 
 func _input(event: InputEvent) -> void:
+	if _background_active() and (event is InputEventKey or event is InputEventMouse or event is InputEventScreenTouch or event is InputEventScreenDrag):
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventKey and not event.pressed: _camera_keys.erase(event.keycode)
 	if controller_cursor != null and controller_cursor.owns_event(event): return
 	if event is InputEventKey and event.pressed:
@@ -2111,7 +2172,7 @@ func _input(event: InputEvent) -> void:
 		elif _pointer_hint_owner == event.index: _finish_pointer_activity.call_deferred()
 
 func _camera_available() -> bool:
-	return _camera_window_focused and has_active_run and not menu_open and not manual_pause and not dock.is_open() and armed_item.is_empty() and run.phase in ["solve","prep","battle","loot"] and (seed_pointer == null or not seed_pointer.is_active()) and not get_viewport().gui_is_dragging()
+	return _camera_window_focused and not _steam_overlay_active and has_active_run and not menu_open and not manual_pause and not dock.is_open() and armed_item.is_empty() and run.phase in ["solve","prep","battle","loot"] and (seed_pointer == null or not seed_pointer.is_active()) and not get_viewport().gui_is_dragging()
 
 func _toggle_camera_mode() -> void:
 	if camera_mode: _set_camera_mode(false)
@@ -2276,6 +2337,12 @@ func _controller_confirm_ui() -> void:
 		focused.pressed.emit()
 
 func _controller_action(action: String) -> void:
+	if tower_aim._stick_active:
+		if action == "confirm":
+			tower_aim.commit()
+			return
+		tower_aim.cancel()
+		if action == "cancel": return
 	if controller.settings_mode:
 		if controller.capturing: return
 		if action == "confirm": _controller_confirm_ui()

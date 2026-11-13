@@ -232,6 +232,11 @@ def main() -> None:
     bootstrap_extension_cache()
     if not args.skip_import:
         run([args.godot, "--headless", "--path", str(PROJECT), "--editor", "--import", "--quit"], logs / "import.log")
+    # Exercise the changed input paths first so a regression fails quickly.
+    for renderer, flags in [("native", []), ("canvas", ["--", "--canvas-graphics"])]:
+        for script, marker in [("test_deck_focus.gd", "DECK_FOCUS_PASS"), ("test_tower_aim.gd", "TOWER_AIM_PASS")]:
+            run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/" + script] + flags,
+                logs / f"{renderer}-{script.removesuffix('.gd')}.log", expected=marker)
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_run.gd"], logs / "simulation-tests.log", expected="PASS:")
     run([args.godot, "--headless", "--path", str(PROJECT), "--script", "res://tests/test_sudoku.gd"], logs / "sudoku-tests.log", expected="SUDOKU_PASS")
     for script, marker in [

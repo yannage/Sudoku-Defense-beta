@@ -216,6 +216,9 @@ func pointer_controls() -> void:
 	check(absf(angle_difference(yaw,scene.world.get_camera_yaw()))<0.001,"Focus loss cancels held camera keys")
 	scene.propagate_notification(Node.NOTIFICATION_WM_WINDOW_FOCUS_IN)
 	key(KEY_Q,false)
+	check(scene.menu_open,"Returning focus keeps gameplay paused until explicit resume")
+	await press_pad(JOY_BUTTON_A)
+	check(not scene.menu_open,"Fresh confirm resumes before camera interaction checks")
 	# Rotation remains a board-only gesture even though its input layer spans the UI.
 	var header: Vector2 = scene.header.get_global_rect().get_center()
 	mouse(header,true,MOUSE_BUTTON_RIGHT)
@@ -332,6 +335,9 @@ func controller_controls() -> void:
 	scene.propagate_notification(Node.NOTIFICATION_WM_WINDOW_FOCUS_OUT)
 	check(not scene.camera_mode and not scene.board_input.camera_pointer_active(),"Focus loss cancels camera mode and gestures")
 	scene.propagate_notification(Node.NOTIFICATION_WM_WINDOW_FOCUS_IN)
+	check(scene.menu_open,"Camera focus interruption retains the pause menu")
+	await press_pad(JOY_BUTTON_A)
+	check(not scene.menu_open,"Resume restores board navigation after camera interruption")
 
 func navigation_and_capture() -> void:
 	# Include spatial content in the rendered review, and pick its visible heads
