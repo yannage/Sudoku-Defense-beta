@@ -8,6 +8,7 @@ const DockScript = preload("res://scripts/dock.gd")
 const SoundScript = preload("res://scripts/sound.gd")
 const DropScript = preload("res://scripts/board_drop.gd")
 const ControllerScript = preload("res://scripts/controller_input.gd")
+const TowerAimScript = preload("res://scripts/tower_aim.gd")
 const ControllerCursorScript = preload("res://scripts/controller_cursor.gd")
 const SeedPointerScript = preload("res://scripts/seed_pointer.gd")
 const QuickIconScript = preload("res://scripts/quick_icon.gd")
@@ -81,6 +82,7 @@ var _bindings_draft: Dictionary = {}
 var _binding_target := ""
 var _binding_message := ""
 var controller_cursor
+var tower_aim
 var _cursor_gesture_canceled := false
 var _controller_number_cell := -1
 var _controller_number_phase := ""
@@ -168,6 +170,9 @@ func _ready() -> void:
 	controller.activity.connect(_controller_activity)
 	controller.action_pressed.connect(_controller_action)
 	controller.navigated.connect(_controller_navigate)
+	controller.tower_navigation_allowed = _tower_aim_available
+	controller.tower_aim_changed.connect(tower_aim.set_stick)
+	controller.tower_aim_canceled.connect(tower_aim.cancel)
 	controller.controller_lost.connect(_controller_disconnected)
 	controller.pointer_activity.connect(_controller_pointer_activity)
 	controller.pointer_axis_changed.connect(_controller_pointer_axis)
@@ -405,6 +410,9 @@ func _build_ui() -> void:
 	controller_cursor = ControllerCursorScript.new()
 	ui.add_child(controller_cursor)
 	controller_cursor.setup(self)
+	tower_aim = TowerAimScript.new()
+	ui.add_child(tower_aim)
+	tower_aim.setup(self)
 
 func _add_quick_icon(quick: Button, kind: String) -> void:
 	var icon := QuickIconScript.new()
@@ -853,12 +861,13 @@ func _refresh() -> void:
 	if portrait_layout: _refresh_portrait_text()
 	_refresh_strategy_preview()
 	controls_label.text = "D-PAD grid   A choose   LB/RB number   X gear   Start menu" if controller_used else "TAP / DRAG to plant   RIGHT-DRAG / Q E rotate   HOME reset   ESC menu"
-	if controller_used and _tower_navigation_active(): controls_label.text = "D-PAD towers   A customize   LB/RB tower   X gear   Start menu"
+	if controller_used and _tower_navigation_active(): controls_label.text = "LS aim / release to select   A customize   LB/RB tower   X gear"
 	if controller_used and not _controller_pointer_active():
 		if dock.controller_context_active(): controls_label.text = "A choose / equip module   B back   LB / RB tower"
-		elif run.phase == "prep" and run.towers.has(selected_cell) and not dock.is_open(): controls_label.text = "A open module slot   LB / RB tower   X gear   Y launch"
+		elif run.phase == "prep" and run.towers.has(selected_cell) and not dock.is_open(): controls_label.text = "LS aim / release   A module slot   LB/RB tower   Y launch"
 		elif _cleanup_controls_available(): controls_label.text = "Y stop fast-forward   B stop   A inspect   X gear" if cleanup_fast else "Y fast-forward 8x (enemies too)   A inspect   X gear"
-	if controller_used and not armed_item.is_empty(): controls_label.text = "D-PAD / STICK choose tower     A attach module     B cancel"
+	if controller_used and not armed_item.is_empty(): controls_label.text = "LS aim / release   D-PAD tower   A attach module   B cancel"
+	if not controller_used and _tower_navigation_active(): controls_label.text = "POINT to aim   CLICK to select / customize   RIGHT-DRAG rotate   ESC menu"
 	if _controller_pointer_active(): controls_label.text = "RS cursor   R3 click   RT drag   LT precision   L3 camera   D-PAD grid"
 	if controller_used: controls_label.text = _controller_hint(controls_label.text)
 	hud_nodes.plant_caption.text = "CHOOSE A NUMBER" if _controller_number_cell >= 0 else "PLANT A NUMBER"
@@ -1185,6 +1194,20 @@ func _move_selection(direction: Vector2i) -> void:
 
 func _tower_navigation_active() -> bool:
 	return (not armed_item.is_empty() or run.phase in ["prep","battle","loot"]) and not reserve_mode
+
+func _tower_aim_available() -> bool:
+	return _camera_window_focused and has_active_run and not menu_open and not manual_pause and not camera_mode and not dock.is_open() and _tower_navigation_active() and _controller_number_cell < 0 and (seed_pointer == null or not seed_pointer.is_active()) and not get_viewport().gui_is_dragging()
+
+func _tap_board_at(point: Vector2) -> void:
+	var cell: int = world.cell_at_screen(point)
+	# Direct tower clicks retain customization. Clicking toward another tower
+	# through a gap only selects it, without equipping or buying anything.
+	if _tower_aim_available() and not run.towers.has(cell):
+		var target: int = tower_aim.target_at(point)
+		if target >= 0 and target != selected_cell:
+			_select(target,false,false)
+		return
+	_tap_board(cell)
 
 func _tower_cells() -> Array[int]:
 	var cells: Array[int] = []
@@ -1950,7 +1973,7 @@ Controller: press L3, use the right stick, R3 to reset, B to finish."),15,MUTED)
 	box.add_child(label("CONTROLLER",12,MINT))
 	var input_label := label(ControllerBindings.help_text(controller.bindings),15,MUTED)
 	box.add_child(input_label)
-	box.add_child(label(_controller_hint("Tower modules: A on a tower focuses its first empty + socket. A opens available modules; A fits one and returns to this tower. B returns one step.\nD-pad / left stick: planted towers during setup and combat. LB / RB cycle towers; solving keeps number selection. Gear: A selects modules; Y installs the selection on this tower. Start opens Gear, Chests and Camp."),15,MUTED))
+	box.add_child(label(_controller_hint("Tower modules: A on a tower focuses its first empty + socket. A opens available modules; A fits one and returns to this tower. B returns one step.\nLeft stick: aim at a highlighted tower, then release to select once. D-pad steps between towers. Mouse / trackpad: point to preview, click toward a tower to select, or click it directly to customize. LB / RB cycle towers; solving keeps number selection. Gear: A selects modules; Y installs the selection on this tower. Start opens Gear, Chests and Camp."),15,MUTED))
 	var reduce := button("Reduced motion: " + ("ON" if reduced_motion else "OFF"),_toggle_reduced_motion)
 	reduce.pressed.connect(func(): reduce.text = "Reduced motion: " + ("ON" if reduced_motion else "OFF"))
 	box.add_child(reduce)

@@ -5,6 +5,9 @@ extends Node
 ## physical press cannot activate a menu and plant a number underneath it.
 signal action_pressed(action: String)
 signal navigated(direction: Vector2i)
+signal tower_aim_changed(axis: Vector2)
+signal tower_aim_canceled()
+var tower_navigation_allowed: Callable
 signal activity()
 signal controller_lost()
 signal pointer_activity()
@@ -133,6 +136,8 @@ func reset_navigation() -> void:
 	_pad = Vector2i.ZERO
 	_direction = Vector2i.ZERO
 	_repeat = 0.0
+	# Cancel a pending gesture; a reset must never commit an aim.
+	if tower_navigation_allowed.is_valid(): tower_aim_canceled.emit()
 
 func _claim(device: int) -> void:
 	if active_device != device:
@@ -257,6 +262,12 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 func _update_direction() -> void:
+	if _pad == Vector2i.ZERO and tower_navigation_allowed.is_valid() and tower_navigation_allowed.call():
+		_direction = Vector2i.ZERO
+		_repeat = 0.0
+		tower_aim_changed.emit(_axis)
+		return
+	tower_aim_canceled.emit()
 	var next: Vector2i = _pad
 	if next == Vector2i.ZERO:
 		if maxf(absf(_axis.x),absf(_axis.y)) >= DEADZONE:
