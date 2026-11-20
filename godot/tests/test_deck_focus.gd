@@ -182,11 +182,12 @@ func background_number_and_loot() -> void:
 	var number := 0
 	for index in range(scene.number_buttons.size()):
 		var candidate: Vector2 = scene.number_buttons[index].get_global_rect().get_center()
-		if scene.seed_pointer._number_at(candidate) == index+1:
+		if scene.number_buttons[index].is_visible_in_tree() and not scene.dock._shell.get_global_rect().has_point(candidate):
 			point = candidate
 			number = index+1
 			break
-	check(number > 0,"Fixture exposes a number-tray input beside the preserved Gear panel")
+	check(number > 0,"Fixture targets an uncovered number button beside the preserved Gear panel")
+	check(scene.seed_pointer._number_at(point) == 0,"Gear leaves the number tray visibly disabled")
 	var original_number: int = scene.selected_number
 	var before := state()
 	scene.steam_platform.overlay_changed.emit(true)

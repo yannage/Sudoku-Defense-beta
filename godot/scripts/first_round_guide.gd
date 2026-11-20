@@ -9,10 +9,54 @@ var previous: Dictionary = {}
 var previous_active := false
 var previous_speed := 1.0
 var previous_pause := false
+var previous_reserve_mode := false
 var previous_cell := -1
 var previous_number := 0
 var target_cell := -1
 var reward_ready := false
+var played_this_session := false
+var marker: Control
+
+# One stationary outline follows the actual projected square and HUD control.
+# It ignores input so mouse, touch and controller all use the normal game.
+class GuideMarker extends Control:
+	var guide
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		focus_mode = Control.FOCUS_NONE
+		z_index = 11
+
+	func _draw() -> void:
+		var game = guide.host
+		if game.menu_open or game.camera_mode: return
+		if game.dock.is_open():
+			# The workshop already identifies the first free socket and the
+			# first fitting module. Outline it only while inside the scroll view.
+			var target: Control = game.dock._focus_target
+			if guide.step == 3 and is_instance_valid(target) and target.is_visible_in_tree():
+				var id := str(target.get_meta("focus_id",""))
+				var scroll: ScrollContainer = game.dock._scroll
+				if (id.begins_with("slot:") or id.begins_with("item:")) and is_instance_valid(scroll):
+					var bounds := target.get_global_rect()
+					if scroll.get_global_rect().encloses(bounds):
+						draw_rect(bounds.grow(-2.0),game.AMBER,false,3.0)
+			return
+		var cell: int = guide.target_cell
+		if cell >= 0 and guide.step in [0, 1, 3]:
+			var shape: PackedVector2Array = game.wrong_guess_feedback._cell_shape(cell)
+			shape.append(shape[0])
+			draw_polyline(shape, Color("102328"), 6.0, true)
+			draw_polyline(shape, game.AMBER, 3.0, true)
+		var button: Button = null
+		if guide.step in [0, 1] and cell >= 0 and game.selected_cell == cell:
+			button = game.number_buttons[int(game.run.solution[cell]) - 1]
+		elif guide.step in [2, 4, 7] or (guide.step == 3 and cell < 0):
+			button = game.next_button
+		elif guide.step == 6:
+			button = game.loot_button
+		if button != null and button.is_visible_in_tree():
+			draw_rect(button.get_global_rect().grow(2.0), game.AMBER, false, 3.0)
 
 func start(game) -> void:
 	if active:
@@ -23,37 +67,61 @@ func start(game) -> void:
 	previous = host.run.save_data().duplicate(true) if previous_active else {}
 	previous_speed = host.game_speed
 	previous_pause = host.manual_pause
+	previous_reserve_mode = host.reserve_mode
 	previous_cell = host.selected_cell
 	previous_number = host.selected_number
 	active = true
+	played_this_session = true
 	step = -1
 	reward_opened = false
 	reward_ready = false
-	host.run.new_run(784217,{"mode":"campaign","puzzle_difficulty":"easy","combat_difficulty":"easy"})
+	host.run.new_run(784217,{"mode":"campaign","puzzle_difficulty":"easy","combat_difficulty":"easy","solve_pace":"untimed"})
 	host._clear_wrong_guess_feedback()
 	host.has_active_run = true
 	host.game_speed = 1.0
 	host.manual_pause = false
+	host.reserve_mode = false
 	host.armed_item = ""
 	host.selected_number = 0
 	host.dock.reset_for_run()
 	host.world.setup(host.run)
 	host.last_phase = host.run.phase
+	if not is_instance_valid(marker):
+		marker = GuideMarker.new()
+		marker.guide = self
+		host.ui.add_child(marker)
+		marker.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	marker.show()
 	target_cell = next_blank()
 	host._select(target_cell,false,false)
 	host._close_overlay()
 	observe()
 
 func next_blank() -> int:
+	# A single candidate can be deduced immediately. For the route lesson,
+	# favor another three-row band so the second placement shows a new bend.
+	var first: int = -1 if host.run.recent_moves.is_empty() else int(host.run.recent_moves[0])
+	var best := -1
+	var best_score := -1
 	for cell in range(81):
-		if host.run.board[cell] == 0: return cell
-	return -1
+		if host.run.board[cell] != 0: continue
+		var score: int = 100 if host.run.candidates(cell).size() == 1 else 0
+		if first >= 0:
+			if cell / 27 != first / 27: score += 30
+			score -= absi(cell % 9 - first % 9) + absi(cell / 9 - first / 9)
+		else:
+			score -= absi(cell % 9 - 4) + absi(cell / 9 - 4)
+		if score > best_score or best < 0:
+			best = cell
+			best_score = score
+	return best
 
 func observe() -> void:
 	if not active: return
+	marker.queue_redraw()
 	var next := step
 	match host.run.phase:
-		"solve": next = 0 if host.run.towers.is_empty() else (1 if host.run.towers.size() < 6 else 2)
+		"solve": next = mini(host.run.towers.size(), 2)
 		"prep":
 			next = 3
 			for tower: Dictionary in host.run.towers.values():
@@ -61,8 +129,6 @@ func observe() -> void:
 		"battle": next = 5
 		"loot", "won":
 			if not reward_ready:
-				# A practice chest is guaranteed even if the player leaked enemies.
-				# It is explicitly practice-only and cannot enter the saved campaign.
 				var cheapest := 9999
 				for chest: Dictionary in host.run.chests: cheapest = mini(cheapest,int(chest.cost))
 				if cheapest == 9999:
@@ -74,95 +140,129 @@ func observe() -> void:
 		"lost": next = 8
 	if next == step: return
 	step = next
-	if step == 1: target_cell = next_blank()
-	# Let a chest reveal finish before the player opens the completion card.
-	if step == 7:
-		host._toast("Guide complete! Close Chests, then press Y / Next to finish.")
-	else: show_step.call_deferred()
+	match step:
+		1:
+			target_cell = next_blank()
+			# Leave the player's focus on the newly grown tower. Clear the seed
+			# brush so clicking the next highlighted square safely selects it.
+			host.selected_number = 0
+			host.world.set_selected(host.selected_cell,0)
+		3:
+			target_cell = int(host.run.recent_moves.back()) if not host.run.recent_moves.is_empty() else -1
+			if target_cell >= 0: host._select(target_cell,false,false)
+		2, 4, 5, 6, 7, 8: target_cell = -1
+	host._refresh()
 
 func event_seen(event: Dictionary) -> void:
 	if active and host.run.phase in ["loot","won"] and str(event.get("type","")) == "chest_open": reward_opened = true
 
+func needs_module() -> bool:
+	return not host.run.towers.is_empty() and host.run.items.any(func(item): return str(item.get("type","")) == "attachment")
+
 func can_advance() -> bool:
 	if not active: return true
 	observe()
-	# Wrong guesses can exhaust practice Solve before any tower exists. Keep
-	# the normal phase path available instead of requiring impossible equipment.
-	if host.run.phase == "prep" and host.run.towers.is_empty(): return true
-	if (host.run.phase == "solve" and host.run.towers.size() < 6) or (host.run.phase == "prep" and step < 4) or host.run.phase in ["loot","won","lost"]:
-		show_step()
+	if step in [7,8]:
+		finish()
+		return false
+	if step in [0,1,6] or (step == 3 and needs_module()):
+		host._toast(instruction(),false)
 		return false
 	return true
 
-func apply_hud() -> void:
-	if not active: return
-	host.phase_label.text = "GUIDE %d / 7" % mini(step+1,7)
-	host.hud_nodes.help.text = "?"
-	host.hud_nodes.help.tooltip_text = "Current guide step / skip practice"
-	if not host.portrait_layout:
-		var hints := ["Plant the highlighted answer. Help reopens this step.","Plant six towers. Recent answers shape the route.","Ready: prepare now. The whole Sudoku is optional.","Open Gear. Select a module, then a planted tower.","Gear fitted! Read Wave intel, then launch.","Watch the route and towers. Gear panels pause battle.","Open Chests and claim a practice reward.","Reward collected! Press Next to finish.","Try another defense, or leave practice."]
-		host.phase_detail.text = hints[clampi(step,0,8)]
-		if step == 3 and host.run.towers.is_empty(): host.phase_detail.text = "No towers planted. Launch the wave or use Help to return."
-	if step == 7: host.next_button.text = "Finish guide"
+func instruction() -> String:
+	match step:
+		0, 1:
+			if target_cell < 0: return "Plant an answer in an empty square."
+			var spot := "R%d C%d" % [target_cell / 9 + 1, target_cell % 9 + 1]
+			var digit: int = host.run.solution[target_cell]
+			if host.selected_cell != target_cell:
+				return ("Your first answer grew a tower! " if step == 1 else "") + "Select the gold square at %s." % spot
+			var clue := "Try %d in %s." % [digit,spot]
+			if host.run.candidates(target_cell).size() == 1:
+				clue = "This row, column and box leave only %d." % digit
+			if host.controller_used and not host._controller_pointer_active():
+				return clue + host._controller_hint(" Press A to open numbers." if host._controller_number_cell < 0 else " Choose %d, then press A." % digit)
+			return clue + " Pick %d below to grow a tower." % digit
+		2: return "Your latest answer bent the gold route. Plant more, or choose Prepare defense to lock it."
+		3:
+			if not needs_module(): return "No spare modules to fit. Launch the wave."
+			if host.dock.is_open():
+				if host.dock.current_panel == "tower": return "Pick an empty + socket on this tower."
+				if host.dock.current_panel == "bag":
+					if host.dock.controller_picker_slot >= 0: return "Choose a module to fit in the socket."
+					return "Choose a module and use Install selected, or open a tower's + socket."
+				return "Close the panel and select a planted tower."
+			return host._controller_hint("Select the marked tower. Press A to open its sockets.") if host.controller_used else "Select the marked tower to open its five sockets."
+		4:
+			if host.dock.is_open(): return host._controller_hint("Module fitted. Press B to close the workshop.") if host.controller_used else "Module fitted. Close the workshop to see the route."
+			return "Follow the gold line from entry to exit. Launch the wave when ready."
+		5: return "Towers fire at enemies in range. Any that reach the exit damage your core."
+		6: return "Wave cleared! Open Chests and spend fragments on a reward."
+		7: return "Reward collected. Close Chests and choose Finish guide."
+		8: return "Your core fell. Choose Finish guide to leave practice."
+	return ""
 
+func optional_tools() -> Array:
+	return [host.hud_nodes.camp, host.hud_nodes.tools, host.hud_nodes.camera, host.hud_nodes.camera_reset,
+		host.hud_nodes.notes, host.hud_nodes.hint, host.reserve_button]
+
+func apply_hud() -> void:
+	if not active or step < 0: return
+	host.hud_nodes.help.tooltip_text = "Current guide step / skip practice"
+	host.phase_label.text = ["FIRST SEED","SECOND SEED","PLAN THE ROUTE","FIT A MODULE","LAUNCH WAVE","DEFEND","OPEN A CHEST","ROUND CLEAR","CORE LOST"][step]
+	# Introduce the controls used in this lesson as their actions become
+	# available. Help, pause, and the run menu stay within reach throughout.
+	for tool: Control in optional_tools(): tool.hide()
+	host.bag_button.visible = step in [3,4,5]
+	host.loot_button.visible = step in [6,7]
+	host.hud_nodes.speed.visible = step == 5
+	host.next_button.visible = step in [2,4,7,8] or (step == 3 and not needs_module())
+	if step in [0,1] and host.selected_cell >= 0 and host.run.board[host.selected_cell] == 0:
+		var options: Array = host.run.candidates(host.selected_cell)
+		host.candidate_label.text = "Possible numbers   " + "  ".join(options.map(func(n): return str(n)))
+	host.phase_detail.text = instruction()
+	host.phase_detail.show()
+	host.phase_label.visible = not host.portrait_layout
+	# In portrait the two ordinary phase labels share a narrow row. Give its
+	# whole width to the instruction, keeping the board and touch tray clear.
+	if host.portrait_layout:
+		host.hud_nodes.intel.hide()
+		host._font(host.phase_detail,20)
+		host._place(host.phase_detail,Rect2(20,147,host.layout_size.x-40,57))
+	elif step in [3,4]:
+		host.phase_detail.size.y = 77
+	if step in [7,8]: host.next_button.text = "Finish guide"
+
+# Help is available on demand. Advancing the lesson never opens an overlay.
 func show_step() -> void:
 	if not active: return
-	var box: VBoxContainer = host._modal(650,590)
+	var box: VBoxContainer = host._modal(565,360)
 	host.overlay.set_meta("first_round_guide",true)
-	var titles := ["Plant your first tower","Shape the route","You can battle before finishing","Fit your first module","Launch your defense","Watch your defense work","Claim your reward","You know the loop","A defense to learn from"]
-	var empty_defense: bool = host.run.towers.is_empty()
-	if empty_defense:
-		titles[3] = "Solve time ran out"
-		titles[7] = "Practice round finished"
-	box.add_child(host.label("GUIDED FIRST ROUND / PRACTICE",13,host.MINT))
-	box.add_child(host.label(titles[clampi(step,0,8)],27,host.WHITE))
-	var cell: int = target_cell if target_cell >= 0 else next_blank()
-	var placement := ""
-	if cell >= 0:
-		placement = "Try row %d, column %d: its answer is %d. " % [cell/9+1,cell%9+1,host.run.solution[cell]]
-	var descriptions := [
-		placement+"Select the highlighted square, then its number below. On controller: A opens the number tray; choose the number and press A to plant and return. Each row, column and 3x3 box uses 1-9 once. The clock is paused while you learn; wrong answers still cost 5 seconds.",
-		"That answer became a tower and earned credits. Plant five more answers. "+placement+"The last answers you place pull the enemy route toward them when you prepare. Spread towers around the route so enemies stay in range. Help reopens this guide at any time.",
-		"Six towers are enough to try the first easy wave. You do NOT need to finish the Sudoku. Press Prepare defense (Y on controller). Watch the route change around your recent answers; numbers become firing towers.",
-		"Open Gear (X), choose an Attack or Support module, then select a planted tower and confirm. Every tower has five sockets. Try Rapid, Lightning or Frost from your starting bag. Equipping changes that tower; number-family upgrades help all planted towers with that number.",
-		"Your first module is fitted. Open Wave intel if you want to inspect health, speed and core damage. Launch the wave with the main button or Y. Towers fire automatically; enemies reaching the exit damage your core.",
-		"Follow the enemies along the route. Watch where towers can reach them. Gear and menus pause the battle so you can inspect safely. During battle, reserve seeds add towers; wrong numbers increase corruption and enemy health. Close this card to let the wave run.",
-		"You cleared the wave and earned credits, fragments and a chest. Open Chests, select a chest and confirm its displayed fragment cost. This practice guarantees enough fragments for one reward. In your own run, fragments come from defeated enemies.",
-		"You placed answers, shaped a route, fitted gear, fought a wave and collected a reward. In a real campaign, credits, modules and number-family levels carry into the next board. You can replay this practice from How to play. Your previous run and its save are preserved.",
-		"Enemies reached the exit before your towers stopped them. Try more coverage along the route and equip modules before launch. You can replay the practice or return to your own run."
-	]
-	for index in [0,2,3,4]: descriptions[index] = host._controller_hint(descriptions[index])
-	if empty_defense:
-		descriptions[3] = "Wrong answers used the remaining Solve time before you planted a tower. You can launch this practice wave and use reserve seeds during battle, or return to your own run. There is no tower to equip yet."
-		descriptions[7] = "You finished this practice wave. Try another practice to plant answers and fit modules before launching. Your previous run and its save are preserved."
-	box.add_child(host.label(descriptions[clampi(step,0,8)],19,host.WHITE))
-	box.add_child(host.label("Practice progress stays separate from your saved run.",14,host.MUTED))
-	var primary: Button
-	if step in [7,8]:
-		primary = host.button("Return to my run" if previous_active else "Choose my own run",finish,true)
-	else:
-		primary = host.button(("Launch wave" if empty_defense else "Open Gear") if step == 3 else ("Open Chests" if step == 6 else "Try it"),continue_step,true)
+	box.add_child(host.label("GUIDED FIRST ROUND",14,host.MINT))
+	box.add_child(host.label(instruction(),23,host.WHITE))
+	if step in [0,1]:
+		box.add_child(host.label("Each row, column and 3×3 box uses the numbers 1–9 once. Every correct answer grows a tower.",16,host.MUTED))
+	box.add_child(host.label("Practice has no solve timer. You can leave at any time.",16,host.MUTED))
+	var primary: Button = host.button("Finish guide" if step in [7,8] else "Back to board",finish if step in [7,8] else continue_step,true)
 	primary.set_meta("focus_id","guide:continue")
 	box.add_child(primary)
-	var skip: Button = host.button("Skip guide / return",finish)
-	skip.set_meta("focus_id","guide:skip")
-	box.add_child(skip)
+	if step not in [7,8]:
+		var skip: Button = host.button("Skip guide / return",finish)
+		skip.set_meta("focus_id","guide:skip")
+		box.add_child(skip)
 	primary.grab_focus()
 
 func continue_step() -> void:
-	if not active: return
-	host._close_overlay()
-	if step == 3:
-		if host.run.towers.is_empty(): host._advance()
-		else: host._toggle_dock("bag")
-	elif step == 6: host._toggle_dock("loot")
-	elif step in [4,5]: host.dock.close_panel()
-	elif step in [0,1] and target_cell >= 0 and host.run.board[target_cell] == 0:
-		host._select(target_cell,false,false)
+	if active and host.menu_open: host._close_overlay()
 
 func restore() -> void:
 	if not active: return
 	active = false
+	if is_instance_valid(marker): marker.hide()
+	for tool: Control in optional_tools() + [host.bag_button, host.loot_button, host.next_button, host.hud_nodes.speed]: tool.show()
+	host.phase_label.show()
+	host.hud_nodes.help.tooltip_text = "How to play / controller controls"
 	host._clear_wrong_guess_feedback()
 	host._close_controller_numbers()
 	host.dock.reset_for_run()
@@ -171,6 +271,7 @@ func restore() -> void:
 	host.has_active_run = previous_active
 	host.game_speed = previous_speed
 	host.manual_pause = previous_pause
+	host.reserve_mode = previous_reserve_mode
 	host.selected_cell = previous_cell
 	host.selected_number = previous_number
 	host.armed_item = ""
@@ -179,10 +280,11 @@ func restore() -> void:
 	host.last_phase = host.run.phase
 	host.save_elapsed = 0
 	previous.clear()
+	host._layout_ui()
 
 func finish() -> void:
 	if not active: return
 	restore()
 	if previous_active: host._close_overlay()
 	else: host._show_menu(true)
-	host._toast("Practice finished. Your own run is unchanged.")
+	host._toast("Practice finished. Welcome back." if previous_active else "Practice finished. Choose your own run.")

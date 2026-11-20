@@ -27,6 +27,13 @@ func make_scene():
 	root.add_child(scene)
 	return scene
 
+func press_option(scene, text: String) -> void:
+	for control in scene.overlay.find_children("*","Button",true,false):
+		if control.text == text:
+			control.pressed.emit()
+			return
+	check(false,"Missing visible option: " + text)
+
 func exercise() -> void:
 	root.size = Vector2i(1280,800)
 	var had_run := FileAccess.file_exists(RUN_PATH)
@@ -36,6 +43,7 @@ func exercise() -> void:
 	var store = Preferences.new()
 	store.file_path = SETTINGS_PATH
 	check(store.read_settings() == Preferences.DEFAULTS,"Missing settings use safe defaults")
+	check(store.validate({"display_mode":2}).display_mode == "borderless" and store.validate({"display_mode":"bad"}).display_mode == "borderless","Invalid display mode falls back to borderless fullscreen")
 	write_text(SETTINGS_PATH,"{truncated settings")
 	check(store.read_settings() == Preferences.DEFAULTS,"Malformed settings use defaults without breaking startup")
 	write_text(SETTINGS_PATH,'{"muted":"false","reduced_motion":true,"board_notes":0,"unrelated":true}')
@@ -51,6 +59,23 @@ func exercise() -> void:
 	check(not FileAccess.file_exists(SETTINGS_PATH + ".tmp"),"Successful save leaves no temporary file")
 	var scene = make_scene()
 	await process_frame
+	press_option(scene,"Settings")
+	check(scene.overlay.get_meta("settings_root","") == "setup" and not scene.has_active_run,"New players can open settings before starting a run")
+	press_option(scene,"Exclusive fullscreen")
+	check(store.read_settings().display_mode == "fullscreen","Fullscreen is saved when chosen")
+	var fullscreen_shortcut := InputEventKey.new()
+	fullscreen_shortcut.keycode = KEY_F11
+	fullscreen_shortcut.pressed = true
+	scene._unhandled_input(fullscreen_shortcut)
+	check(store.read_settings().display_mode == "windowed","Fullscreen shortcut persists the switch back to a window")
+	press_option(scene,"Audio settings")
+	press_option(scene,"Done")
+	check(scene.overlay.get_meta("settings_root","") == "setup","Audio Done returns to the settings panel it was opened from")
+	press_option(scene,"Controller mapping")
+	press_option(scene,"Save and return")
+	check(store.read_settings().display_mode == "windowed","Saving mappings preserves the selected display mode")
+	press_option(scene,"Back")
+	check(not scene.has_active_run and is_instance_valid(scene.seed_input),"Leaving settings returns to run setup")
 	check(not scene.muted and not scene.reduced_motion and scene.board_notes and not scene.auto_open_chests,"First scene starts with documented defaults and opt-in automatic chests")
 	scene.hud_nodes.mute.pressed.emit()
 	check(scene.muted and scene.sound.muted,"Sound button immediately mutes playback")
@@ -64,6 +89,7 @@ func exercise() -> void:
 	scene.hud_nodes.notes.pressed.emit()
 	check(not scene.board_notes and scene.hud_nodes.notes.text.ends_with("OFF"),"Notes button changes and displays its persistent state")
 	expected = Preferences.DEFAULTS.duplicate()
+	expected.display_mode = "windowed"
 	scene._toggle_auto_open_chests()
 	check(scene.auto_open_chests,"Automatic chest opening can be enabled independently of a run")
 	expected.merge({"muted":true,"reduced_motion":true,"board_notes":false,"auto_open_chests":true},true)
@@ -72,6 +98,7 @@ func exercise() -> void:
 	await process_frame
 	scene = make_scene()
 	await process_frame
+	check(scene.display_mode == "windowed","New scene restores saved windowed mode")
 	check(scene.muted and scene.sound.muted,"Fresh launch restores mute to sound playback")
 	check(scene.auto_open_chests,"Fresh launch restores the player's automatic chest preference")
 	check(scene.reduced_motion and scene.world.reduced_motion and scene.dock.reduced_motion,"Fresh launch applies reduced motion before interaction")
@@ -81,6 +108,12 @@ func exercise() -> void:
 			check(art.reduced_motion,"Launch menu art honors saved reduced motion")
 	scene.seed_input.text = "12345"
 	scene._start_run()
+	scene._show_menu(false)
+	press_option(scene,"Settings")
+	check(scene.overlay.get_meta("settings_root","") == "pause","Players can change display settings during a campaign")
+	press_option(scene,"Back")
+	check(scene.has_active_run and scene.menu_open,"Leaving in-run settings keeps simulation paused")
+	press_option(scene,"Resume run")
 	check(scene.muted and scene.reduced_motion and not scene.board_notes and scene.auto_open_chests,"Starting a new run retains player preferences")
 	check(scene.world.reduced_motion and scene.dock.reduced_motion,"Resetting the world retains reduced motion")
 	var event := InputEventKey.new()

@@ -96,8 +96,7 @@ func exercise() -> void:
 	modal_bounds("menu")
 	scene.tutorial.start(scene)
 	await capture("guide-first-answer")
-	modal_bounds("guide")
-	button(scene.overlay,"guide:continue").pressed.emit()
+	check(scene.overlay == null and scene.tutorial.marker.visible,"Guide first step and square are visible on the board")
 	await frames()
 	check(not scene.menu_open,"Guide action exposes the actual board")
 	scene.selected_number = scene.run.solution[scene.selected_cell]
@@ -118,11 +117,11 @@ func exercise() -> void:
 	scene._advance()
 	scene.tutorial.observe()
 	await capture("guide-gear")
-	scene.tutorial.continue_step()
+	scene._select(first)
 	scene.dock._act("equip_item",[first,scene.run.items[0].id])
 	scene.tutorial.observe()
 	await capture("guide-launch")
-	scene.tutorial.continue_step()
+	scene.dock.close_panel()
 	scene._select(first)
 	await frames(75)
 	check(scene.dock.is_open() and scene.dock.current_panel == "tower","Selecting a planted tower opens the family upgrade panel")
@@ -151,7 +150,7 @@ func exercise() -> void:
 	check(scene.run.phase == "loot","Rendered guide fixture clears real wave")
 	scene.tutorial.observe()
 	await capture("guide-reward")
-	scene.tutorial.continue_step()
+	scene.loot_button.pressed.emit()
 	var cheapest: Dictionary = scene.run.chests[0]
 	for chest: Dictionary in scene.run.chests:
 		if int(chest.cost) < int(cheapest.cost): cheapest = chest

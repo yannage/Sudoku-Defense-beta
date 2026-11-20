@@ -65,6 +65,7 @@ var _loot_table: Control
 var reduced_motion: bool = false
 var controller_workshop_cell := -1
 var controller_picker_slot := -1
+var pointer_socket_picker := false
 var controller_context_phase := ""
 var _controller_focus_id := ""
 var _controller_tower: Dictionary = {}
@@ -84,6 +85,7 @@ func validate_controller_context() -> bool:
 
 func cancel_controller_context(refresh_ui: bool = false) -> void:
 	var was_picker := controller_picker_slot >= 0
+	pointer_socket_picker = false
 	controller_workshop_cell = -1
 	controller_picker_slot = -1
 	controller_context_phase = ""
@@ -96,18 +98,29 @@ func cancel_controller_context(refresh_ui: bool = false) -> void:
 		refresh(false)
 		_focus_current.call_deferred()
 
-func open_controller_workshop(cell: int, focus_slot: int = -1) -> void:
-	if not run._gear_phase() or not run.towers.has(cell): return
+func _set_workshop_target(cell: int) -> void:
 	controller_workshop_cell = cell
 	controller_picker_slot = -1
 	controller_context_phase = str(run.phase)
 	_controller_tower = run.towers[cell]
 	_controller_picker_count = -1
+	_armed_id = ""
+
+func open_controller_workshop(cell: int, focus_slot: int = -1) -> void:
+	if not run._gear_phase() or not run.towers.has(cell): return
+	pointer_socket_picker = false
+	_set_workshop_target(cell)
 	var used: int = run.towers[cell].attachments.size()
 	var slot: int = focus_slot if focus_slot >= 0 and focus_slot < 5 else used
 	_controller_focus_id = "slot:%d" % slot if slot < 5 else "close"
-	_armed_id = ""
 	open_panel("tower",cell,true)
+
+func _open_socket_picker(cell: int, slot: int) -> void:
+	if not run._gear_phase() or not run.towers.has(cell): return
+	if not controller_context_active():
+		_set_workshop_target(cell)
+		pointer_socket_picker = true
+	open_controller_picker(slot)
 
 func open_controller_picker(slot: int) -> void:
 	if not validate_controller_context(): return
@@ -121,7 +134,8 @@ func open_controller_picker(slot: int) -> void:
 
 func controller_back() -> bool:
 	if not validate_controller_context(): return false
-	if controller_picker_slot >= 0: open_controller_workshop(controller_workshop_cell,controller_picker_slot)
+	if pointer_socket_picker: open_panel("tower",controller_workshop_cell)
+	elif controller_picker_slot >= 0: open_controller_workshop(controller_workshop_cell,controller_picker_slot)
 	else: close_panel()
 	return true
 
@@ -147,13 +161,18 @@ func _choose_controller_module(item_id: String) -> void:
 		open_controller_workshop(cell)
 		return
 	var result: Dictionary = run.equip_item(cell,item_id)
+	if result.ok:
+		result.message = "%s fitted to tower %d (R%d C%d)." % [Card.effect_name(result.item),run.towers[cell].number,cell / 9 + 1,cell % 9 + 1]
 	_message = str(result.get("message",""))
 	changed.emit(result)
-	if bool(result.get("ok",false)): controller_module_equipped.emit(cell)
+	if bool(result.get("ok",false)):
+		if pointer_socket_picker: open_panel("tower",cell)
+		else: controller_module_equipped.emit(cell)
 
 func _controller_picker_panel(content: VBoxContainer) -> void:
 	_note(content,"Fit a module to tower %d / R%d C%d" % [int(run.towers[controller_workshop_cell].number),controller_workshop_cell/9+1,controller_workshop_cell%9+1],MINT)
-	_note(content,_hint("A equips once. B returns to this tower. LB / RB choose another tower."))
+	if controller_mode and not pointer_socket_picker:
+		_note(content,_hint("A fits a module. B returns to this tower. LB / RB choose another tower."))
 	var back := _button("Back to tower",controller_back,false,false,42,"upgrade:back")
 	content.add_child(back)
 	var available := _controller_modules()
@@ -169,9 +188,10 @@ func _controller_picker_panel(content: VBoxContainer) -> void:
 	for item: Dictionary in available:
 		var id := str(item.id)
 		var card: Button = Card.new()
-		card.configure(item,false,true,true,_recent_item_ids.has(id))
+		card.configure(item,false,controller_mode and not pointer_socket_picker,true,_recent_item_ids.has(id))
 		for text in card.find_children("*","Label",true,false):
 			if text.text == "A SELECT": text.text = _hint("A EQUIP")
+			elif text.text == "DRAG / TAP": text.text = "EQUIP"
 		card.pressed.connect(func(): _choose_controller_module(id))
 		grid.add_child(card)
 
@@ -605,6 +625,13 @@ func _tower_panel(content: VBoxContainer) -> void:
 	_stat(stats_row, "DAMAGE", "%.0f" % float(stats.get("damage", 0)))
 	_stat(stats_row, "FIRE / SEC", "%.1f" % (1.0 / maxf(0.05, float(stats.get("interval", 1)))))
 	_stat(stats_row, "RANGE", "%.1f" % float(stats.get("range", 0)))
+	var attachments: Array = tower.get("attachments", [])
+	_section(content, "MODULE SOCKETS", "%d / 5 fitted" % attachments.size())
+	_socket_strip(content, selected_cell)
+	if attachments.size() == 5: _note(content, "Full. Select a fitted module to return it to Gear.")
+	elif not run.items.any(func(item): return item.type == "attachment"):
+		_note(content, "No spare modules. Open a chest or remove one from another tower.", GOLD)
+	else: _note(content, "Select +, then a module to fit it. Select a fitted module to remove it.")
 	_section(content, "TARGET PRIORITY", "IN RANGE")
 	var priority: String = str(tower.get("target_priority","first"))
 	var target_row := HBoxContainer.new()
@@ -621,11 +648,6 @@ func _tower_panel(content: VBoxContainer) -> void:
 		_selection_style(choice,priority == mode,6)
 		target_row.add_child(choice)
 	_note(content,"First = nearest exit\nStrongest = highest current HP\nNearest = closest to this tower")
-	var attachments: Array = tower.get("attachments", [])
-	_section(content, "MODULE SOCKETS", "%d / 5 used" % attachments.size())
-	_socket_strip(content, selected_cell)
-	_note(content, "Select a module to remove it. Drag another onto a filled slot to swap.")
-	content.add_child(_button("Fit a module", func(): open_panel("bag", selected_cell), false, false, 38, "gear:open"))
 	var cost: int = int(run.upgrade_cost(selected_cell))
 	var cell: int = selected_cell
 	var upgrade_preview: Dictionary = StrategyFeedback.upgrade(run,cell)
@@ -677,11 +699,10 @@ func _socket_strip(content: VBoxContainer, cell: int) -> void:
 			socket.text = "+"
 			socket.add_theme_font_size_override("font_size",22)
 			socket.add_theme_color_override("font_color",MINT if not _armed_id.is_empty() else MUTED)
-			socket.tooltip_text = "Empty slot %d / 5" % (slot+1)
+			socket.tooltip_text = "Choose a module for this tower. %d of 5 sockets free." % (5-attachments.size())
 			socket.pressed.connect(func():
-				if controller_context_active(): open_controller_picker(slot)
-				elif not _armed_id.is_empty(): _act("equip_item",[cell,_armed_id])
-				else: open_panel("bag",cell)
+				if not _armed_id.is_empty(): _act("equip_item",[cell,_armed_id])
+				else: _open_socket_picker(cell,slot)
 			)
 		socket.module_dropped.connect(func(id):
 			if filled: _act("swap_attachment",[cell,slot,id])

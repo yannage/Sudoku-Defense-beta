@@ -102,6 +102,10 @@ func exercise() -> void:
 		scene.muted = true
 		scene.sound.set_muted(true)
 		check_modal("Expedition setup")
+		await click(button_by_text(scene.overlay,"Settings"))
+		check(scene.overlay.get_meta("settings_root","") == "setup" and not scene.has_active_run,"Visible title Settings works before starting a campaign")
+		check_modal("Settings")
+		await click(button_by_text(scene.overlay,"Back"))
 		for prefix in ["Campaign","Free play","Locked in","Start run"]:
 			check(exposed(button_by_text(scene.overlay,prefix)),"Setup exposes "+prefix+" without scrolling")
 		var keypad: Button = button_by_text(scene.overlay,"Keypad")

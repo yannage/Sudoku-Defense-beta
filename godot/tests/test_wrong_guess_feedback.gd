@@ -284,42 +284,17 @@ func exercise_profile_boundaries() -> void:
 	var practice_before: float = scene.run.timer
 	scene._choose_number(wrong)
 	scene._process(0.0)
-	check(scene.run.timer == practice_before-5.0,"Wrong practice guess exercises the ordinary model penalty")
-	check_feedback(cell,5.0)
-	check(profile_bytes() == bytes_before,"Practice penalty leaves all normal save and achievement journal bytes unchanged")
-	scene.tutorial.finish()
-	check(not scene.tutorial.active and JSON.stringify(scene.run.save_data(),"",true,true) == original,"Skipping practice restores the complete normal run and reduced timer")
-	check(feedback._entries.is_empty() and scene.penalty_notice_remaining == 0.0,"Leaving practice cannot paint its wrong-answer feedback onto the restored board")
-	check(profile_bytes() == bytes_before,"Leaving practice preserves the normal journals")
-	# Repeated genuine wrong answers can expire an empty practice board. The
-	# guide must still offer a way into Battle instead of requiring an impossible
-	# module fit when no tower exists. Every guess uses the ordinary input action.
-	scene.tutorial.start(scene)
-	await frames()
-	scene.tutorial.continue_step()
-	cell = scene.tutorial.target_cell
-	wrong = wrong_number(cell)
-	scene._select(cell,false,false)
-	var practice_guesses := 0
-	for attempt in range(200):
-		if scene.run.phase != "solve": break
+	check(scene.run.timer == practice_before and scene.run.phase == "solve","Wrong practice guess keeps the untimed Solve board open")
+	check_feedback(cell,0.0)
+	for attempt in range(4):
 		scene._choose_number(wrong)
 		scene._process(0.0)
-		practice_guesses += 1
-	await frames()
-	check(practice_guesses > 1 and scene.run.phase == "prep" and scene.run.timer == 0.0,"Repeated practice mistakes exhaust Solve and enter Prepare")
-	check(scene.run.towers.is_empty() and scene.tutorial.step == 3,"Expired practice reaches the guide's empty-tower preparation case")
-	check(scene.tutorial.can_advance(),"Empty practice preparation has an escape path without an impossible equip action")
-	check(profile_bytes() == bytes_before,"Repeated practice penalties never write normal run or achievement journals")
-	scene.tutorial.continue_step()
-	scene._process(0.0)
-	await frames()
-	check(scene.tutorial.active and scene.run.phase == "battle" and scene.run.towers.is_empty(),"Guide continuation launches the actual empty-board Battle")
-	check(profile_bytes() == bytes_before,"Launching the empty practice wave preserves normal journal bytes")
+	check(scene.run.phase == "solve" and scene.run.board[cell] == 0,"Repeated practice mistakes leave the square playable")
+	check(profile_bytes() == bytes_before,"Practice mistakes leave normal journals unchanged")
 	scene.tutorial.finish()
-	check(not scene.tutorial.active and JSON.stringify(scene.run.save_data(),"",true,true) == original,"Leaving expired practice restores the exact prior run and timer")
-	check(feedback._entries.is_empty() and scene.penalty_notice_remaining == 0.0,"Leaving expired practice clears its map feedback")
-	check(profile_bytes() == bytes_before,"Expired practice exit preserves normal run and achievement journals")
+	check(not scene.tutorial.active and JSON.stringify(scene.run.save_data(),"",true,true) == original,"Skipping practice restores the exact normal run and timer")
+	check(feedback._entries.is_empty() and scene.penalty_notice_remaining == 0.0,"Leaving practice clears its map feedback")
+	check(profile_bytes() == bytes_before,"Leaving practice preserves the normal journals")
 	# A rejected answer is still a save attempt; failed storage must report it
 	# and retain the in-memory deduction without overwriting the previous save.
 	cell = blank()

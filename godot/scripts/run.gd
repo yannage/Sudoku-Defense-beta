@@ -19,6 +19,7 @@ var phase: String = "solve"
 var round_no: int = 1
 var max_rounds: int = 50
 var mode: String = "campaign"
+var solve_pace := "timed"
 var puzzle_difficulty: String = "easy"
 var combat_difficulty: String = "easy"
 var seed_value: int = 1
@@ -167,12 +168,15 @@ func _read_combat_report(value: Variant) -> Dictionary:
 	return value.duplicate(true)
 
 func retry_options() -> Dictionary:
-	return {"mode":mode,"puzzle_difficulty":_difficulty(_locked_puzzle),"combat_difficulty":_difficulty(_locked_combat)}
+	var options := {"mode":mode,"puzzle_difficulty":_difficulty(_locked_puzzle),"combat_difficulty":_difficulty(_locked_combat)}
+	if solve_pace == "untimed": options.solve_pace = solve_pace
+	return options
 
 func new_run(run_seed: int, options: Dictionary = {}) -> void:
 	seed_value = run_seed
 	rng.seed = run_seed
 	mode = str(options.get("mode", "campaign"))
+	solve_pace = "untimed" if options.get("solve_pace") == "untimed" else "timed"
 	if not ["campaign","freeplay","locked"].has(mode): mode = "campaign"
 	puzzle_difficulty = _difficulty(str(options.get("puzzle_difficulty", options.get("sudokuDifficulty", "easy"))))
 	combat_difficulty = _difficulty(str(options.get("combat_difficulty", options.get("combatDifficulty", "easy"))))
@@ -219,7 +223,7 @@ func _new_board() -> void:
 	givens.assign(puzzle.givens)
 	phase = "solve"
 	solve_duration = float(DIFFICULTIES[puzzle_difficulty].duration)
-	timer = solve_duration
+	timer = solve_duration if solve_pace == "timed" else 0.0
 	towers.clear()
 	enemies.clear()
 	recent_moves.clear()
@@ -276,6 +280,10 @@ func place(cell: int, number: int) -> Dictionary:
 	if phase == "solve" and illegal:
 		AchievementFacts.count(achievement_stats,"wrong_answers")
 		combo = 0
+		if solve_pace == "untimed":
+			var rejection := {"reason":"wrong_answer","cell":cell,"number":number,"text":"Wrong answer. Try another number.","pos":cell_position(cell),"color":Color("ff7289")}
+			_emit("invalid",rejection)
+			return {"ok":false,"message":rejection.text,"reason":"wrong_answer","cell":cell,"number":number}
 		var before: float = timer
 		timer = maxf(0.0,timer-WRONG_GUESS_PENALTY_SECONDS)
 		var penalty: float = before-timer
@@ -366,10 +374,11 @@ func hint(cell: int = -1) -> Dictionary:
 
 func advance_phase() -> Dictionary:
 	if phase == "solve":
+		var expired := solve_pace == "timed" and timer <= 0.000001
 		phase = "prep"
 		timer = 0.0
 		_build_route()
-		_emit("phase", {"phase":phase,"text":"Prepare · equip your towers"})
+		_emit("phase", {"phase":phase,"text":"Prepare · equip your towers","solve_time_expired":expired})
 		return _ok("Equip modules and upgrade towers, then launch the wave.")
 	if phase == "prep":
 		phase = "battle"
@@ -907,6 +916,7 @@ func update(dt: float) -> void:
 func _step(dt: float) -> void:
 	for tower: Dictionary in towers.values(): tower.growth = minf(1.0,float(tower.growth)+dt/0.8)
 	if phase == "solve":
+		if solve_pace == "untimed": return
 		timer = maxf(0.0,timer-dt)
 		if timer <= 0.000001: advance_phase()
 		return
@@ -985,7 +995,7 @@ func _finish_wave() -> void:
 # JSON-safe saves keep the 64-bit RNG state as text, avoiding JSON precision loss.
 func save_data() -> Dictionary:
 	var state: Dictionary = {
-		"phase":phase,"round_no":round_no,"max_rounds":max_rounds,"mode":mode,
+		"phase":phase,"round_no":round_no,"max_rounds":max_rounds,"mode":mode,"solve_pace":solve_pace,
 		"puzzle_difficulty":puzzle_difficulty,"combat_difficulty":combat_difficulty,"seed_value":str(seed_value),
 		"board":board.duplicate(),"solution":solution.duplicate(),"givens":givens.duplicate(),
 		"recent_moves":recent_moves.duplicate(),"credits":credits,"fragments":fragments,"health":health,
@@ -1023,6 +1033,7 @@ func load_data(data: Dictionary) -> bool:
 		if not state.has(key) or float(state[key]) < 0.0 or not is_finite(float(state[key])): return false
 	if not ["solve","prep","battle","loot","won","lost"].has(str(state.get("phase",""))): return false
 	if not ["campaign","freeplay","locked"].has(str(state.get("mode",""))): return false
+	if state.get("solve_pace","timed") not in ["timed","untimed"]: return false
 	if not DIFFICULTIES.has(str(state.get("puzzle_difficulty",""))) or not DIFFICULTIES.has(str(state.get("combat_difficulty",""))): return false
 	if int(state.get("round_no",0)) < 1 or int(state.round_no) > 50: return false
 	if not state.get("passives") is Dictionary or state.route.size()<2: return false
@@ -1052,6 +1063,7 @@ func load_data(data: Dictionary) -> bool:
 	round_no = int(state.round_no)
 	max_rounds = int(state.max_rounds)
 	mode = str(state.mode)
+	solve_pace = state.get("solve_pace","timed")
 	puzzle_difficulty = str(state.puzzle_difficulty)
 	combat_difficulty = str(state.combat_difficulty)
 	seed_value = int(state.seed_value)

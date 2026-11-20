@@ -238,7 +238,7 @@ func _draw() -> void:
 	_draw_island()
 	_flush_faces()
 	_draw_tiles()
-	if _blend > 0.08: _draw_route()
+	if run.phase != "solve" or not run.recent_moves.is_empty(): _draw_route()
 	_draw_selection()
 	_draw_seed_ground()
 	_draw_digits()
@@ -435,20 +435,25 @@ func _draw_route() -> void:
 	if run.route.size() < 2: return
 	var points: PackedVector2Array = PackedVector2Array()
 	for point: Vector2 in run.route: points.append(project_point(_world_pos(point,0.018)))
-	draw_polyline(points,Color(0.02,0.07,0.09,0.45*_blend),maxf(3.0,_scale*0.19),true)
-	draw_polyline(points,Color(Color("e5b271"),0.88*_blend),maxf(1.4,_scale*0.055),true)
+	var plotting: bool = run.phase == "solve"
+	if plotting: draw_polyline(points,Color("ad702f"),maxf(1.5,_scale*0.045),true)
+	else:
+		draw_polyline(points,Color(0.02,0.07,0.09,0.45*_blend),maxf(3.0,_scale*0.19),true)
+		draw_polyline(points,Color(Color("e5b271"),0.88*_blend),maxf(1.4,_scale*0.055),true)
+	var arrow_color := Color("8f511b") if plotting else Color(Color("ffe0a2"),0.80*_blend)
 	for i: int in range(1,run.route.size()):
+		if plotting and i % 2 == 0: continue
 		var a: Vector2 = run.route[i-1]
 		var b: Vector2 = run.route[i]
 		var delta: Vector2 = b-a
-		var steps: int = maxi(1,int(delta.length()/1.4))
+		var steps: int = 1 if plotting else maxi(1,int(delta.length()/1.4))
 		for n: int in range(steps):
 			var p: Vector2 = a.lerp(b,(float(n)+0.5)/float(steps))
 			var forward: Vector2 = delta.normalized()*0.12
 			var side: Vector2 = Vector2(-forward.y,forward.x)*0.65
 			var arrow: PackedVector2Array = PackedVector2Array([project_point(_world_pos(p-forward+side,0.025)),project_point(_world_pos(p+forward,0.025)),project_point(_world_pos(p-forward-side,0.025))])
-			draw_polyline(arrow,Color(Color("ffe0a2"),0.80*_blend),maxf(1.0,_scale*0.025),true)
-	if not reduced_motion:
+			draw_polyline(arrow,arrow_color,maxf(1.0,_scale*0.025),true)
+	if not plotting and not reduced_motion:
 		for i: int in range(3):
 			var point: Vector2 = run.position_on_route(fmod(_clock*1.55+float(i)*float(run.route_length)/3.0,float(run.route_length)))
 			var pixel: Vector2 = project_point(_world_pos(point,0.035))

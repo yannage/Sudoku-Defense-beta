@@ -43,7 +43,7 @@ def bootstrap_extension_cache(project: Path = PROJECT) -> None:
     cache.write_text(existing + separator + extension + "\n", encoding="utf-8", newline="\n")
 
 
-def run(command: list[str], log: Path, expected: str | None = None) -> None:
+def run(command: list[str], log: Path, expected: str | None = None, timeout: int = 180) -> None:
     # UI regressions exercise real save paths. A fresh profile per suite keeps
     # the developer's actual campaign untouched, including journal sidecars.
     command = command.copy()
@@ -58,7 +58,7 @@ def run(command: list[str], log: Path, expected: str | None = None) -> None:
                 folder = Path(profile) / key.lower()
                 folder.mkdir()
                 environment[key] = str(folder)
-        result = subprocess.run(command, cwd=PROJECT, env=environment, text=True, encoding="utf-8", errors="replace", stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=180)
+        result = subprocess.run(command, cwd=PROJECT, env=environment, text=True, encoding="utf-8", errors="replace", stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=timeout)
     log.write_text(result.stdout, encoding="utf-8")
     problems = [line for line in result.stdout.splitlines() if "ERROR:" in line or "Parse Error:" in line]
     if result.returncode or problems or (expected is not None and expected not in result.stdout):
@@ -352,7 +352,9 @@ def main() -> None:
                     raise SystemExit("The render check requires a display or xvfb-run; headless rendering cannot validate pixels.")
                 command = [xvfb, "-a", "-s", "-screen 0 1920x1600x24"] + command
             try:
-                run(command, logs / logfile, expected=marker)
+                # Software-rendered native socket tests exercise over 1,000 assertions.
+                budget = 420 if script == "test_controller_upgrades.gd" and not flag else 180
+                run(command, logs / logfile, expected=marker, timeout=budget)
             except SystemExit as error:
                 # Collect independent render failures and their screenshots in
                 # one CI run, but never export a candidate unless every check passes.

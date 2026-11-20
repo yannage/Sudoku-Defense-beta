@@ -2,8 +2,13 @@ extends RefCounted
 ## Device-local accessibility and presentation choices, independent of run saves.
 
 const Bindings = preload("res://scripts/controller_bindings.gd")
+const DISPLAY_MODES := {
+	"borderless": DisplayServer.WINDOW_MODE_FULLSCREEN,
+	"fullscreen": DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN,
+	"windowed": DisplayServer.WINDOW_MODE_WINDOWED,
+}
 const DEFAULTS := {"muted": false, "reduced_motion": false, "board_notes": true, "auto_open_chests": false,
-	"master_volume": 0.85, "music_volume": 1.0, "effects_volume": 1.0, "controller_bindings": Bindings.DEFAULTS}
+	"master_volume": 0.85, "music_volume": 1.0, "effects_volume": 1.0, "controller_bindings": Bindings.DEFAULTS, "display_mode": "borderless"}
 var file_path := "user://sudoku-defense-settings.json"
 
 func read_settings() -> Dictionary:
@@ -23,8 +28,10 @@ func validate(settings: Dictionary) -> Dictionary:
 		# Legacy boolean settings keep their meaning; strings never become true.
 		if typeof(DEFAULTS[key]) == TYPE_BOOL:
 			if typeof(value) == TYPE_BOOL: validated[key] = value
-		elif typeof(value) in [TYPE_FLOAT, TYPE_INT] and is_finite(float(value)):
+		elif typeof(DEFAULTS[key]) == TYPE_FLOAT and typeof(value) in [TYPE_FLOAT, TYPE_INT] and is_finite(float(value)):
 			validated[key] = clampf(float(value), 0.0, 1.0)
+	if typeof(settings.get("display_mode")) == TYPE_STRING and DISPLAY_MODES.has(settings.display_mode):
+		validated.display_mode = settings.display_mode
 	validated["controller_bindings"] = Bindings.validate(settings.get("controller_bindings"))
 	return validated
 
