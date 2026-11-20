@@ -45,6 +45,14 @@ jobs:
         run: |
           python3 -m unittest discover -s tests -p test_desktop_package.py
           python3 godot/scripts/build_exports.py --render-check
+      - name: Export and test the one-wave demo
+        run: python3 steam/demo/build.py --godot "$GODOT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Sudoku-Defense-Steam-Demo
+          path: release/demo/Sudoku-Defense-Demo-Depot-5670271.zip
+          if-no-files-found: error
+          retention-days: 30
       - uses: actions/upload-artifact@v4
         with:
           name: Sudoku-Defense-Godot-Web
@@ -85,6 +93,26 @@ jobs:
         with:
           name: Sudoku-Defense-Godot-Desktop-and-Source
           path: packages
+      - uses: actions/download-artifact@v4
+        with:
+          name: Sudoku-Defense-Steam-Demo
+          path: demo-package
+      - name: Verify the Steam demo starts on Windows
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $archive = 'demo-package/Sudoku-Defense-Demo-Depot-5670271.zip'
+          Expand-Archive -Path $archive -DestinationPath demo-build
+          $folder = (Resolve-Path demo-build).Path
+          $exe = Join-Path $folder 'SudokuDefenseDemo.exe'
+          $profile = Join-Path $env:RUNNER_TEMP 'sudoku-demo-smoke-profile'
+          New-Item -ItemType Directory -Force -Path $profile | Out-Null
+          $env:APPDATA = $profile
+          $env:LOCALAPPDATA = $profile
+          $app = Start-Process -FilePath $exe -WorkingDirectory $folder -WindowStyle Hidden -ArgumentList @('--headless', '--audio-driver', 'Dummy', '--quit-after', '120', '--log-file', 'demo-smoke.log', '--', '--smoke-test') -Wait -PassThru
+          $log = Get-Content (Join-Path $folder 'demo-smoke.log') -Raw
+          if ($app.ExitCode -ne 0 -or $log -match 'ERROR:|Parse Error:' -or -not $log.Contains('SUDOKU_DEFENSE_DEMO_READY')) { throw "Demo startup failed: $log" }
+          Write-Host "Verified demo depot SHA256 $((Get-FileHash $archive -Algorithm SHA256).Hash)"
       - name: Verify exported Windows startup
         shell: pwsh
         run: |

@@ -478,11 +478,12 @@ func _sync_board(force: bool) -> void:
 			_labels[i].text = str(values[i]) if int(values[i]) > 0 else ""
 		_update_palette(BoardTransition.eased(_morph))
 	var route: Array = run.get("route")
-	var route_signature: String = str(route)
+	var plotting: bool = run.phase == "solve"
+	var route_signature: String = str(route) + str(plotting)
 	if force or route_signature != _route_signature:
 		_route_signature = route_signature
-		_build_route(route)
-	_route_root.visible = _morph > 0.3
+		_build_route(route,plotting)
+	_route_root.visible = not plotting or not run.recent_moves.is_empty()
 
 func _update_palette(blend: float) -> void:
 	if run == null:
@@ -759,7 +760,7 @@ func _build_enemy(enemy: Dictionary) -> Dictionary:
 	node.add_child(bar)
 	return {"node":node, "body":body, "bar":bar}
 
-func _build_route(route: Array) -> void:
+func _build_route(route: Array, plotting: bool) -> void:
 	_route_markers.clear()
 	for child: Node in _route_root.get_children():
 		child.queue_free()
@@ -770,14 +771,16 @@ func _build_route(route: Array) -> void:
 		var b2: Vector2 = route[i + 1]
 		var a: Vector3 = Vector3(a2.x - 4.0, 0.035, a2.y - 4.0)
 		var b: Vector3 = Vector3(b2.x - 4.0, 0.035, b2.y - 4.0)
-		var line: MeshInstance3D = _line_box(_route_root, a, b, 0.055, Color("e3aa67"))
+		var line: MeshInstance3D = _line_box(_route_root, a, b, 0.045 if plotting else 0.055, Color("ad702f") if plotting else Color("e3aa67"))
 		line.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		if i % 2 == 0:
 			var direction: Vector3 = (b - a).normalized()
 			var left: Vector3 = Vector3(direction.z, 0, -direction.x)
 			var center: Vector3 = a.lerp(b, 0.5)
-			_line_box(_route_root, center - direction * 0.10 + left * 0.09, center + direction * 0.04, 0.032, Color("ffdb9a"))
-			_line_box(_route_root, center - direction * 0.10 - left * 0.09, center + direction * 0.04, 0.032, Color("ffdb9a"))
+			var arrow_color := Color("8f511b") if plotting else Color("ffdb9a")
+			_line_box(_route_root, center - direction * 0.10 + left * 0.09, center + direction * 0.04, 0.032, arrow_color)
+			_line_box(_route_root, center - direction * 0.10 - left * 0.09, center + direction * 0.04, 0.032, arrow_color)
+	if plotting: return
 	var start: Vector2 = route[0]
 	var end: Vector2 = route[route.size() - 1]
 	_gate(Vector3(start.x - 4, 0, start.y - 4), Color("f18d85"), false)

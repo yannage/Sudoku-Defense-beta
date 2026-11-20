@@ -24,7 +24,7 @@ func play_event(event: Dictionary) -> void:
 	if str(event.get("type", "")) != "invalid" or str(event.get("reason", "")) != "wrong_answer": return
 	var cell := int(event.get("cell", -1))
 	var lost := float(event.get("time_penalty", 0.0))
-	if cell < 0 or cell >= 81 or lost <= 0.0: return
+	if cell < 0 or cell >= 81: return
 	var attempts := 1
 	# Rapid retries remain one legible receipt. Its count makes the accumulated
 	# loss explicit, rather than claiming one mistake had a larger penalty.
@@ -60,6 +60,7 @@ func _cell_shape(cell: int) -> PackedVector2Array:
 	return PackedVector2Array([center-x-y,center+x-y,center+x+y,center-x+y])
 
 func _receipt(entry: Dictionary) -> String:
+	if float(entry.time_penalty) <= 0.0: return "Try another number"
 	var loss := loss_text(float(entry.time_penalty))
 	return "%s · %d wrong guesses" % [loss,int(entry.attempts)] if int(entry.attempts) > 1 else "%s solve time" % loss
 

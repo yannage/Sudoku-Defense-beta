@@ -34,9 +34,10 @@ func _draw() -> void:
 	var font_size: int = clampi(get_theme_font_size("font_size"),14,22)
 	if compact:
 		draw_string(font,Vector2(12,size.y*0.5+5),title,HORIZONTAL_ALIGNMENT_LEFT,maxf(20,size.x-44),font_size,Palette.TEXT)
-		var bars: int = {"easy":1,"medium":2,"hard":3}.get(symbol,1)
-		for i in range(3):
-			draw_rect(Rect2(size.x-30+i*6, size.y*0.5+7-(i+1)*5,4,(i+1)*5),accent if i<bars else Color("27434b"))
+		var bars: int = {"easy":1,"medium":2,"hard":3}.get(symbol,0)
+		if bars > 0:
+			for i in range(3):
+				draw_rect(Rect2(size.x-30+i*6, size.y*0.5+7-(i+1)*5,4,(i+1)*5),accent if i<bars else Color("27434b"))
 	else:
 		_glyph(Vector2(17,20),accent)
 		draw_string(font,Vector2(12,47),title,HORIZONTAL_ALIGNMENT_LEFT,size.x-22,font_size,Palette.TEXT)

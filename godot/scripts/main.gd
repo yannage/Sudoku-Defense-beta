@@ -51,6 +51,7 @@ var muted := false
 var master_volume := 0.85
 var music_volume := 1.0
 var effects_volume := 1.0
+var display_mode := "borderless"
 var reduced_motion := false
 var board_notes := true
 var auto_open_chests := false
@@ -80,6 +81,7 @@ var feedback_ui = FeedbackUIScript.new()
 const ControllerBindings = preload("res://scripts/controller_bindings.gd")
 var _bindings_draft: Dictionary = {}
 var _binding_target := ""
+var _binding_settings_return := ""
 var _binding_message := ""
 var controller_cursor
 var tower_aim
@@ -113,6 +115,7 @@ var phase_badges: Array[Label] = []
 var mode_choice := "campaign"
 var puzzle_choice := "easy"
 var combat_choice := "easy"
+var pace_choice := "timed"
 var seed_input: LineEdit
 var hud_nodes: Dictionary = {}
 var portrait_layout := false
@@ -149,6 +152,10 @@ func _ready() -> void:
 	master_volume = settings.master_volume
 	music_volume = settings.music_volume
 	effects_volume = settings.effects_volume
+	display_mode = settings.display_mode
+	# Only the standalone game owns the host window's launch mode.
+	if get_tree().current_scene == self:
+		_apply_display_mode()
 	reduced_motion = settings.reduced_motion
 	board_notes = settings.board_notes
 	auto_open_chests = settings.auto_open_chests
@@ -655,7 +662,7 @@ func _update_context_visibility() -> void:
 func _refresh_portrait_text() -> void:
 	phase_label.text = "ROUND %02d / %02d" % [run.round_no,run.max_rounds]
 	match run.phase:
-		"solve": phase_detail.text = "SOLVE  %02d:%02d" % [int(run.timer)/60,int(run.timer)%60]
+		"solve": phase_detail.text = "UNTIMED SOLVE" if run.solve_pace == "untimed" else "SOLVE  %02d:%02d" % [int(run.timer)/60,int(run.timer)%60]
 		"prep": phase_detail.text = "PREPARE"
 		"battle": phase_detail.text = "CLEANUP 8x · %d left" % _wave_enemies_remaining() if cleanup_fast else "DEFEND · %d %s left" % [_wave_enemies_remaining(),"enemy" if _wave_enemies_remaining() == 1 else "enemies"]
 		"loot": phase_detail.text = "LOOT"
@@ -733,6 +740,8 @@ func _process(dt: float) -> void:
 		world.play_event(event)
 		sound.play_event(event)
 		wrong_guess_feedback.play_event(event)
+		if event.get("solve_time_expired",false) and not save_failed and not achievement_save_failed:
+			_toast("Time's up. Equip your towers, then launch the wave." if not run.towers.is_empty() else "Time's up. Launch the wave and use Reserve seeds to plant.")
 		if str(event.get("type", "")) == "loot": gear_feedback.chest_recovered(event)
 	tutorial.observe()
 	if notice_time > 0:
@@ -811,6 +820,9 @@ func _refresh() -> void:
 	if _controller_number_cell >= 0 and (not _number_placement_allowed() or run.phase != _controller_number_phase or selected_cell != _controller_number_cell or run.board[_controller_number_cell] != 0):
 		_close_controller_numbers()
 	hud_nodes.notes.text = "Notes  ON" if board_notes else "Notes  OFF"
+	hud_nodes.pause.text = "Resume" if manual_pause else "Pause"
+	hud_nodes.notes.disabled = run.phase != "solve" and not reserve_mode
+	hud_nodes.hint.disabled = run.phase != "solve" or run.credits < 6 or not run.board.has(0) or manual_pause or dock.is_open()
 	hud_nodes.speed.text = "%dx" % (8 if cleanup_fast else int(game_speed))
 	hud_nodes.speed.tooltip_text = "Fast-forward: all enemies and towers run at 8x. Y / Enter or Stop fast-forward returns to %dx. Core hits and opening controls stop it." % int(game_speed) if cleanup_fast else "Battle speed: 1x / 2x / 4x. Sudoku time stays normal."
 	resources.text = "CORE %d/%d   CREDITS %d   FRAGMENTS %d" % [int(run.health),int(run.max_health),run.credits,run.fragments]
@@ -818,14 +830,16 @@ func _refresh() -> void:
 	for i in range(4): phase_badges[i].modulate = MINT if run.phase == phases[i] else Color("647d85")
 	phase_label.text = "ROUND %02d / %02d" % [run.round_no,run.max_rounds]
 	var count: int = run.towers.size()
+	progress.visible = run.phase != "solve" or run.solve_pace == "timed"
 	match run.phase:
 		"solve":
-			phase_detail.text = "PLANT YOUR DEFENSE\n\n%d %s grown\n%02d:%02d remaining" % [count,"tower" if count == 1 else "towers",int(run.timer)/60,int(run.timer)%60]
+			var clock_text := "Untimed · prepare when ready" if run.solve_pace == "untimed" else "%02d:%02d until Prepare" % [int(run.timer)/60,int(run.timer)%60]
+			phase_detail.text = "PLANT YOUR DEFENSE\n\n%d %s grown\n%s" % [count,"tower" if count == 1 else "towers",clock_text]
 			progress.value = 100.0*run.timer/maxf(1,run.solve_duration)
 			next_button.text = "Prepare defense"
 		"prep":
 			var forecast: Dictionary = run.wave_forecast()
-			phase_detail.text = "%d ENEMIES NEXT\n%s" % [int(forecast.count),"BOSS IN THIS WAVE" if bool(forecast.boss) else "Choose tower targets."]
+			phase_detail.text = "%d INCOMING%s\nRoute locked · fit gear" % [int(forecast.count)," · BOSS" if bool(forecast.boss) else ""]
 			progress.value = 100
 			next_button.text = "Launch wave"
 		"battle":
@@ -851,7 +865,7 @@ func _refresh() -> void:
 		hud_nodes.intel.text = ("%d incoming%s\nWave intel" % [int(forecast.count)," · BOSS" if bool(forecast.boss) else ""]) if portrait_layout else "Wave intel"
 		hud_nodes.intel.add_theme_color_override("font_color",AMBER if bool(forecast.boss) else WHITE)
 	reserve_button.text = "Seed %d  +1  ·  6" % selected_number if selected_number>0 else "Buy seed 1  ·  6"
-	reserve_button.disabled = run.credits<6
+	reserve_button.disabled = run.credits < 6 or run.phase in ["won","lost"]
 	bag_button.text = _controller_hint("X Gear") if controller_used else "Gear"
 	loot_button.text = "Chests"
 	loot_button.tooltip_text = _controller_hint("%d unopened - use fragments to open. Start / Menu: Chests." % run.chests.size())
@@ -881,7 +895,7 @@ func _refresh() -> void:
 		b.tooltip_text = "9 / 9 complete. Tap to highlight. %d emergency reserves for battle." % run.inventory[i+1] if complete else "%d / 9 placed. Tap a square, then %d — or drag %d onto the grid. %d emergency reserves." % [correct_counts[i+1],i+1,i+1,run.inventory[i+1]]
 		# Completed families remain selectable for matching-number highlights,
 		# and their reserve seeds still work during the defense phase.
-		b.disabled = not _number_input_allowed()
+		b.disabled = not _number_input_allowed() or (run.phase == "battle" and run.inventory[i+1] <= 0)
 		b.focus_mode = Control.FOCUS_ALL if _controller_number_cell >= 0 else Control.FOCUS_NONE
 		b.add_theme_color_override("font_color",tint)
 		b.add_theme_color_override("font_hover_color",tint.lightened(0.15))
@@ -889,6 +903,17 @@ func _refresh() -> void:
 		var selected_bg: Color = Color("253740") if complete else Color("315950")
 		b.add_theme_stylebox_override("normal",style(selected_bg if selected_number==i+1 else PANEL, tint if selected_number==i+1 else Color("35505a")))
 	if portrait_layout: _refresh_portrait_text()
+	if run.phase in ["prep","battle","loot","won","lost"] and not reserve_mode and _controller_number_cell < 0 and not run.towers.has(selected_cell):
+		match run.phase:
+			"prep":
+				selected_label.text = "PREPARE YOUR DEFENSE"
+				candidate_label.text = "Select a tower to fit a module." if count > 0 else "Launch, then use Reserve seeds to plant."
+			"battle":
+				selected_label.text = "DEFEND THE CORE"
+				candidate_label.text = "Use Reserve seeds to plant during the wave."
+			_:
+				selected_label.text = "WAVE COMPLETE" if run.phase != "lost" else "CORE DESTROYED"
+				candidate_label.text = "Open Chests to collect gear." if run.phase == "loot" else "Open Run results to continue."
 	_refresh_strategy_preview()
 	controls_label.text = "D-PAD grid   A choose   LB/RB number   X gear   Start menu" if controller_used else "TAP / DRAG to plant   RIGHT-DRAG / Q E rotate   HOME reset   ESC menu"
 	if controller_used and _tower_navigation_active(): controls_label.text = "LS aim / release to select   A customize   LB/RB tower   X gear"
@@ -980,17 +1005,17 @@ func _number_complete(number: int) -> bool:
 	return number >= 1 and number <= 9 and _number_correct_counts()[number] == 9
 
 func _number_input_allowed() -> bool:
-	return not _background_active() and has_active_run and not menu_open and not manual_pause and not camera_mode and armed_item.is_empty() and run.phase in ["solve","prep","battle","loot"]
+	return not _background_active() and has_active_run and not menu_open and not manual_pause and not camera_mode and not dock.is_open() and armed_item.is_empty() and run.phase in ["solve","battle"]
 
 func _number_placement_allowed() -> bool:
-	return _number_input_allowed() and not dock.is_open() and run.phase in ["solve","battle"]
+	return _number_input_allowed()
 
 func _pointer_activity(pointer_owner: int = -2) -> void:
 	if controller_cursor != null and controller_cursor.is_dispatching(): return
 	if tower_aim != null and tower_aim._stick_active: tower_aim.cancel()
 	# Clear targeting immediately, but retain the pressed Control until release.
 	# The normal pointer handoff below rebuilds the sheet after the gesture.
-	if dock != null and dock.controller_workshop_cell >= 0: dock.cancel_controller_context()
+	if dock != null and dock.controller_workshop_cell >= 0 and not dock.pointer_socket_picker: dock.cancel_controller_context()
 	_close_controller_numbers()
 	if _controller_pointer_active(): controller_cursor.deactivate()
 	if pointer_owner == -2 and _pointer_hint_owner != -2: _finish_pointer_activity.call_deferred()
@@ -1015,6 +1040,8 @@ func _tap_board(cell: int) -> void:
 	if camera_mode or menu_open or manual_pause or (seed_pointer != null and seed_pointer.is_active()): return
 	# Pointer taps choose an empty square; only a number tap/drop commits it.
 	# Controller A has a separate board -> number tray -> board focus flow.
+	if cell >= 0 and cell < run.board.size() and run.phase == "solve" and run.board[cell] == 0 and dock.is_open() and dock.current_panel == "tower" and armed_item.is_empty():
+		dock.close_panel()
 	_select(cell,run.towers.has(cell),true)
 
 func _drop_number(cell: int, number: int) -> void:
@@ -1303,7 +1330,7 @@ func _action(result: Dictionary) -> void:
 	# A rejected Solve guess changes durable progress. Use the existing guarded
 	# save path, including practice exclusion and unresolved-profile protection.
 	if str(result.get("reason","")) == "wrong_answer":
-		penalty_notice_remaining = 2.0
+		penalty_notice_remaining = 2.0 if result.has("time_penalty") else 0.0
 		_save()
 	if result.get("ok",false):
 		_save()
@@ -1311,6 +1338,7 @@ func _action(result: Dictionary) -> void:
 			armed_item = ""
 			dock.clear_armed()
 	dock.refresh()
+	if tutorial.active: tutorial.observe()
 	_refresh()
 
 func _advance() -> void:
@@ -1385,9 +1413,55 @@ func _maybe_auto_open_chests() -> void:
 	dock._loot_table.present_rewards(result)
 
 func _save_preferences() -> void:
-	if not preferences.write_settings({"muted": muted, "reduced_motion": reduced_motion, "board_notes": board_notes, "auto_open_chests": auto_open_chests,
-		"master_volume": master_volume, "music_volume": music_volume, "effects_volume": effects_volume, "controller_bindings": controller.bindings}):
+	if not preferences.write_settings(_current_preferences(controller.bindings)):
 		_toast("Settings apply now, but could not be saved on this device.",false)
+
+func _current_preferences(bindings: Dictionary) -> Dictionary:
+	return {"muted": muted, "reduced_motion": reduced_motion, "board_notes": board_notes, "auto_open_chests": auto_open_chests,
+		"master_volume": master_volume, "music_volume": music_volume, "effects_volume": effects_volume,
+		"controller_bindings": bindings, "display_mode": display_mode}
+
+func _desktop_display() -> bool:
+	return OS.has_feature("windows") or OS.has_feature("linux") or OS.has_feature("macos")
+
+func _apply_display_mode() -> void:
+	if _desktop_display() and DisplayServer.get_name() != "headless":
+		DisplayServer.window_set_mode(PreferencesScript.DISPLAY_MODES[display_mode])
+
+func _set_display_mode(mode: String) -> void:
+	display_mode = mode
+	_apply_display_mode()
+	_save_preferences()
+	if is_instance_valid(overlay) and overlay.has_meta("settings_root"):
+		for option in overlay.find_children("*","Button",true,false):
+			if option.has_meta("display_mode"):
+				option.set_pressed_no_signal(option.get_meta("display_mode") == display_mode)
+
+func _show_settings(from_setup: bool) -> void:
+	var box := _modal(600,640)
+	var origin := "setup" if from_setup else "pause"
+	overlay.set_meta("settings_root",origin)
+	box.add_child(label("Settings",28,WHITE))
+	var back := button("Back",_close_overlay)
+	box.add_child(back)
+	if _desktop_display():
+		box.add_child(label("DISPLAY MODE",14,MINT))
+		var group := ButtonGroup.new()
+		var names := {"borderless":"Borderless fullscreen","fullscreen":"Exclusive fullscreen","windowed":"Windowed"}
+		for mode: String in names:
+			var option := CheckBox.new()
+			option.text = names[mode]
+			option.add_theme_font_size_override("font_size",17)
+			UISkin.button(option)
+			option.button_group = group
+			option.set_meta("display_mode",mode)
+			option.button_pressed = mode == display_mode
+			option.pressed.connect(_set_display_mode.bind(mode))
+			box.add_child(option)
+	box.add_child(button("Audio settings",_show_audio_settings.bind(origin)))
+	box.add_child(button("Controller mapping",_show_controller_settings.bind(origin)))
+	_add_preference_buttons(box)
+	back.grab_focus()
 
 func _set_audio_level(channel: String, value: float) -> void:
 	value = clampf(snappedf(value, 0.05), 0.0, 1.0)
@@ -1400,7 +1474,8 @@ func _set_audio_level(channel: String, value: float) -> void:
 func _audio_level(channel: String) -> float:
 	return master_volume if channel == "master" else (music_volume if channel == "music" else effects_volume)
 
-func _show_controller_settings() -> void:
+func _show_controller_settings(settings_return: String = "") -> void:
+	_binding_settings_return = settings_return
 	_bindings_draft = controller.bindings.duplicate()
 	_binding_target = ""
 	_binding_message = "Changes apply only after Save. Already assigned inputs swap actions."
@@ -1409,6 +1484,7 @@ func _show_controller_settings() -> void:
 func _render_controller_settings(focus_action: String = "") -> void:
 	var box := _modal(690,690)
 	overlay.set_meta("controller_settings",true)
+	overlay.set_meta("settings_return",_binding_settings_return)
 	controller.set_settings_mode(true)
 	box.add_child(label("CONTROLLER MAPPING",25,MINT))
 	var note := label("In this panel: D-pad / left stick to navigate, A to choose, B / Start or Escape to leave. These controls stay fixed.\nRight stick and D-pad axes are fixed; mappings below apply to gameplay and other menus.",15,MUTED)
@@ -1443,6 +1519,7 @@ func _capture_controller_binding(action: String) -> void:
 	# _modal cancels any prior input mode; this new panel owns all capture input.
 	_binding_target = action
 	overlay.set_meta("controller_settings",true)
+	overlay.set_meta("settings_return",_binding_settings_return)
 	controller.set_settings_mode(true)
 	box.add_child(label("PRESS AN INPUT",25,MINT))
 	var prompt := label("Assign " + ControllerBindings.TITLES[action] + ".\nPress a face button, shoulder, stick click, View, Start or trigger. B and Start can be assigned here.\nD-pad Left, Escape or the Cancel button below cancels. Stick movement and other D-pad directions are ignored.",16,WHITE)
@@ -1473,10 +1550,7 @@ func _resume_controller_settings(action: String) -> void:
 		_render_controller_settings(action)
 
 func _save_controller_settings() -> void:
-	var data := {"muted":muted,"reduced_motion":reduced_motion,"board_notes":board_notes,"auto_open_chests":auto_open_chests,
-		"master_volume":master_volume,"music_volume":music_volume,"effects_volume":effects_volume,
-		"controller_bindings":_bindings_draft}
-	if not preferences.write_settings(data):
+	if not preferences.write_settings(_current_preferences(_bindings_draft)):
 		_binding_message = "Could not save. Your previous mapping is still active. Retry Save or Cancel."
 		_render_controller_settings()
 		return
@@ -1498,9 +1572,10 @@ func _controller_hint(text: String) -> String:
 		offset = match_result.get_end()
 	return result + text.substr(offset)
 
-func _show_audio_settings() -> void:
+func _show_audio_settings(settings_return: String = "") -> void:
 	var box := _modal(540,568)
 	overlay.set_meta("audio_settings",true)
+	overlay.set_meta("settings_return",settings_return)
 	box.add_child(label("AUDIO",26,MINT))
 	box.add_child(label("Changes are saved on this device.",15,MUTED))
 	var first_control: Button
@@ -1671,9 +1746,9 @@ func _start_run() -> void:
 	if tutorial.active: tutorial.restore()
 	_cancel_camera_controls()
 	var input_seed: String = seed_input.text.strip_edges() if seed_input else ""
-	var chosen_seed: int = input_seed.to_int() if input_seed.is_valid_int() else int(Time.get_unix_time_from_system())%2147483647
+	var chosen_seed: int = input_seed.to_int() if input_seed.is_valid_int() else randi_range(1,2147483646)
 	has_active_run = true
-	run.new_run(chosen_seed,{"mode":mode_choice,"puzzle_difficulty":puzzle_choice,"combat_difficulty":combat_choice,"achievement_run_id":_new_achievement_run_id()})
+	run.new_run(chosen_seed,{"mode":mode_choice,"puzzle_difficulty":puzzle_choice,"combat_difficulty":combat_choice,"solve_pace":pace_choice,"achievement_run_id":_new_achievement_run_id()})
 	_clear_wrong_guess_feedback()
 	selected_cell = -1
 	selected_number = 0
@@ -1685,12 +1760,18 @@ func _start_run() -> void:
 	world.set_selected(-1,0)
 	_close_overlay()
 	last_phase = run.phase
-	if _save(): _toast("Plant 6-8 correct answers, then prepare your defense.")
+	if _save(): _toast("Each correct answer grows a tower. Choose Prepare defense when you're ready.")
 
 func _close_overlay() -> void:
 	if controller != null and controller.settings_mode:
 		_binding_target = ""
 		controller.set_settings_mode(false)
+	if is_instance_valid(overlay) and overlay.has_meta("settings_root"):
+		_show_menu(overlay.get_meta("settings_root") == "setup")
+		return
+	if is_instance_valid(overlay) and not str(overlay.get_meta("settings_return","")).is_empty():
+		_show_settings(overlay.get_meta("settings_return") == "setup")
+		return
 	if is_instance_valid(overlay) and overlay.get_meta("feedback_panel",false):
 		feedback_ui.back()
 		return
@@ -1772,6 +1853,8 @@ func _choice_row(box: VBoxContainer, title: String, values: Array, current: Stri
 		var id: String = str(value[0])
 		var b: Button = MenuChoice.new()
 		b.configure(str(value[1]),str(descriptions.get(id,"")),id,current == id,not descriptions.has(id))
+		if id == "timed": b.tooltip_text = "The clock ends Solve. Wrong answers cost up to 5 seconds."
+		elif id == "untimed": b.tooltip_text = "Take as long as you like. Choose Prepare defense to finish solving."
 		if descriptions.has(id):
 			b.tooltip_text = str({"campaign":"50 rounds. Choose Sudoku and siege difficulty before each round.", "freeplay":"One Sudoku board and one wave. Choose both difficulties at the start.", "locked":"50 rounds. Keep the same Sudoku and siege difficulties for the whole run."}[id])
 		row.add_child(b)
@@ -1821,12 +1904,29 @@ func _show_menu(initial: bool = false) -> void:
 	setup.add_theme_constant_override("separation",10)
 	columns.add_child(setup)
 	setup.add_child(label("NEW RUN",11,MINT))
-	setup.add_child(label("SUDOKU DEFENSE",34,WHITE))
+	var title_row := HBoxContainer.new()
+	setup.add_child(title_row)
+	var title := label("SUDOKU DEFENSE",34,WHITE)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_row.add_child(title)
+	title_row.add_child(button("Settings",_show_settings.bind(true)))
 	setup.add_child(label("Plant answers. Grow firepower.",17,AMBER))
+	var first_visit: bool = not has_active_run and not run_save.has_save() and not tutorial.played_this_session
+	var guide := button("Guided first round",func(): tutorial.start(self),first_visit)
+	guide.set_meta("focus_id","guide:start")
+	guide.tooltip_text = "Learn on a practice board at your own pace."
+	var start := button("Start run",_start_run,not first_visit)
+	var play := HBoxContainer.new()
+	play.add_theme_constant_override("separation",8)
+	setup.add_child(play)
+	for action: Button in ([guide,start] if first_visit else [start,guide]):
+		action.set_meta("menu_height",52)
+		action.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		play.add_child(action)
 	_choice_row(setup,"01  GAME MODE",[["campaign","Campaign / 50"],["freeplay","Free play / 1"],["locked","Locked in / 50"]],mode_choice,func(v): mode_choice=v)
 	_choice_row(setup,"02  SUDOKU DIFFICULTY",[["easy","Easy"],["medium","Medium"],["hard","Hard"]],puzzle_choice,func(v): puzzle_choice=v)
 	_choice_row(setup,"03  SIEGE DIFFICULTY",[["easy","Easy"],["medium","Medium"],["hard","Hard"]],combat_choice,func(v): combat_choice=v)
-	setup.add_child(label("Harder puzzles have fewer clues and more room for towers.",12,MUTED))
+	_choice_row(setup,"SOLVE CLOCK",[["timed","Timed"],["untimed","Untimed"]],pace_choice,func(v): pace_choice=v)
 	# A separate label and a bounded input row prevent the seed label from
 	# wrapping letter-by-letter when a controller keypad is present.
 	setup.add_child(label("RUN SEED  /  OPTIONAL",11,MUTED))
@@ -1850,12 +1950,6 @@ func _show_menu(initial: bool = false) -> void:
 	keypad.set_meta("menu_keypad",true)
 	keypad.custom_minimum_size.x = 88
 	seed_row.add_child(keypad)
-	var start := button("Start run",_start_run,true)
-	start.set_meta("menu_height",52)
-	setup.add_child(start)
-	var guide := button("Guided first round",func(): tutorial.start(self))
-	guide.set_meta("focus_id","guide:start")
-	setup.add_child(guide)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation",8)
 	setup.add_child(row)
@@ -1884,10 +1978,9 @@ func _show_menu(initial: bool = false) -> void:
 		var item := button(str(action[0]),action[1])
 		item.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		platform_row.add_child(item)
-	setup.add_child(button("Controller mapping",_show_controller_settings))
 	setup.add_child(button("Feedback / report a bug",feedback_ui.show_panel))
 	if not OS.has_feature("web"): setup.add_child(button("Quit game",_request_quit))
-	start.grab_focus()
+	(guide if first_visit else start).grab_focus()
 
 func _show_pause_menu() -> void:
 	var box := _modal(780,620)
@@ -1904,7 +1997,7 @@ func _show_pause_menu() -> void:
 	actions.add_child(label("RUN PAUSED",11,MINT))
 	actions.add_child(label("Paused",32,WHITE))
 	actions.add_child(label("ROUND %02d / %02d  ·  %s" % [run.round_no,run.max_rounds,str({"solve":"Solve", "prep":"Prepare", "battle":"Defend", "loot":"Loot", "won":"Victory", "lost":"Defeat"}.get(run.phase,run.phase)).to_upper()],13,AMBER))
-	actions.add_child(label("Latest progress is NOT saved." if save_failed or achievement_save_failed else "Your progress is saved on this device.",13,AMBER if save_failed or achievement_save_failed else MUTED))
+	actions.add_child(label("Practice progress lasts for this session." if tutorial.active else ("Latest progress is NOT saved." if save_failed or achievement_save_failed else "Your progress is saved on this device."),13,AMBER if save_failed or achievement_save_failed else MUTED))
 	if save_failed or achievement_save_failed:
 		actions.add_child(button("Return and retry saving" if tutorial.active else "Retry saving",_retry_save_from_menu,true))
 	var resume := button("Resume run",_close_overlay,true)
@@ -1915,14 +2008,13 @@ func _show_pause_menu() -> void:
 		var intel := button("Wave intel",_show_wave_intel)
 		intel.set_meta("focus_id","wave:intel")
 		actions.add_child(intel)
+	actions.add_child(button("Settings",_show_settings.bind(false)))
 	actions.add_child(button("Manage gear",func(): _open_management("bag")))
 	actions.add_child(button("Chests / Open all",func(): _open_management("loot")))
 	actions.add_child(button("Camp / Salvage slots",func(): _open_management("camp")))
 	if run.phase == "battle":
 		actions.add_child(button("Finish reserve planting" if reserve_mode else "Plant reserve seeds",func(): _close_overlay(); _toggle_reserve_mode()))
-	actions.add_child(button("Settings / How to play",_help))
-	actions.add_child(button("Audio settings",_show_audio_settings))
-	actions.add_child(button("Controller mapping",_show_controller_settings))
+	actions.add_child(button("How to play",_help))
 	actions.add_child(button("Feedback / report a bug",feedback_ui.show_panel))
 	actions.add_child(button("Achievements",platform_ui.show_achievements))
 	actions.add_child(button("Saves & Steam",platform_ui.show_saves))
@@ -1991,8 +2083,8 @@ func _help() -> void:
 	box.add_child(button("Controller mapping",_show_controller_settings))
 	box.add_child(button("Feedback / report a bug",feedback_ui.show_panel))
 	for text in [
-		"01  SOLVE  ·  Fill each row, column and 3x3 box with 1-9. Tap a square, then a number, or drag a number onto the board. Correct answers grow towers. Wrong answers cost 5 seconds. At zero, preparation begins. You may move on early.",
-		"02  PREPARE  ·  Read Wave intel before launching. Select a tower, open Gear, select modules and Install selected. Each tower has five slots. Slow and Range filters help plan your build. Modules return to Gear on each new board; equip your new towers before launching. Menus pause the game.",
+		"01  SOLVE  ·  Each row, column and 3×3 box uses 1–9 once. Tap an empty square, then its number to grow a tower. Choose Prepare defense when ready. Timed runs also advance when the clock expires, and a wrong answer costs up to 5 seconds. Untimed runs give you as long as you want.",
+		"02  PREPARE  ·  The gold path locks when Solve ends. Select a tower, choose + and pick a module. All five sockets are available. Wave intel shows what is coming. Launch when ready. Modules return to Gear each new board.",
 		"03  DEFEND  ·  Your recent answers shape the route before battle. During the wave, use reserve seeds to add towers. Wrong numbers are allowed, but add corruption: later enemies have more health, and those towers disappear after the wave.",
 		"04  LOOT  ·  Open all affordable chests together, or enable automatic opening below. Both use the same fragment costs. Camp offers salvage slots and upgrades between rounds. Credits, gear and number upgrades carry over."
 	]:
@@ -2009,6 +2101,18 @@ Controller: press L3, use the right stick, R3 to reset, B to finish."),15,MUTED)
 	var input_label := label(ControllerBindings.help_text(controller.bindings),15,MUTED)
 	box.add_child(input_label)
 	box.add_child(label(_controller_hint("Tower modules: A on a tower focuses its first empty + socket. A opens available modules; A fits one and returns to this tower. B returns one step.\nLeft stick: aim at a highlighted tower, then release to select once. D-pad steps between towers. Mouse / trackpad: point to preview, click toward a tower to select, or click it directly to customize. LB / RB cycle towers; solving keeps number selection. Gear: A selects modules; Y installs the selection on this tower. Start opens Gear, Chests and Camp."),15,MUTED))
+	_add_preference_buttons(box)
+	var speed := button("Battle speed: %dx" % int(game_speed),_cycle_speed)
+	speed.pressed.connect(func(): speed.text = "Battle speed: %dx" % int(game_speed))
+	box.add_child(speed)
+	box.add_child(label(_controller_hint("Long waves: after 45 battle seconds and the final spawn, Fast-forward 8x becomes available. Tap it or press Y / Enter. It speeds up enemies too. Press again or B to stop. Core hits, menus and tower inspection return to your normal speed; it never carries into the next wave."),15,MUTED))
+	if has_active_run and run.phase == "solve" and run.credits >= 6 and selected_cell >= 0 and run.board[selected_cell] == 0:
+		box.add_child(button("Reveal selected square · 6 credits",func(): _action(run.hint(selected_cell)); _close_overlay()))
+	box.add_child(label("Version " + str(ProjectSettings.get_setting("application/config/version")),11,MUTED))
+	box.add_child(button("Got it",_close_overlay,true))
+	back.grab_focus()
+
+func _add_preference_buttons(box: VBoxContainer) -> void:
 	var reduce := button("Reduced motion: " + ("ON" if reduced_motion else "OFF"),_toggle_reduced_motion)
 	reduce.pressed.connect(func(): reduce.text = "Reduced motion: " + ("ON" if reduced_motion else "OFF"))
 	box.add_child(reduce)
@@ -2024,15 +2128,6 @@ Controller: press L3, use the right stick, R3 to reset, B to finish."),15,MUTED)
 	var auto_note := label("Uses fragments at the normal cost. Opens together after combat or when you finish your current menu action.",14,MUTED)
 	auto_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(auto_note)
-	var speed := button("Battle speed: %dx" % int(game_speed),_cycle_speed)
-	speed.pressed.connect(func(): speed.text = "Battle speed: %dx" % int(game_speed))
-	box.add_child(speed)
-	box.add_child(label(_controller_hint("Long waves: after 45 battle seconds and the final spawn, Fast-forward 8x becomes available. Tap it or press Y / Enter. It speeds up enemies too. Press again or B to stop. Core hits, menus and tower inspection return to your normal speed; it never carries into the next wave."),15,MUTED))
-	if has_active_run and selected_cell >= 0 and not run.givens[selected_cell] and not run.towers.has(selected_cell):
-		box.add_child(button("Reveal selected square · 6 credits",func(): _action(run.hint(selected_cell)); _close_overlay()))
-	box.add_child(label("Version " + str(ProjectSettings.get_setting("application/config/version")),11,MUTED))
-	box.add_child(button("Got it",_close_overlay,true))
-	back.grab_focus()
 
 func _show_next_round() -> void:
 	puzzle_choice = run.puzzle_difficulty
@@ -2101,6 +2196,7 @@ func _retry_same_seed() -> void:
 	run.new_run(retry_seed,options)
 	_clear_wrong_guess_feedback()
 	mode_choice = str(options.mode)
+	pace_choice = str(options.get("solve_pace","timed"))
 	puzzle_choice = str(options.puzzle_difficulty)
 	combat_choice = str(options.combat_difficulty)
 	has_active_run = true
@@ -2129,8 +2225,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			_reset_camera_view()
 			get_viewport().set_input_as_handled()
 			return
-		if event.keycode == KEY_F:
-			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if DisplayServer.window_get_mode()==DisplayServer.WINDOW_MODE_FULLSCREEN else DisplayServer.WINDOW_MODE_FULLSCREEN)
+		if event.keycode in [KEY_F, KEY_F11]:
+			if _desktop_display():
+				_set_display_mode("borderless" if display_mode == "windowed" else "windowed")
+			elif OS.has_feature("web"):
+				DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN else DisplayServer.WINDOW_MODE_FULLSCREEN)
+			get_viewport().set_input_as_handled()
 			return
 		if event.keycode == KEY_ESCAPE:
 			if camera_mode: _set_camera_mode(false)
@@ -2150,7 +2250,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		controller_used = false
 		if event.keycode >= KEY_1 and event.keycode <= KEY_9: _choose_number(event.keycode-KEY_0)
 		elif event.keycode == KEY_ENTER: _advance()
-		elif event.keycode == KEY_H: _action(run.hint(selected_cell))
+		elif event.keycode == KEY_H and not hud_nodes.hint.disabled: _action(run.hint(selected_cell))
 		elif event.keycode == KEY_LEFT: _move_selection(Vector2i.LEFT)
 		elif event.keycode == KEY_RIGHT: _move_selection(Vector2i.RIGHT)
 		elif event.keycode == KEY_UP: _move_selection(Vector2i.UP)

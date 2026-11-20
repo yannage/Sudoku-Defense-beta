@@ -30,9 +30,12 @@ func exercise() -> void:
 			check(node.get_rect().end.y <= 800,"Launch menu must fit 800px height: %s" % node.get_rect())
 			check(node.get_rect().end.x <= 1280,"Launch menu must fit viewport")
 	scene.seed_input.text = "12345"
+	for option: Button in scene.overlay.find_children("*","Button",true,false):
+		if option.text == "Untimed": option.pressed.emit()
 	scene._start_run()
 	check(not scene.menu_open,"Starting game closes menu")
 	check(scene.run.seed_value==12345,"Typed seed is applied")
+	check(scene.run.solve_pace == "untimed" and not scene.progress.visible,"Untimed setup starts a run with no countdown")
 	var cells: Array[int] = []
 	for cell in range(81):
 		if scene.run.board[cell]==0 and cells.size()<8: cells.append(cell)
@@ -43,9 +46,15 @@ func exercise() -> void:
 	scene._select(cells[0],true)
 	check(scene.dock.is_open(),"Click tower opens workshop")
 	check(scene.dock.current_panel=="tower","Selected tower panel")
-	scene.dock.close_panel()
+	check(scene.number_buttons[0].disabled,"Number tray is inactive while inspecting a tower")
+	var next_cell: int = scene.run.board.find(0)
+	scene._tap_board(next_cell)
+	check(not scene.dock.is_open() and scene.selected_cell == next_cell,"Tapping an empty square returns from tower inspection to planting")
+	scene._choose_number(scene.run.solution[next_cell])
+	check(scene.run.towers.size() == 9,"Players can continue planting after inspecting a tower")
 	scene._advance()
 	check(scene.run.phase=="prep","Prepare advances phase")
+	check(not scene.number_buttons[0].visible and scene.hud_nodes.hint.disabled,"Prepare hides the number tray and disables Solve hints")
 	var first_item = scene.run.items[0]
 	scene.armed_item = str(first_item.id)
 	scene._select(cells[0],false)

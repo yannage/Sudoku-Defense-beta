@@ -16,6 +16,7 @@ func _initialize() -> void:
 	_test_save_reload()
 	_test_journal_restart()
 	_test_modes_and_legacy_history()
+	_test_untimed()
 	_test_battle()
 	if failures.is_empty():
 		print("WRONG_GUESS_PENALTY_PASS %d checks" % checks)
@@ -42,6 +43,34 @@ func blank(run: RefCounted) -> int:
 
 func wrong(run: RefCounted, cell: int) -> int:
 	return int(run.solution[cell]) % 9 + 1
+
+func _test_untimed() -> void:
+	var run = Run.new()
+	run.new_run(784217,{"solve_pace":"untimed"})
+	var cell := blank(run)
+	for i in range(30): run.update(10.0)
+	var result: Dictionary = run.place(cell,wrong(run,cell))
+	check(run.solve_pace == "untimed" and run.phase == "solve","Untimed Solve waits for Prepare even after a full countdown")
+	check(not result.ok and result.reason == "wrong_answer" and not result.has("time_penalty"),"Untimed mistakes have feedback without a clock deduction")
+	check(run.board[cell] == 0 and run.achievement_stats.counters.wrong_answers == 1,"Untimed Solve still enforces Sudoku rules")
+	var empty_squares: int = run.board.count(0)
+	for square in range(81):
+		if run.board[square] == 0:
+			check(run.place(square,run.solution[square]).ok,"Untimed Solve can grow a tower on square %d" % square)
+	check(run.towers.size() == empty_squares and run.phase == "solve","A completed untimed board waits for Prepare")
+	var state: Dictionary = JSON.parse_string(JSON.stringify(run.save_data()))
+	var restored = Run.new()
+	check(restored.load_data(state) and restored.solve_pace == "untimed","Saved untimed run restores its pace")
+	check(restored.retry_options().get("solve_pace") == "untimed","Retry keeps untimed pace")
+	check(restored.advance_phase().ok and restored.phase == "prep","Players explicitly end untimed Solve")
+	check(restored.advance_phase().ok and restored.phase == "battle","Untimed pace uses the same wave transition")
+	restored.update(1.0)
+	check(restored.battle_time > 0.0,"Untimed puzzle pace does not stop combat")
+	state.state.erase("solve_pace")
+	state.state.timer = 0.1
+	check(restored.load_data(state) and restored.solve_pace == "timed","Old saves resume with the classic timer")
+	restored.update(0.2)
+	check(restored.phase == "prep","Restored classic timer still expires")
 
 func without_wrong_count(run: RefCounted) -> Dictionary:
 	var state: Dictionary = run.save_data()
